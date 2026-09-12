@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Local">
-  <path fill="#303838" d="M35 26c0-9 7-16 16-16h37c8 0 12 3 17 10l7 10c3 4 6 6 11 6h5c9 0 16 7 16 16v72c0 9-7 16-16 16H51c-9 0-16-7-16-16V26Z"/>
-  <circle cx="77" cy="127" r="13" fill="#303838"/>
-  <circle cx="106" cy="127" r="13" fill="#303838"/>
-  <circle cx="135" cy="127" r="13" fill="#739068"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t d">
+  <title id="t">Local</title>
+  <desc id="d">حرف L مبسط مع نقاط وخط زمني</desc>
+  <rect width="512" height="512" rx="112" fill="#F4F3EF"/>
+  <path d="M126 112c0-17.7 14.3-32 32-32h82c13 0 25 7.9 29.9 19.9l13.2 32.2c4.9 12 16.6 19.9 29.6 19.9H340c17.7 0 32 14.3 32 32v194c0 17.7-14.3 32-32 32H158c-17.7 0-32-14.3-32-32V112Z" fill="#303838"/>
+  <circle cx="202" cy="410" r="31" fill="#303838"/>
+  <circle cx="276" cy="410" r="31" fill="#303838"/>
+  <circle cx="350" cy="410" r="31" fill="#303838"/>
+  <circle cx="424" cy="410" r="31" fill="#739068"/>
 </svg>

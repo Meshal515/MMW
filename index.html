@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#F4F3EF" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Local</title>
+  <meta name="description" content="شغّل مشاريع الويب محليًا، حدّثها، وارجع لأي نسخة عبر خط زمني بصري." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./assets/logo.svg" />
+  <link rel="apple-touch-icon" href="./assets/logo.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="brand" href="#" aria-label="Local">
+        <img src="./assets/logo.svg" alt="" />
+        <span>Local</span>
+      </a>
+      <div class="header-actions">
+        <button class="icon-button" id="themeToggle" type="button" aria-label="تغيير المظهر" title="تغيير المظهر">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.1A8.8 8.8 0 0 1 8.9 3.8a9 9 0 1 0 11.3 11.3Z"/></svg>
+        </button>
+        <button class="button button--compact" id="headerAdd" type="button" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span>أضف مشروعًا</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="main" aria-live="polite"></main>
+  </div>
+
+  <dialog class="sheet" id="importDialog">
+    <form method="dialog" class="sheet__panel" id="importForm">
+      <div class="sheet__head">
+        <div>
+          <p class="eyebrow" id="importEyebrow">مشروع جديد</p>
+          <h2 id="importTitle">أضف مشروعك</h2>
+        </div>
+        <button class="icon-button" value="cancel" type="submit" aria-label="إغلاق">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <p class="sheet__lede">اختر ZIP أو مجلدًا كاملًا أو ملف ويب واحدًا. سيُحفظ المشروع محليًا على هذا الجهاز.</p>
+      <div class="import-grid">
+        <button type="button" class="import-choice" data-import="zip">
+          <span class="import-choice__icon">ZIP</span>
+          <strong>ملف ZIP</strong>
+          <small>مشروع مضغوط كامل</small>
+        </button>
+        <button type="button" class="import-choice" data-import="folder">
+          <span class="import-choice__icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v9.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg>
+          </span>
+          <strong>مجلد</strong>
+          <small>اختر مجلد المشروع</small>
+        </button>
+        <button type="button" class="import-choice" data-import="file">
+          <span class="import-choice__icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4V20.5H6zM14 3.5v4h4"/></svg>
+          </span>
+          <strong>ملف واحد</strong>
+          <small>HTML يعمل وحده</small>
+        </button>
+      </div>
+      <div class="drop-zone" id="dropZone">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
+        <strong>أو اسحب مشروعك هنا</strong>
+        <span>ZIP أو ملفات المشروع</span>
+      </div>
+      <input id="zipInput" type="file" accept=".zip,application/zip" hidden />
+      <input id="folderInput" type="file" webkitdirectory multiple hidden />
+      <input id="singleInput" type="file" accept=".html,.htm,text/html" hidden />
+      <div class="progress" id="importProgress" hidden>
+        <div class="progress__bar"><i id="progressBar"></i></div>
+        <span id="progressText">جاري تجهيز المشروع…</span>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="infoDialog">
+    <div class="modal__panel modal__panel--wide">
+      <div class="modal__head">
+        <div>
+          <p class="eyebrow">كل المعلومات</p>
+          <h2 id="infoTitle">المشروع</h2>
+        </div>
+        <button class="icon-button" id="closeInfo" type="button" aria-label="إغلاق">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div id="infoBody"></div>
+    </div>
+  </dialog>
+
+  <section class="timeline-view" id="timelineView" hidden aria-label="الخط الزمني">
+    <header class="timeline-header">
+      <button class="icon-button" id="closeTimeline" type="button" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
+      </button>
+      <div class="timeline-header__title">
+        <p class="eyebrow">الخط الزمني</p>
+        <h2 id="timelineTitle">المشروع</h2>
+      </div>
+      <div class="timeline-tools">
+        <button class="icon-button" id="timelineZoomOut" type="button" aria-label="تصغير">−</button>
+        <button class="icon-button" id="timelineZoomIn" type="button" aria-label="تكبير">+</button>
+      </div>
+    </header>
+    <div class="timeline-canvas" id="timelineCanvas">
+      <div class="timeline-world" id="timelineWorld">
+        <div class="timeline-line"></div>
+        <div id="timelineNodes"></div>
+      </div>
+      <div class="timeline-hint">اسحب المساحة للتنقل · اضغط على أي نقطة لعرض النسخة</div>
+    </div>
+    <aside class="version-panel" id="versionPanel" hidden></aside>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

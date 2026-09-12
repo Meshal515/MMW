@@ -1,8 +1,8 @@
-import{getOne,getAll,putOne,fmtNumber,fmtBytes,fmtDate,fmtDateShort,plural,esc,bdi}from'./core.js';
+import{getOne,getAll,putOne,fmtNumber,fmtBytes,fmtDate,fmtDateShort,plural,esc,bdi,deleteVersions,keepOnlyVersion,deleteImpact}from'./core.js';
 
 const SPACING=220,PAD=420;
 
-export function createTimeline({runProject,toast,render}){
+export function createTimeline({runProject,toast,render,confirm}){
   const view=document.querySelector('#timelineView'),canvas=document.querySelector('#timelineCanvas'),world=document.querySelector('#timelineWorld'),nodes=document.querySelector('#timelineNodes'),panel=document.querySelector('#versionPanel');
   let state={project:null,versions:[],selected:null,x:0,y:0,scale:1,dragging:false,px:0,py:0};
   const pointers=new Map();let pinch=null;
@@ -39,8 +39,10 @@ export function createTimeline({runProject,toast,render}){
     for(const n of document.querySelectorAll('.timeline-node'))n.classList.toggle('is-selected',n.dataset.versionId===id);
     const p=state.project,d=v.diff||{},stats=v.stats||{files:0,size:0,lines:0};
     panel.hidden=false;
-    panel.innerHTML=`<p class="eyebrow">${v.id===p.adoptedVersionId?'النسخة المعتمدة':'نسخة محفوظة'}</p><h3>${esc(v.title||p.title)} · ${v.index===1?'أول نسخة':`النسخة ${fmtNumber(v.index)}`}</h3><p>${bdi(fmtDate(v.createdAt))}</p><div class="version-panel__stats"><div><strong>${fmtNumber(stats.files)}</strong><span>${plural(stats.files,'ملف','ملفان','ملفات','ملفًا')}</span></div><div><strong>${bdi(fmtBytes(stats.size))}</strong><span>الحجم</span></div><div><strong>${fmtNumber(stats.lines)}</strong><span>سطر</span></div></div><p>${v.index===1?'هذه نقطة البداية للمشروع.':`${fmtNumber(d.added||0)} أضيف · ${fmtNumber(d.removed||0)} حُذف · ${fmtNumber(d.changed||0)} تغيّر`}</p><div class="version-panel__actions"><button class="button run-version" type="button">تشغيل</button><button class="button button--outline adopt-version" type="button" ${v.id===p.adoptedVersionId?'disabled':''}>${v.id===p.adoptedVersionId?'معتمدة':'اعتماد'}</button></div>`;
+    panel.innerHTML=`<p class="eyebrow">${v.id===p.adoptedVersionId?'النسخة المعتمدة':'نسخة محفوظة'}</p><h3>${esc(v.title||p.title)} · ${v.index===1?'أول نسخة':`النسخة ${fmtNumber(v.index)}`}</h3><p>${bdi(fmtDate(v.createdAt))}</p><div class="version-panel__stats"><div><strong>${fmtNumber(stats.files)}</strong><span>${plural(stats.files,'ملف','ملفان','ملفات','ملفًا')}</span></div><div><strong>${bdi(fmtBytes(stats.size))}</strong><span>الحجم</span></div><div><strong>${fmtNumber(stats.lines)}</strong><span>سطر</span></div></div><p>${v.index===1?'هذه نقطة البداية للمشروع.':`${fmtNumber(d.added||0)} أضيف · ${fmtNumber(d.removed||0)} حُذف · ${fmtNumber(d.changed||0)} تغيّر`}</p><div class="version-panel__actions"><button class="button run-version" type="button">تشغيل</button><button class="button button--outline adopt-version" type="button" ${v.id===p.adoptedVersionId?'disabled':''}>${v.id===p.adoptedVersionId?'معتمدة':'اعتماد'}</button></div>${state.versions.length>1?`<div class="version-panel__danger"><button class="button button--outline drop-version" type="button">حذف هذه النسخة</button><button class="button button--outline keep-only" type="button">احذف ما عداها (${fmtNumber(state.versions.length-1)})</button></div>`:''}`;
     panel.querySelector('.run-version').onclick=()=>runProject(p.id,v.id);
+    panel.querySelector('.drop-version')?.addEventListener('click',()=>removeVersion(v));
+    panel.querySelector('.keep-only')?.addEventListener('click',()=>keepOnly(v));
     panel.querySelector('.adopt-version').onclick=async()=>{
       p.adoptedVersionId=v.id;p.updatedAt=Date.now();
       if(v.title)p.title=v.title;
@@ -48,6 +50,58 @@ export function createTimeline({runProject,toast,render}){
       await putOne('projects',p);
       state.project=p;build();select(v.id);toast('تم اعتماد النسخة');render();
     };
+  }
+
+
+  async function reload(){
+    const p=await getOne('projects',state.project.id);
+    const versions=(await getAll('versions','projectId',state.project.id)).sort((a,b)=>a.index-b.index);
+    if(!p||!versions.length){close();render();return}
+    state.project=p;state.versions=versions;
+    document.querySelector('#timelineTitle').textContent=p.title;
+    build();
+    select(versions.find(v=>v.id===p.adoptedVersionId)?.id||versions.at(-1).id);
+    render();
+  }
+
+  async function removeVersion(v){
+    const p=state.project;
+    if(state.versions.length<2){toast('هذه آخر نسخة — احذف المشروع نفسه من بطاقته');return}
+    const impact=await deleteImpact(p.id,state.versions.filter(x=>x.id!==v.id).map(x=>x.id));
+    const adopted=v.id===p.adoptedVersionId;
+    const ok=await confirm({
+      title:`حذف النسخة ${fmtNumber(v.index)}؟`,
+      lede:adopted
+        ?'هذه هي النسخة المعتمدة. بحذفها تُعتمد أحدث نسخة باقية تلقائيًا. الملفات التي تشترك فيها نسخ أخرى تبقى كما هي.'
+        :'تُحذف هذه النسخة وحدها. الملفات التي تشترك فيها نسخ أخرى تبقى كما هي.',
+      cost:[['الملفات التي ستُحذف',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
+      okLabel:'احذف النسخة'});
+    if(!ok)return;
+    await deleteVersions([v.id]);
+    const remaining=state.versions.filter(x=>x.id!==v.id);
+    const project=await getOne('projects',p.id);
+    if(project){
+      project.versionCount=remaining.length;
+      if(adopted){const newest=remaining.at(-1);project.adoptedVersionId=newest.id;project.thumbnailHash=newest.thumbnailHash||'';project.thumbSize=newest.thumbSize||null;if(newest.title)project.title=newest.title}
+      await putOne('projects',project);
+    }
+    toast('حُذفت النسخة');
+    await reload();
+  }
+
+  async function keepOnly(v){
+    const p=state.project;
+    if(state.versions.length<2)return;
+    const impact=await deleteImpact(p.id,[v.id]);
+    const ok=await confirm({
+      title:`الإبقاء على النسخة ${fmtNumber(v.index)} وحدها؟`,
+      lede:`تُحذف كل النسخ الأخرى ويبقى تاريخ المشروع نسخةً واحدة، وتصير هي المعتمدة.`,
+      cost:[['النسخ التي ستُحذف',fmtNumber(impact.versions)],['الملفات',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
+      okLabel:'احذف ما عداها'});
+    if(!ok)return;
+    await keepOnlyVersion(p.id,v.id);
+    toast('بقيت نسخة واحدة');
+    await reload();
   }
 
   async function show(projectId){

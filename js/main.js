@@ -1,4 +1,4 @@
-import{getAll,getOne,logsFor,storageSnapshot,requestPersistentStorage,fmtBytes,fmtNumber,fmtDate,since,plural,esc,bdi,safeThemeGet,safeThemeSet}from'./core.js';
+import{getAll,getOne,logsFor,storageSnapshot,requestPersistentStorage,fmtBytes,fmtNumber,fmtDate,since,plural,esc,bdi,safeThemeGet,safeThemeSet,deleteProject,deleteImpact}from'./core.js';
 import{unzip,fromFileList,persistVersion}from'./importer.js';
 import{createTimeline}from'./timeline.js';
 
@@ -15,7 +15,7 @@ async function objectURL(hash){if(!hash)return'';if(objectUrlCache.has(hash))ret
 function releaseUnusedURLs(keep){for(const[hash,url]of objectUrlCache)if(!keep.has(hash)){URL.revokeObjectURL(url);objectUrlCache.delete(hash)}}
 
 async function runProject(projectId,versionId){if(!versionId){toast('لا توجد نسخة معتمدة لهذا المشروع');return}if('serviceWorker'in navigator){try{await navigator.serviceWorker.ready}catch{}}location.href=`./runner.html?project=${encodeURIComponent(projectId)}&version=${encodeURIComponent(versionId)}`}
-const timeline=createTimeline({runProject,toast,render});
+const timeline=createTimeline({runProject,toast,render,confirm:confirmDestructive});
 
 function coverMarkup(url,size){
   /* A 16x16 favicon stretched across a 16:10 frame was the single ugliest thing
@@ -57,6 +57,39 @@ async function render(){
   grid.appendChild(frag);
 }
 
+
+/* Deleting is the one thing here that cannot be undone, so the dialog names what
+   goes: how many versions, how many files, how much disk comes back. Shared
+   files that other versions still use are not counted — they are not freed. */
+const confirmDialog=$('#confirmDialog');
+function confirmDestructive({title,lede,cost=[],okLabel='حذف'}){
+  $('#confirmTitle').textContent=title;
+  $('#confirmLede').textContent=lede;
+  /* Values are Latin (685 B, 12 KB) inside Arabic rows — isolate or the bidi
+     algorithm moves the unit to the front and prints "B 685". */
+  $('#confirmCost').innerHTML=cost.map(([k,v])=>`<div><span>${esc(k)}</span><b>${bdi(v)}</b></div>`).join('');
+  $('#confirmCost').hidden=!cost.length;
+  $('#confirmOk').textContent=okLabel;
+  return new Promise(resolve=>{
+    confirmDialog.addEventListener('close',()=>resolve(confirmDialog.returnValue==='ok'),{once:true});
+    confirmDialog.showModal();
+    $('#confirmOk').focus();
+  });
+}
+
+async function removeProject(p){
+  const impact=await deleteImpact(p.id);
+  const ok=await confirmDestructive({
+    title:`حذف «${p.title}»؟`,
+    lede:'يُحذف المشروع وكل نسخه وملفاته من هذا الجهاز. لا نسخة احتياطية، ولا طريق للرجوع.',
+    cost:[['النسخ',fmtNumber(impact.versions)],['الملفات',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
+    okLabel:'احذف المشروع'});
+  if(!ok)return;
+  await deleteProject(p.id);
+  toast('حُذف المشروع');
+  await render();
+}
+
 function closeMenu(){if(menuCloser){menuCloser();menuCloser=null}}
 function toggleMenu(card,p){
   const kebab=card.querySelector('.kebab'),wasOpen=card.contains(document.querySelector('.popover'));
@@ -64,13 +97,14 @@ function toggleMenu(card,p){
   if(wasOpen)return; // second click on the same kebab closes it
   const m=document.createElement('div');
   m.className='popover';m.setAttribute('role','menu');
-  m.innerHTML=`<button role="menuitem" type="button" data-act="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>كل المعلومات</button><button role="menuitem" type="button" data-act="timeline"><svg viewBox="0 0 24 24"><path d="M4 12h16M7 8v8m5-10v12m5-8v4"/></svg>الخط الزمني</button>`;
+  m.innerHTML=`<button role="menuitem" type="button" data-act="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>كل المعلومات</button><button role="menuitem" type="button" data-act="timeline"><svg viewBox="0 0 24 24"><path d="M4 12h16M7 8v8m5-10v12m5-8v4"/></svg>الخط الزمني</button><hr><button role="menuitem" type="button" class="is-danger" data-act="delete"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h7a1.5 1.5 0 0 0 1.5-1.4L18 7M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2"/></svg>حذف المشروع</button>`;
   const onDown=e=>{if(!m.contains(e.target)&&!kebab.contains(e.target))closeMenu()};
   const onKey=e=>{if(e.key==='Escape'){closeMenu();kebab.focus()}};
   /* The old code registered this listener per menu and only ever removed it from
      inside itself, so opening a second menu orphaned the first one forever. */
   menuCloser=()=>{document.removeEventListener('pointerdown',onDown);document.removeEventListener('keydown',onKey);m.remove();kebab.setAttribute('aria-expanded','false')};
-  m.onclick=e=>{const b=e.target.closest('button');if(!b)return;const act=b.dataset.act;closeMenu();act==='info'?showInfo(p.id):timeline.show(p.id)};
+  m.onclick=e=>{const b=e.target.closest('button');if(!b)return;const act=b.dataset.act;closeMenu();
+    if(act==='info')showInfo(p.id);else if(act==='timeline')timeline.show(p.id);else if(act==='delete')removeProject(p);};
   card.appendChild(m);kebab.setAttribute('aria-expanded','true');
   setTimeout(()=>{document.addEventListener('pointerdown',onDown);document.addEventListener('keydown',onKey)},0);
 }

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Local · تشغيل</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;height:100%;background:#171c1c;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif}body{overflow:hidden}.bar{height:54px;display:flex;align-items:center;gap:10px;padding:0 14px;background:#202626;color:#f0efea;border-bottom:1px solid #343c3c}.bar img{width:30px;height:30px;object-fit:contain}.bar strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bar button{margin-inline-start:auto;width:38px;height:38px;border:1px solid #3b4444;background:transparent;color:#f0efea;border-radius:12px;cursor:pointer;font-size:20px}iframe{display:block;width:100%;height:calc(100% - 54px);border:0;background:white}.error{height:100%;display:grid;place-items:center;color:#f0efea;text-align:center;padding:30px}.error p{color:#a8aeaa}
+  </style>
+</head>
+<body>
+  <div class="bar"><img src="./assets/logo.svg" alt=""><strong id="name">Local</strong><button id="close" aria-label="إغلاق">×</button></div>
+  <div id="root"></div>
+  <script>
+    const DB='local-launcher-v1';
+    const open=()=>new Promise((res,rej)=>{const r=indexedDB.open(DB,1);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+    const get=(db,store,key)=>new Promise((res,rej)=>{const r=db.transaction(store).objectStore(store).get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+    const params=new URLSearchParams(location.search); const vid=params.get('version'); const pid=params.get('project');
+    document.getElementById('close').onclick=()=>{ if(history.length>1) history.back(); else location.href='./'; };
+    (async()=>{try{const db=await open(); const [p,v]=await Promise.all([get(db,'projects',pid),get(db,'versions',vid)]); if(!p||!v) throw new Error('missing'); document.title=`${p.title} · Local`; document.getElementById('name').textContent=p.title; const f=document.createElement('iframe'); f.setAttribute('allow','clipboard-read; clipboard-write; fullscreen'); f.src=`./__local__/${encodeURIComponent(pid)}/${encodeURIComponent(vid)}/${v.entry.split('/').map(encodeURIComponent).join('/')}`; document.getElementById('root').appendChild(f);}catch(e){document.getElementById('root').innerHTML='<div class="error"><div><h2>تعذر تشغيل هذه النسخة</h2><p>ارجع إلى Local وحاول استيراد المشروع من جديد.</p></div></div>'}})();
+  </script>
+</body>
+</html>

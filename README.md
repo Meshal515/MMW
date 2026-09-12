@@ -8,7 +8,8 @@ Local is a local-first web-project launcher and visual version timeline.
 - Keep project files in browser IndexedDB on the current device.
 - Deduplicate identical files by SHA-256 across versions.
 - Add updates without destroying old versions.
-- Run any saved version and explicitly adopt the version shown on the home screen.
+- Adding an update adopts it immediately; the timeline is where you go back to an older version and adopt that instead.
+- Run a version full screen, with no Local chrome over it. The only exit is a handle on the screen edge, placed opposite the project's own scrollbar. No keyboard shortcut is taken, so the project keeps Escape and every other key for itself.
 - Explore the full project history on a pannable/zoomable timeline.
 - Inspect file counts, size, lines, characters, file types, runtime console messages, and errors.
 - Install as a PWA and continue using the app offline after the shell is cached.

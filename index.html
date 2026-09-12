@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ar" dir="rtl" data-theme="light">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -10,11 +10,19 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/logo.svg" />
   <link rel="apple-touch-icon" href="./assets/logo.svg" />
+  <script>
+    /* Before first paint: a deferred module set data-theme, so every dark-mode
+       load flashed the light palette first. */
+    (function(){try{var t=localStorage.getItem('local-theme');if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==='dark'?'#171C1C':'#F4F3EF';}catch(e){document.documentElement.dataset.theme='light'}})();
+  </script>
+  <link rel="stylesheet" href="./styles/base.css" />
+  <link rel="stylesheet" href="./styles/components.css" />
+  <link rel="stylesheet" href="./styles/timeline.css" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <header class="app-header">
+  <header class="app-header">
+    <div class="app-header__inner">
       <a class="brand" href="#" aria-label="Local">
         <img src="./assets/logo.svg" alt="" />
         <span>Local</span>
@@ -28,8 +36,10 @@
           <span>أضف مشروعًا</span>
         </button>
       </div>
-    </header>
+    </div>
+  </header>
 
+  <div class="app-shell">
     <main id="main" class="main" aria-live="polite"></main>
   </div>
 

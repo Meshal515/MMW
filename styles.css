@@ -1,93 +1,36 @@
-@import url('./styles/base.css');
-@import url('./styles/components.css');
-@import url('./styles/timeline.css');
+/* base.css, components.css and timeline.css are linked directly from index.html.
+   Importing them from here made the browser fetch this file, parse it, and only
+   then start on the other three — two round trips before anything was styled. */
 
-/* Keep touch interaction fully inside Local's visual language. */
-html,
-body,
-*,
-*::before,
-*::after {
-  -webkit-tap-highlight-color: transparent !important;
-}
+::selection { background: var(--accent-soft); color: var(--ink); }
 
-::selection {
-  background: var(--accent-soft);
-  color: var(--ink);
-}
+html, body, *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
 
-button,
-a,
-input,
-select,
-textarea,
-summary,
-[role="button"],
-[tabindex] {
-  -webkit-tap-highlight-color: transparent !important;
-}
-
-button,
-a,
-summary,
-[role="button"],
-.import-choice,
-.kebab,
-.timeline-node,
-.drop-zone {
+button, a, summary, [role="button"],
+.import-choice, .kebab, .timeline-node, .drop-zone {
   -webkit-touch-callout: none;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
 }
 
-:where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus {
-  outline: none;
+/* :focus-visible already fires only for keyboard and assistive navigation, so it
+   belongs at every pointer type. Gating it behind (pointer:fine) left anyone on a
+   touchscreen laptop tabbing through the app with no visible focus at all. */
+:where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus { outline: none; }
+:where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
-  }
-}
-
-@media (hover: none), (pointer: coarse) {
-  :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus,
-  :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible,
-  :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):active {
-    outline: none !important;
-    -webkit-tap-highlight-color: transparent !important;
-  }
-
-  .icon-button:hover {
-    background: transparent !important;
-    transform: none !important;
-  }
-
-  .button:hover {
-    transform: none !important;
-    box-shadow: none !important;
-  }
-
-  .project-card:hover {
-    transform: none !important;
-    box-shadow: none !important;
-    border-color: var(--line) !important;
-  }
-
-  .kebab:hover,
-  .popover button:hover {
-    background: transparent !important;
-  }
-
-  .import-choice:hover {
-    transform: none !important;
-    border-color: var(--line) !important;
-    background: var(--surface) !important;
-  }
-
-  .timeline-node:hover {
-    transform: none !important;
-  }
+/* Hover states on a touchscreen stick after the finger lifts, so they are lifts
+   and shadows that never come back down. Drop the effect, keep the focus ring. */
+@media (hover: none) {
+  .icon-button:hover { background: transparent; transform: none; }
+  .button:hover { transform: none; box-shadow: none; }
+  .project-card:hover { transform: none; box-shadow: none; border-color: var(--line); }
+  .kebab:hover, .popover button:hover { background: transparent; }
+  .import-choice:hover { transform: none; border-color: var(--line); background: var(--surface); }
+  .timeline-node:hover { transform: none; }
 }

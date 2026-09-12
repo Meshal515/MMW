@@ -3,21 +3,155 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
   <title>Local · تشغيل</title>
   <style>
-    *{box-sizing:border-box}html,body{margin:0;height:100%;background:#171c1c;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif}body{overflow:hidden}.bar{height:54px;display:flex;align-items:center;gap:10px;padding:0 14px;background:#202626;color:#f0efea;border-bottom:1px solid #343c3c}.bar img{width:30px;height:30px;object-fit:contain}.bar strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bar button{margin-inline-start:auto;width:38px;height:38px;border:1px solid #3b4444;background:transparent;color:#f0efea;border-radius:12px;cursor:pointer;font-size:20px}iframe{display:block;width:100%;height:calc(100% - 54px);border:0;background:white}.error{height:100%;display:grid;place-items:center;color:#f0efea;text-align:center;padding:30px}.error p{color:#a8aeaa}
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:#171c1c;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif}
+    body{overflow:hidden}
+
+    /* The project gets the whole screen. Nothing of Local's is painted over it. */
+    #root,iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+
+    /* Exit lives on the edge, not on the page: a 6px handle at the vertical
+       centre of the left rim, where a site almost never puts anything. It opens
+       on hover (mouse) or on a first tap (touch), so nothing exits by accident. */
+    /* Exit lives on the edge, not on the page: a 6px handle at the vertical
+       centre of one rim, where a site almost never puts anything. It opens on
+       hover (mouse) or on a first tap (touch), so nothing exits by accident.
+       Which rim is decided at load time — see placeHandle(). */
+    .exit{
+      position:fixed;z-index:2147483647;
+      inset-block-start:50%;
+      transform:translateY(-50%);
+      inline-size:6px;block-size:64px;padding:0;
+      border:0;
+      background:rgba(23,28,28,.32);
+      color:#F0EFEA;cursor:pointer;
+      display:grid;place-items:center;overflow:hidden;
+      -webkit-tap-highlight-color:transparent;
+      transition:inline-size .26s cubic-bezier(.16,1,.3,1),block-size .26s cubic-bezier(.16,1,.3,1),background .26s ease,box-shadow .26s ease;
+    }
+    .exit[data-side="left"]{left:0;right:auto;margin-left:env(safe-area-inset-left,0px);border-radius:0 8px 8px 0}
+    .exit[data-side="right"]{right:0;left:auto;margin-right:env(safe-area-inset-right,0px);border-radius:8px 0 0 8px}
+    .exit::after{
+      content:"";position:absolute;inline-size:3px;block-size:26px;
+      border-radius:99px;background:currentColor;opacity:.5;transition:opacity .2s ease;
+    }
+    .exit[data-side="left"]::after{left:1.5px}
+    .exit[data-side="right"]::after{right:1.5px}
+    .exit svg{inline-size:19px;block-size:19px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;opacity:0;transition:opacity .18s ease}
+    .exit.is-open{
+      inline-size:44px;block-size:44px;
+      background:rgba(23,28,28,.9);
+      box-shadow:0 6px 22px rgba(0,0,0,.4);
+      -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    }
+    .exit[data-side="left"].is-open{border-radius:0 14px 14px 0}
+    .exit[data-side="right"].is-open{border-radius:14px 0 0 14px}
+    .exit.is-open::after{opacity:0}
+    .exit.is-open svg{opacity:1}
+    .exit:focus-visible{outline:2px solid #86A37C;outline-offset:3px}
+
+    /* Says what is running, then gets out of the way. */
+    .flash{
+      position:fixed;z-index:2147483646;inset-block-end:calc(18px + env(safe-area-inset-bottom,0px));
+      inset-inline-start:50%;transform:translateX(-50%);
+      max-inline-size:min(86vw,420px);
+      padding:9px 15px;border-radius:999px;
+      background:rgba(23,28,28,.92);color:#F0EFEA;
+      -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+      font-size:13px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      box-shadow:0 8px 26px rgba(0,0,0,.34);pointer-events:none;
+      opacity:0;animation:flash 3.4s cubic-bezier(.16,1,.3,1) forwards;
+    }
+        @keyframes flash{0%{opacity:0;transform:translate(-50%,10px)}12%{opacity:1;transform:translate(-50%,0)}72%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,6px)}}
+
+    .error{height:100%;display:grid;place-items:center;color:#F0EFEA;background:#171c1c;text-align:center;padding:30px}
+    .error h2{margin:0 0 8px;font-size:20px}
+    .error p{color:#A8AEAA;margin:0 0 20px;line-height:1.7}
+    .error a{color:#86A37C}
+    @media (prefers-reduced-motion:reduce){
+      .exit{transition-duration:.01ms}
+      .flash{animation-duration:.01ms;animation-delay:3s;opacity:1}
+    }
   </style>
 </head>
 <body>
-  <div class="bar"><img src="./assets/logo.svg" alt=""><strong id="name">Local</strong><button id="close" aria-label="إغلاق">×</button></div>
   <div id="root"></div>
+
+  <button class="exit" id="exit" data-side="left" type="button" aria-label="خروج من المشروع" title="خروج من المشروع">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+  </button>
+
   <script>
     const DB='local-launcher-v1';
     const open=()=>new Promise((res,rej)=>{const r=indexedDB.open(DB,1);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
     const get=(db,store,key)=>new Promise((res,rej)=>{const r=db.transaction(store).objectStore(store).get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
-    const params=new URLSearchParams(location.search); const vid=params.get('version'); const pid=params.get('project');
-    document.getElementById('close').onclick=()=>{ if(history.length>1) history.back(); else location.href='./'; };
-    (async()=>{try{const db=await open(); const [p,v]=await Promise.all([get(db,'projects',pid),get(db,'versions',vid)]); if(!p||!v) throw new Error('missing'); document.title=`${p.title} · Local`; document.getElementById('name').textContent=p.title; const f=document.createElement('iframe'); f.setAttribute('allow','clipboard-read; clipboard-write; fullscreen'); f.src=`./__local__/${encodeURIComponent(pid)}/${encodeURIComponent(vid)}/${v.entry.split('/').map(encodeURIComponent).join('/')}`; document.getElementById('root').appendChild(f);}catch(e){document.getElementById('root').innerHTML='<div class="error"><div><h2>تعذر تشغيل هذه النسخة</h2><p>ارجع إلى Local وحاول استيراد المشروع من جديد.</p></div></div>'}})();
+    const params=new URLSearchParams(location.search), vid=params.get('version'), pid=params.get('project');
+    const exitBtn=document.getElementById('exit');
+
+    function leave(){ if(history.length>1) history.back(); else location.href='./'; }
+
+    /* A vertical scrollbar sits on the right of an LTR page and on the left of an
+       RTL one. Put the handle on the other rim so it never covers the bar the
+       project needs you to be able to drag. */
+    function placeHandle(frame){
+      let rtl=false;
+      try{
+        const d=frame.contentDocument;
+        if(d) rtl=(d.documentElement.getAttribute('dir')||d.body?.getAttribute('dir')||getComputedStyle(d.documentElement).direction)==='rtl';
+      }catch{}
+      exitBtn.dataset.side=rtl?'right':'left';
+    }
+
+    /* Two stages on touch, one on a mouse: the handle has to be open before the
+       click counts, so a stray thumb on the screen edge never drops the project. */
+    let openTimer=null;
+    const setOpen=on=>{
+      exitBtn.classList.toggle('is-open',on);
+      clearTimeout(openTimer);
+      if(on) openTimer=setTimeout(()=>exitBtn.classList.remove('is-open'),2600);
+    };
+    const finePointer=matchMedia('(hover:hover) and (pointer:fine)').matches;
+    exitBtn.addEventListener('pointerenter',()=>{ if(finePointer) setOpen(true); });
+    exitBtn.addEventListener('pointerleave',()=>{ if(finePointer) setOpen(false); });
+    exitBtn.addEventListener('focus',()=>setOpen(true));
+    exitBtn.addEventListener('blur',()=>setOpen(false));
+    exitBtn.addEventListener('click',()=>{ exitBtn.classList.contains('is-open') ? leave() : setOpen(true); });
+
+    /* No keyboard shortcut here on purpose. Escape belongs to the project being
+       tested — it closes its dialogs and cancels its inputs — and a launcher that
+       steals a key is a launcher you cannot test that key in. The handle is the
+       only exit, and it lives in this document, so the project cannot paint over
+       it however high its own z-index goes. */
+
+    (async()=>{
+      const root=document.getElementById('root');
+      try{
+        const db=await open();
+        const [p,v]=await Promise.all([get(db,'projects',pid),get(db,'versions',vid)]);
+        if(!p||!v) throw new Error('missing');
+        document.title=`${p.title} · Local`;
+        const f=document.createElement('iframe');
+        f.setAttribute('allow','clipboard-read; clipboard-write; fullscreen; camera; microphone; geolocation');
+        f.setAttribute('title',p.title);
+        f.src=`./__local__/${encodeURIComponent(pid)}/${encodeURIComponent(vid)}/${String(v.entry).split('/').map(encodeURIComponent).join('/')}`;
+        f.addEventListener('load',()=>placeHandle(f));
+        root.appendChild(f);
+
+        const flash=document.createElement('div');
+        flash.className='flash';
+        const name=document.createElement('span'); name.textContent=p.title;
+        flash.appendChild(name);
+        flash.insertAdjacentHTML('beforeend',' — للخروج: المقبض على حافة الشاشة');
+        document.body.appendChild(flash);
+        flash.addEventListener('animationend',()=>flash.remove());
+      }catch(e){
+        exitBtn.hidden=true;
+        root.innerHTML='<div class="error"><div><h2>تعذر تشغيل هذه النسخة</h2><p>الملفات المحفوظة لهذه النسخة غير مكتملة.<br>ارجع إلى Local واستورد المشروع من جديد.</p><a href="./">رجوع إلى Local</a></div></div>';
+      }
+    })();
   </script>
 </body>
 </html>

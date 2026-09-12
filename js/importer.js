@@ -43,8 +43,41 @@ return{entry,title,thumb,thumbBlob,thumbSize}}
    enough to crop" — so a vector is measured from its markup instead. */
 async function imageSize(blob){
   if(!blob)return null;
-  if(/svg/i.test(blob.type)){try{const t=await blob.text();const doc=new DOMParser().parseFromString(t,'image/svg+xml');const el=doc.documentElement;const n=v=>{const f=parseFloat(v);return Number.isFinite(f)?f:0};let w=n(el.getAttribute('width')),h=n(el.getAttribute('height'));if(!w||!h){const vb=(el.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number);if(vb.length===4){w=w||vb[2];h=h||vb[3]}}return{w,h,vector:true}}catch{return{w:0,h:0,vector:true}}}
-  try{const bmp=await createImageBitmap(blob);const out={w:bmp.width,h:bmp.height};bmp.close?.();return out}catch{return null}
+  let w=0,h=0;const vector=/svg/i.test(blob.type);
+  /* An SVG that carries only a viewBox has no intrinsic size for
+     createImageBitmap, which then rejects — so vectors are measured from their
+     markup and everything else from the decoded bitmap. */
+  if(vector){
+    try{const t=await blob.text();const doc=new DOMParser().parseFromString(t,'image/svg+xml');const el=doc.documentElement;
+      const n=v=>{const f=parseFloat(v);return Number.isFinite(f)?f:0};
+      w=n(el.getAttribute('width'));h=n(el.getAttribute('height'));
+      if(!w||!h){const vb=(el.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number);if(vb.length===4){w=w||vb[2];h=h||vb[3]}}
+    }catch{}
+  }else{
+    try{const bmp=await createImageBitmap(blob);w=bmp.width;h=bmp.height;bmp.close?.()}catch{return null}
+  }
+  const lum=await meanLuminance(blob);
+  return{w,h,vector,lum};
+}
+
+/* How bright the artwork actually is, ignoring transparent pixels. A logo is
+   usually one flat tone, and a dark one on a dark cover disappears — so the card
+   needs to know which way to plate it rather than guess from the theme. */
+async function meanLuminance(blob){
+  const url=URL.createObjectURL(blob);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('decode'));i.src=url});
+    const N=32,c=document.createElement('canvas');c.width=c.height=N;
+    const g=c.getContext('2d',{willReadFrequently:true});
+    if(!g)return null;
+    g.drawImage(img,0,0,N,N);
+    const d=g.getImageData(0,0,N,N).data;
+    const lin=v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4};
+    let sum=0,weight=0;
+    for(let i=0;i<d.length;i+=4){const a=d[i+3]/255;if(a<0.06)continue;
+      sum+=(.2126*lin(d[i])+.7152*lin(d[i+1])+.0722*lin(d[i+2]))*a;weight+=a}
+    return weight?+(sum/weight).toFixed(3):null;
+  }catch{return null}finally{URL.revokeObjectURL(url)}
 }
 
 export function dataUriToBlob(uri){

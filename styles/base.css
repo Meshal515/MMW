@@ -87,9 +87,12 @@ svg { width: 1.35em; height: 1.35em; fill: none; stroke: currentColor; stroke-wi
 .section-head h1 { margin: 0; font-size: clamp(30px, 5vw, 48px); letter-spacing: -.045em; }
 .section-head p { margin: 9px 0 0; color: var(--muted); }
 .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 22px; }
-.project-card { position: relative; border: 1px solid var(--line); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--bg) 72%, var(--surface)); overflow: hidden; transition: .25s ease; }
+.project-card { position: relative; border: 1px solid var(--line); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--bg) 72%, var(--surface)); transition: .25s ease; }
+/* Not `overflow: hidden` — that clipped the card's own menu. The cover clips
+   itself and rounds its own top corners, which is all the hiding was for. */
+.project-card:has(.popover) { z-index: 30; }
 .project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--accent) 38%, var(--line)); }
-.project-cover { aspect-ratio: 16 / 10; background: var(--surface); display: grid; place-items: center; overflow: hidden; position: relative; border-bottom: 1px solid var(--line); }
+.project-cover { aspect-ratio: 16 / 10; background: var(--surface); display: grid; place-items: center; overflow: hidden; position: relative; border-bottom: 1px solid var(--line); border-start-start-radius: calc(var(--radius-lg) - 1px); border-start-end-radius: calc(var(--radius-lg) - 1px); }
 .project-cover__img { width: 100%; height: 100%; object-fit: cover; }
 .project-cover__img[data-fit="contain"] {
   width: auto; height: auto;
@@ -109,7 +112,15 @@ svg { width: 1.35em; height: 1.35em; fill: none; stroke: currentColor; stroke-wi
 .kebab { width: 38px; height: 38px; border: 0; border-radius: 12px; background: transparent; cursor: pointer; display: grid; place-items: center; }
 .kebab:hover { background: var(--surface); }
 .kebab svg { width: 20px; height: 20px; }
-.popover { position: absolute; inset-inline-start: 16px; top: calc(100% - 96px); z-index: 12; min-width: 190px; padding: 7px; border: 1px solid var(--line); border-radius: 15px; background: var(--bg); box-shadow: var(--shadow); animation: pop .16s ease; }
+.kebab-wrap { position: relative; flex: 0 0 auto; }
+/* Anchored under its own trigger. The old `top: calc(100% - 96px)` was measured
+   from the card's foot, so it drifted the moment the menu gained an item. */
+.popover { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 40; min-width: 190px; padding: 7px; border: 1px solid var(--line); border-radius: 15px; background: var(--bg); box-shadow: var(--shadow); animation: pop .16s ease; }
 @keyframes pop { from { opacity: 0; transform: translateY(-5px) scale(.98); } }
 .popover button { width: 100%; border: 0; background: transparent; border-radius: 10px; padding: 11px 12px; text-align: start; cursor: pointer; display: flex; gap: 10px; align-items: center; }
 .popover button:hover { background: var(--surface); }
+
+/* A plated cover carries the same tone in both themes — the mark's legibility
+   depends on the mark, not on what the viewer set. */
+.project-cover[data-plate="light"] { background: #EFEEE9; }
+.project-cover[data-plate="dark"]  { background: #1C2222; }

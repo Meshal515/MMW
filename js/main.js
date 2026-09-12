@@ -17,6 +17,12 @@ function releaseUnusedURLs(keep){for(const[hash,url]of objectUrlCache)if(!keep.h
 async function runProject(projectId,versionId){if(!versionId){toast('لا توجد نسخة معتمدة لهذا المشروع');return}if('serviceWorker'in navigator){try{await navigator.serviceWorker.ready}catch{}}location.href=`./runner.html?project=${encodeURIComponent(projectId)}&version=${encodeURIComponent(versionId)}`}
 const timeline=createTimeline({runProject,toast,render,confirm:confirmDestructive});
 
+function coverPlate(size){
+  if(!size||typeof size.lum!=='number')return'';
+  const small=size.vector||size.w<320||size.h<200;
+  if(!small)return'';
+  return size.lum<0.42?'light':size.lum>0.62?'dark':'';
+}
 function coverMarkup(url,size){
   /* A 16x16 favicon stretched across a 16:10 frame was the single ugliest thing
      on the home screen. Anything under 320px wide gets letterboxed instead. */
@@ -48,7 +54,7 @@ async function render(){
   for(const p of projects){
     const vc=p.versionCount||1,card=document.createElement('article');
     card.className='project-card';
-    card.innerHTML=`<div class="project-cover">${coverMarkup(covers.get(p.id),p.thumbSize)}</div><div class="project-card__body"><div class="project-card__head"><div class="project-card__id"><h2>${esc(p.title)}</h2><div class="project-meta"><span>${fmtNumber(vc)} ${plural(vc,'نسخة','نسختان','نسخ','نسخة')}</span><span aria-hidden="true">·</span><span>آخر تحديث ${esc(since(p.updatedAt))}</span></div></div><button class="kebab" type="button" aria-label="خيارات ${esc(p.title)}" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></button></div><div class="project-actions"><button class="button enter" type="button">دخول</button><button class="button button--outline update" type="button">تحديث</button></div></div>`;
+    card.innerHTML=`<div class="project-cover" data-plate="${coverPlate(p.thumbSize)}">${coverMarkup(covers.get(p.id),p.thumbSize)}</div><div class="project-card__body"><div class="project-card__head"><div class="project-card__id"><h2>${esc(p.title)}</h2><div class="project-meta"><span>${fmtNumber(vc)} ${plural(vc,'نسخة','نسختان','نسخ','نسخة')}</span><span aria-hidden="true">·</span><span>آخر تحديث ${esc(since(p.updatedAt))}</span></div></div><div class="kebab-wrap"><button class="kebab" type="button" aria-label="خيارات ${esc(p.title)}" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></button></div></div><div class="project-actions"><button class="button enter" type="button">دخول</button><button class="button button--outline update" type="button">تحديث</button></div></div>`;
     card.querySelector('.enter').onclick=()=>runProject(p.id,p.adoptedVersionId);
     card.querySelector('.update').onclick=()=>openImport(p.id,p.title);
     card.querySelector('.kebab').onclick=e=>{e.stopPropagation();toggleMenu(card,p)};
@@ -105,7 +111,7 @@ function toggleMenu(card,p){
   menuCloser=()=>{document.removeEventListener('pointerdown',onDown);document.removeEventListener('keydown',onKey);m.remove();kebab.setAttribute('aria-expanded','false')};
   m.onclick=e=>{const b=e.target.closest('button');if(!b)return;const act=b.dataset.act;closeMenu();
     if(act==='info')showInfo(p.id);else if(act==='timeline')timeline.show(p.id);else if(act==='delete')removeProject(p);};
-  card.appendChild(m);kebab.setAttribute('aria-expanded','true');
+  kebab.parentElement.appendChild(m);kebab.setAttribute('aria-expanded','true');
   setTimeout(()=>{document.addEventListener('pointerdown',onDown);document.addEventListener('keydown',onKey)},0);
 }
 

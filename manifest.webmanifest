@@ -1,0 +1,15 @@
+{
+  "name": "Local",
+  "short_name": "Local",
+  "description": "شغّل مشاريع الويب محليًا واحتفظ بخطها الزمني.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f3ef",
+  "theme_color": "#f4f3ef",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {"src":"./assets/logo.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}

@@ -41,7 +41,7 @@ jobs:
           RESPONSE="$(mktemp)"
           STATUS="$(curl --retry 3 --retry-all-errors -sS -o "$RESPONSE" -w "%{http_code}" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects?per_page=100")"
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects")"
           if [ "$STATUS" != "200" ] || ! jq -e '.success == true' "$RESPONSE" >/dev/null; then
             cat "$RESPONSE"
             exit 1
@@ -55,7 +55,7 @@ jobs:
           LIST="$(mktemp)"
           curl --retry 3 --retry-all-errors -fsS \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            "${API}?per_page=100" > "$LIST"
+            "$API" > "$LIST"
 
           EXISTING="$(jq -r '.result[]? | select(.name == "mmw" or .name == "mmw-meshal515" or .name == "mmw-1367603013") | .name' "$LIST" | head -n1)"
           if [ -n "$EXISTING" ]; then

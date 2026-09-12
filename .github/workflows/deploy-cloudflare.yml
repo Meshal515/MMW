@@ -28,9 +28,52 @@ jobs:
           cp index.html runner.html app.js styles.css sw.js manifest.webmanifest _headers dist/
           cp -R assets js styles dist/
 
+      - name: Ensure Cloudflare Pages project exists
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          PROJECT_NAME="mmw"
+          PROJECT_URL="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"
+          PROJECTS_URL="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
+          RESPONSE="$(mktemp)"
+
+          STATUS="$(curl -sS -o "$RESPONSE" -w "%{http_code}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$PROJECT_URL")"
+
+          if [ "$STATUS" = "200" ] && jq -e '.success == true' "$RESPONSE" >/dev/null; then
+            echo "Cloudflare Pages project '${PROJECT_NAME}' already exists."
+          elif [ "$STATUS" = "404" ] || jq -e '.errors[]? | select(.code == 8000007)' "$RESPONSE" >/dev/null; then
+            echo "Creating Cloudflare Pages project '${PROJECT_NAME}'..."
+            CREATE_RESPONSE="$(mktemp)"
+            CREATE_STATUS="$(curl -sS -o "$CREATE_RESPONSE" -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data '{"name":"mmw","production_branch":"main"}' \
+              "$PROJECTS_URL")"
+
+            if [ "$CREATE_STATUS" != "200" ] || ! jq -e '.success == true' "$CREATE_RESPONSE" >/dev/null; then
+              echo "Cloudflare project creation failed (HTTP ${CREATE_STATUS})."
+              cat "$CREATE_RESPONSE"
+              exit 1
+            fi
+
+            echo "Cloudflare Pages project '${PROJECT_NAME}' created."
+          else
+            echo "Unable to check Cloudflare Pages project (HTTP ${STATUS})."
+            cat "$RESPONSE"
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=mmw --branch=main
+          command: pages deploy dist --project-name=mmw --branch=main --commit-dirty=true

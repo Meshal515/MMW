@@ -1,7 +1,7 @@
 const DB_NAME='local-launcher-v1';
 const DB_VERSION=1;
-const SHELL='local-shell-v7';
-const SHELL_FILES=['./','./index.html','./styles.css','./styles/base.css','./styles/components.css','./styles/timeline.css','./app.js','./js/core.js','./js/importer.js','./js/timeline.js','./js/main.js','./runner.html','./manifest.webmanifest','./assets/logo.svg'];
+const SHELL='local-shell-v8';
+const SHELL_FILES=['./','./index.html','./styles.css','./styles/base.css','./styles/components.css','./styles/timeline.css','./app.js','./js/core.js','./js/importer.js','./js/timeline.js','./js/main.js','./runner.html','./manifest.webmanifest','./assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png'];
 
 self.addEventListener('install',event=>{event.waitUntil(caches.open(SHELL).then(c=>c.addAll(SHELL_FILES)).catch(()=>null));self.skipWaiting()});
 self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('local-shell-')&&k!==SHELL).map(k=>caches.delete(k)));await self.clients.claim()})()));

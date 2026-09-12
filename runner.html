@@ -53,6 +53,17 @@
     .exit.is-open svg{opacity:1}
     .exit:focus-visible{outline:2px solid #86A37C;outline-offset:3px}
 
+    /* **لا مقبض على اللمس.** الأندرويد يخرج بزرّ الرجوع أو بإيماءته، وإيماءتُه
+       تبدأ من حافّة الشاشة — وهو المكان نفسه الذي كان المقبض يجلس فيه، فيزاحم
+       ما لا حاجة إليه أصلًا.
+
+       ويبقى في التثبيت المستقلّ: هناك قد لا يكون في الواجهة زرُّ رجوعٍ ظاهر،
+       فحذفُه هناك يترك المستخدم بلا مخرج. */
+    @media (hover: none) and (pointer: coarse) { .exit { display: none; } }
+    @media all and (display-mode: standalone),
+           all and (display-mode: fullscreen),
+           all and (display-mode: minimal-ui) { .exit { display: grid; } }
+
     /* Says what is running, then gets out of the way. */
     .flash{
       position:fixed;z-index:2147483646;inset-block-end:calc(18px + env(safe-area-inset-bottom,0px));
@@ -144,7 +155,11 @@
         flash.className='flash';
         const name=document.createElement('span'); name.textContent=p.title;
         flash.appendChild(name);
-        flash.insertAdjacentHTML('beforeend',' — للخروج: المقبض على حافة الشاشة');
+        /* يُقرأ من الأنماط لا من تخمين: ما كان المقبض مخفيًّا فالمخرج هو الرجوع. */
+        const handled=getComputedStyle(exitBtn).display!=='none';
+        flash.insertAdjacentHTML('beforeend', handled
+          ? ' — للخروج: المقبض على حافة الشاشة'
+          : ' — للخروج: زر الرجوع');
         document.body.appendChild(flash);
         flash.addEventListener('animationend',()=>flash.remove());
       }catch(e){

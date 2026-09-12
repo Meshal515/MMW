@@ -1,0 +1,36 @@
+name: Validate Local
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check sw.js
+          node --check js/core.js
+          node --check js/importer.js
+          node --check js/main.js
+          node --check js/timeline.js
+      - name: Check HTML and required files
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          class P(HTMLParser): pass
+          for f in ['index.html','runner.html']:
+              p=P(); p.feed(Path(f).read_text())
+          required=['styles.css','manifest.webmanifest','assets/logo.svg','sw.js']
+          missing=[f for f in required if not Path(f).exists()]
+          assert not missing, f'Missing: {missing}'
+          print('Validation OK')
+          PY

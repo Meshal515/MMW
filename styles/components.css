@@ -40,3 +40,27 @@
 .console-row[data-level="error"] { color: #E1A59B; }
 .console-row[data-level="warn"] { color: #D9C78B; }
 .console-empty { color: var(--muted); padding: 26px; text-align: center; border: 1px dashed var(--line); border-radius: 18px; }
+
+/* ── destructive confirmation ─────────────────────────────────────────────── */
+.modal--narrow { width: min(520px, calc(100% - 28px)); }
+.eyebrow--danger { color: var(--danger); }
+.confirm__lede { margin: 16px 0 0; color: var(--muted); line-height: 1.8; }
+.confirm__cost {
+  margin-top: 16px; display: grid; gap: 1px;
+  border: 1px solid var(--line); border-radius: 15px;
+  background: var(--line); overflow: hidden;
+}
+.confirm__cost div {
+  display: flex; justify-content: space-between; gap: 16px;
+  padding: 12px 15px; background: var(--surface); font-size: 14px;
+}
+.confirm__cost dt, .confirm__cost span:first-child { color: var(--muted); }
+.confirm__cost b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.confirm__actions { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.button--danger { background: var(--danger); color: #fff; border-color: transparent; }
+.popover button.is-danger { color: var(--danger); }
+.popover hr { border: 0; border-top: 1px solid var(--line); margin: 5px 7px; }
+.version-panel__actions--three { grid-template-columns: 1fr 1fr auto; }
+.version-panel .icon-button--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, var(--line)); }
+.version-panel__danger { margin-top: 9px; display: grid; gap: 8px; }
+.version-panel__danger .button { min-height: 40px; font-size: 13px; }

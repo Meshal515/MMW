@@ -106,6 +106,23 @@
     </div>
   </dialog>
 
+  <dialog class="modal modal--narrow" id="confirmDialog">
+    <form method="dialog" class="modal__panel">
+      <div class="modal__head">
+        <div>
+          <p class="eyebrow eyebrow--danger">لا يمكن التراجع</p>
+          <h2 id="confirmTitle">حذف</h2>
+        </div>
+      </div>
+      <p class="confirm__lede" id="confirmLede"></p>
+      <div class="confirm__cost" id="confirmCost"></div>
+      <div class="confirm__actions">
+        <button class="button button--outline" value="cancel" type="submit">تراجع</button>
+        <button class="button button--danger" value="ok" type="submit" id="confirmOk">حذف</button>
+      </div>
+    </form>
+  </dialog>
+
   <section class="timeline-view" id="timelineView" hidden aria-label="الخط الزمني">
     <header class="timeline-header">
       <button class="icon-button" id="closeTimeline" type="button" aria-label="رجوع">

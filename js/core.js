@@ -31,6 +31,87 @@ export async function putOne(store,value){const db=await openDB();const tx=db.tr
 export async function putMany(store,values){const db=await openDB();const tx=db.transaction(store,'readwrite');const s=tx.objectStore(store);for(const v of values)s.put(v);return done(tx)}
 export async function logsFor(versionId){const db=await openDB();const idx=db.transaction('logs').objectStore('logs').index('versionId');const rows=await req(idx.getAll(versionId));return rows.sort((a,b)=>b.ts-a.ts).slice(0,150)}
 
+/* ── deletion ───────────────────────────────────────────────────────────────
+   Files are shared between versions by hash, so nothing may be removed from
+   `objects` because one version stopped pointing at it. Every delete ends with
+   a sweep that keeps whatever any surviving version — or project cover — still
+   references, and drops only what nothing points to. */
+
+export async function deleteOne(store,key){const db=await openDB();const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(key);return done(tx)}
+
+async function deleteLogsFor(versionIds){const db=await openDB();const ids=new Set(versionIds);const tx=db.transaction('logs','readwrite');const idx=tx.objectStore('logs').index('versionId');const store=tx.objectStore('logs');for(const id of ids){const r=idx.getAllKeys(id);r.onsuccess=()=>{for(const k of r.result)store.delete(k)}}return done(tx)}
+
+export async function sweepObjects(){
+  const [versions,projects]=await Promise.all([getAll('versions'),getAll('projects')]);
+  const keep=new Set();
+  for(const v of versions){for(const m of v.manifest||[])keep.add(m.hash);if(v.thumbnailHash)keep.add(v.thumbnailHash)}
+  for(const p of projects)if(p.thumbnailHash)keep.add(p.thumbnailHash);
+  const db=await openDB();
+  const all=await req(db.transaction('objects').objectStore('objects').getAllKeys());
+  const dead=all.filter(h=>!keep.has(h));
+  if(!dead.length)return{removed:0,freed:0};
+  let freed=0;
+  for(const h of dead){const o=await getOne('objects',h);freed+=o?.size||o?.blob?.size||0}
+  const tx=db.transaction('objects','readwrite'),store=tx.objectStore('objects');
+  for(const h of dead)store.delete(h);
+  await done(tx);
+  return{removed:dead.length,freed};
+}
+
+/* What a delete would cost, measured before it is offered — the confirmation has
+   to name what is actually lost, not a vague warning. */
+export async function deleteImpact(projectId,keepVersionIds=[]){
+  const versions=(await getAll('versions','projectId',projectId));
+  const keep=new Set(keepVersionIds);
+  const going=versions.filter(v=>!keep.has(v.id));
+  const [all,projects]=await Promise.all([getAll('versions'),getAll('projects')]);
+  const survivors=all.filter(v=>v.projectId!==projectId||keep.has(v.id));
+  const kept=new Set();
+  for(const v of survivors){for(const m of v.manifest||[])kept.add(m.hash);if(v.thumbnailHash)kept.add(v.thumbnailHash)}
+  for(const p of projects)if(p.id!==projectId&&p.thumbnailHash)kept.add(p.thumbnailHash);
+  const freeing=new Map();
+  for(const v of going){for(const m of v.manifest||[])if(!kept.has(m.hash))freeing.set(m.hash,m.size||0)}
+  let bytes=0;for(const n of freeing.values())bytes+=n;
+  return{versions:going.length,files:freeing.size,bytes};
+}
+
+export async function deleteVersions(versionIds){
+  const ids=[...new Set(versionIds)];
+  if(!ids.length)return{removed:0,freed:0};
+  await deleteLogsFor(ids);
+  const db=await openDB();
+  const tx=db.transaction('versions','readwrite'),store=tx.objectStore('versions');
+  for(const id of ids)store.delete(id);
+  await done(tx);
+  return sweepObjects();
+}
+
+export async function deleteProject(projectId){
+  const versions=await getAll('versions','projectId',projectId);
+  await deleteVersions(versions.map(v=>v.id));
+  await deleteOne('projects',projectId);
+  return sweepObjects();
+}
+
+/* Keeps one version and drops the rest. The survivor becomes the adopted one,
+   because a project whose adopted version was just deleted has nothing to run. */
+export async function keepOnlyVersion(projectId,versionId){
+  const versions=await getAll('versions','projectId',projectId);
+  const survivor=versions.find(v=>v.id===versionId);
+  if(!survivor)throw new Error('النسخة غير موجودة');
+  await deleteVersions(versions.filter(v=>v.id!==versionId).map(v=>v.id));
+  const project=await getOne('projects',projectId);
+  if(project){
+    project.adoptedVersionId=survivor.id;
+    project.versionCount=1;
+    project.thumbnailHash=survivor.thumbnailHash||'';
+    project.thumbSize=survivor.thumbSize||null;
+    if(survivor.title)project.title=survivor.title;
+    await putOne('projects',project);
+  }
+  return sweepObjects();
+}
+
 export async function requestPersistentStorage(){try{if(navigator.storage?.persist)await navigator.storage.persist()}catch{}}
 export async function storageSnapshot(){try{const e=await navigator.storage?.estimate?.();const persisted=await navigator.storage?.persisted?.();return{usage:e?.usage||0,quota:e?.quota||0,persisted:!!persisted}}catch{return{usage:0,quota:0,persisted:false}}}
 export function safeThemeGet(){try{return localStorage.getItem('local-theme')}catch{return null}}

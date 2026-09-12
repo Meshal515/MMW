@@ -9,6 +9,7 @@ Local is a local-first web-project launcher and visual version timeline.
 - Deduplicate identical files by SHA-256 across versions.
 - Add updates without destroying old versions.
 - Adding an update adopts it immediately; the timeline is where you go back to an older version and adopt that instead.
+- Delete a whole project, a single version, or every version but one. Files shared with a surviving version are kept; only what nothing points to is freed, and the confirmation states the real cost before anything is removed.
 - Run a version full screen, with no Local chrome over it. The only exit is a handle on the screen edge, placed opposite the project's own scrollbar. No keyboard shortcut is taken, so the project keeps Escape and every other key for itself.
 - Explore the full project history on a pannable/zoomable timeline.
 - Inspect file counts, size, lines, characters, file types, runtime console messages, and errors.

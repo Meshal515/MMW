@@ -20,5 +20,6 @@ This repository is static and requires no build step.
 - Framework preset: None
 - Build command: leave empty
 - Build output directory: `/`
+- Production deployment is triggered automatically from GitHub Actions on pushes to `main`.
 
 The imported projects stay local to the browser. They are not uploaded to this repository or Cloudflare.

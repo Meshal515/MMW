@@ -14,6 +14,7 @@ Local is a local-first web-project launcher and visual version timeline.
 - Run a version full screen, with no Local chrome over it. On a touch device nothing is drawn over the project at all — the system back gesture is the way out. On a pointer device a handle sits on the screen edge, opposite the project's own scrollbar. No keyboard shortcut is taken, so the project keeps Escape and every other key for itself.
 - Explore the full project history on a pannable/zoomable timeline.
 - Inspect file counts, size, lines, characters, file types, runtime console messages, and errors.
+- Export the whole library to a single ZIP and restore it on another device. The archive carries the projects, their versions, their deduplicated files, `localStorage`, **and the IndexedDB databases the tools themselves wrote** — the last of these being the only data with no copy anywhere else. Restore merges: nothing already present is overwritten.
 - Install as a PWA and continue using the app offline after the shell is cached.
 
 ## Cloudflare Pages

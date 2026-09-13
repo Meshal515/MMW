@@ -1,5 +1,6 @@
 import{getAll,getOne,logsFor,storageSnapshot,requestPersistentStorage,fmtBytes,fmtNumber,fmtDate,since,plural,esc,bdi,safeThemeGet,safeThemeSet,deleteProject,deleteImpact}from'./core.js';
 import{unzip,fromFileList,persistVersion}from'./importer.js';
+import{exportLibrary,importLibrary}from'./archive.js';
 import{createTimeline}from'./timeline.js';
 
 const $=s=>document.querySelector(s),main=$('#main'),importDialog=$('#importDialog'),importProgress=$('#importProgress'),progressText=$('#progressText'),headerAdd=$('#headerAdd'),infoDialog=$('#infoDialog');
@@ -267,3 +268,80 @@ async function drainInbox(){
   if(files.length)await openLaunchedFiles(files);
 }
 await drainInbox();
+
+/* ── النسخ الاحتياطيّ ───────────────────────────────────────────────────────
+   المشروع يُعاد استيراده من ملفّه الأصليّ إن ضاع، أمّا ما كتبتَه **داخل**
+   أداتك فلا نسخةَ له في مكانٍ آخر. فالأرشيف يحمل الاثنين. */
+const backupDialog=$('#backupDialog'),backupProgress=$('#backupProgress'),backupProgressText=$('#backupProgressText');
+let archiving=false;
+
+async function showBackup(){
+  const [projects,versions]=await Promise.all([getAll('projects'),getAll('versions')]);
+  const storage=await storageSnapshot();
+  let toolDbs=0;
+  try{ toolDbs=(await indexedDB.databases?.()||[]).filter(d=>d.name&&d.name!=='local-launcher-v1').length }catch{}
+  $('#backupStats').innerHTML=[
+    ['المشاريع',fmtNumber(projects.length)],
+    ['النسخ',fmtNumber(versions.length)],
+    ['قواعد بيانات الأدوات',fmtNumber(toolDbs)],
+    ['المستخدم على الجهاز',bdi(fmtBytes(storage.usage))],
+    ['المتاح',storage.quota?bdi(fmtBytes(storage.quota)):'—'],
+    ['تخزين دائم',storage.persisted?'نعم':'لا — قد يُمحى عند ضغط المساحة'],
+  ].map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join('');
+  backupProgress.hidden=true;
+  backupDialog.showModal();
+}
+
+function busy(on,text=''){
+  archiving=on;
+  backupProgress.hidden=!on;
+  backupProgressText.textContent=text;
+  for(const b of [$('#exportLibrary'),$('#importLibrary')])b.disabled=on;
+}
+
+async function doExport(){
+  if(archiving)return;
+  busy(true,'أجهّز…');
+  try{
+    const {blob,manifest}=await exportLibrary(t=>{backupProgressText.textContent=t});
+    const stamp=new Date().toISOString().slice(0,10);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`local-library-${stamp}.zip`;
+    document.body.appendChild(a); a.click(); a.remove();
+    /* لا يُسحب فورًا: بعض المتصفّحات تقرأ الرابط بعد النقرة. */
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    toast(`صُدِّرت — ${fmtNumber(manifest.counts.projects)} ${plural(manifest.counts.projects,'مشروع','مشروعان','مشاريع','مشروعًا')} · ${fmtBytes(blob.size)}`);
+    backupDialog.close();
+  }catch(err){
+    console.error(err);
+    backupProgressText.textContent=err.message||'تعذر التصدير';
+    toast('تعذر التصدير');
+  }finally{ busy(false) }
+}
+
+async function doImport(file){
+  if(archiving||!file)return;
+  busy(true,'أقرأ الملف…');
+  try{
+    const {report}=await importLibrary(file,t=>{backupProgressText.textContent=t});
+    const added=report.projects+report.versions+report.objects+report.toolRows;
+    if(!added){
+      backupProgressText.textContent='كل ما في النسخة موجود عندك أصلًا — لم يُغيَّر شيء.';
+    }else{
+      backupDialog.close();
+      toast(`استُعيد ${fmtNumber(report.projects)} ${plural(report.projects,'مشروع','مشروعان','مشاريع','مشروعًا')} و${fmtNumber(report.toolRows)} سجلًّا من بيانات الأدوات`);
+      await render();
+    }
+  }catch(err){
+    console.error(err);
+    backupProgressText.textContent=err.message||'تعذر الاستيراد';
+    toast('تعذر الاستيراد');
+  }finally{ busy(false); $('#libraryInput').value='' }
+}
+
+$('#headerBackup').onclick=()=>showBackup();
+$('#closeBackup').onclick=()=>{ if(!archiving)backupDialog.close() };
+$('#exportLibrary').onclick=()=>doExport();
+$('#importLibrary').onclick=()=>$('#libraryInput').click();
+$('#libraryInput').onchange=e=>e.target.files[0]&&doImport(e.target.files[0]);

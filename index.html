@@ -31,6 +31,9 @@
         <button class="icon-button" id="themeToggle" type="button" aria-label="تغيير المظهر" title="تغيير المظهر">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.1A8.8 8.8 0 0 1 8.9 3.8a9 9 0 1 0 11.3 11.3Z"/></svg>
         </button>
+        <button class="icon-button" id="headerBackup" type="button" aria-label="نسخة احتياطية" title="نسخة احتياطية">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10m0 0-3.5-3.5M12 13l3.5-3.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
+        </button>
         <button class="button button--compact" id="headerAdd" type="button" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           <span>أضف مشروعًا</span>
@@ -103,6 +106,31 @@
         </button>
       </div>
       <div id="infoBody"></div>
+    </div>
+  </dialog>
+
+  <dialog class="modal modal--narrow" id="backupDialog">
+    <div class="modal__panel">
+      <div class="modal__head">
+        <div>
+          <p class="eyebrow">نسخة احتياطية</p>
+          <h2>مكتبتك كاملة في ملف واحد</h2>
+        </div>
+        <button class="icon-button" id="closeBackup" type="button" aria-label="إغلاق">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <p class="confirm__lede">يشمل الملف مشاريعك ونسخها وملفاتها، <strong>وبيانات أدواتك نفسها</strong> — وهي ما لا نسخة له في مكان آخر.</p>
+      <div class="confirm__cost" id="backupStats"></div>
+      <div class="progress" id="backupProgress" hidden>
+        <div class="progress__bar"><i></i></div>
+        <span id="backupProgressText">…</span>
+      </div>
+      <div class="confirm__actions">
+        <button class="button button--outline" id="importLibrary" type="button">استيراد نسخة</button>
+        <button class="button button--accent" id="exportLibrary" type="button">تصدير المكتبة</button>
+      </div>
+      <input id="libraryInput" type="file" accept=".zip,application/zip" hidden>
     </div>
   </dialog>
 

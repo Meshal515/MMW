@@ -15,7 +15,7 @@ async function objectURL(hash){if(!hash)return'';if(objectUrlCache.has(hash))ret
 function releaseUnusedURLs(keep){for(const[hash,url]of objectUrlCache)if(!keep.has(hash)){URL.revokeObjectURL(url);objectUrlCache.delete(hash)}}
 
 async function runProject(projectId,versionId){if(!versionId){toast('لا توجد نسخة معتمدة لهذا المشروع');return}if('serviceWorker'in navigator){try{await navigator.serviceWorker.ready}catch{}}location.href=`./runner.html?project=${encodeURIComponent(projectId)}&version=${encodeURIComponent(versionId)}`}
-const timeline=createTimeline({runProject,toast,render,confirm:confirmDestructive});
+const timeline=createTimeline({runProject,toast,render,confirm:confirmAction});
 
 function coverPlate(size){
   if(!size||typeof size.lum!=='number')return'';
@@ -68,29 +68,37 @@ async function render(){
    goes: how many versions, how many files, how much disk comes back. Shared
    files that other versions still use are not counted — they are not freed. */
 const confirmDialog=$('#confirmDialog');
-function confirmDestructive({title,lede,cost=[],okLabel='حذف'}){
+/* Returns the chosen value — 'ok', 'alt' or 'cancel' — because this dialog also
+   asks questions that are not yes/no, such as "new project or new version?". */
+function confirmAction({title,lede,cost=[],okLabel='حذف',altLabel='',tone='danger'}){
   $('#confirmTitle').textContent=title;
   $('#confirmLede').textContent=lede;
   /* Values are Latin (685 B, 12 KB) inside Arabic rows — isolate or the bidi
      algorithm moves the unit to the front and prints "B 685". */
   $('#confirmCost').innerHTML=cost.map(([k,v])=>`<div><span>${esc(k)}</span><b>${bdi(v)}</b></div>`).join('');
   $('#confirmCost').hidden=!cost.length;
-  $('#confirmOk').textContent=okLabel;
+  const ok=$('#confirmOk'),alt=$('#confirmAlt');
+  ok.textContent=okLabel;
+  ok.classList.toggle('button--danger',tone==='danger');
+  ok.classList.toggle('button--accent',tone!=='danger');
+  alt.hidden=!altLabel;
+  alt.textContent=altLabel||'';
+  confirmDialog.querySelector('.eyebrow').textContent=tone==='danger'?'لا يمكن التراجع':'اختر';
   return new Promise(resolve=>{
-    confirmDialog.addEventListener('close',()=>resolve(confirmDialog.returnValue==='ok'),{once:true});
+    confirmDialog.addEventListener('close',()=>resolve(confirmDialog.returnValue||'cancel'),{once:true});
     confirmDialog.showModal();
-    $('#confirmOk').focus();
+    ok.focus();
   });
 }
 
 async function removeProject(p){
   const impact=await deleteImpact(p.id);
-  const ok=await confirmDestructive({
+  const choice=await confirmAction({
     title:`حذف «${p.title}»؟`,
     lede:'يُحذف المشروع وكل نسخه وملفاته من هذا الجهاز. لا نسخة احتياطية، ولا طريق للرجوع.',
     cost:[['النسخ',fmtNumber(impact.versions)],['الملفات',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
     okLabel:'احذف المشروع'});
-  if(!ok)return;
+  if(choice!=='ok')return;
   await deleteProject(p.id);
   toast('حُذف المشروع');
   await render();
@@ -177,3 +185,59 @@ $('#themeToggle').setAttribute('aria-pressed',String((safeThemeGet()||'light')==
 requestPersistentStorage();
 if('serviceWorker'in navigator){try{await navigator.serviceWorker.register('./sw.js',{scope:'./'})}catch(e){console.warn('SW',e)}}
 await render();
+
+/* ── فتحُ ملفٍّ من النظام ────────────────────────────────────────────────────
+   التطبيقُ المثبَّت يُسجَّل لدى النظام معالِجًا لـ.html و.zip، فيظهر في «الفتح
+   بواسطة» بجانب المتصفّحات والمحرّرات. والملفّ يصل هنا بدل أن يُفتح في لسانٍ
+   لا يحسن إلّا النظر إليه. */
+
+async function peekTitle(file){
+  const fallback=String(file.name||'').replace(/\.(zip|html?)$/i,'').trim()||'مشروع';
+  if(!/\.html?$/i.test(file.name||''))return fallback;
+  try{
+    /* العنوان في <head>، فأوّل مقطعٍ يكفي — أداةٌ بحجم ميجابايتين لا تُقرأ
+       كاملةً لمجرّد معرفة اسمها. */
+    const head=await file.slice(0,65536).text();
+    const m=/<title[^>]*>([\s\S]*?)<\/title>/i.exec(head);
+    return (m&&m[1].trim())||fallback;
+  }catch{return fallback}
+}
+
+async function openLaunchedFiles(files){
+  if(!files.length||importing)return;
+  const first=files[0];
+  const kind=files.length>1?'folder':(/\.zip$/i.test(first.name||'')?'zip':'file');
+  const title=await peekTitle(first);
+  const existing=(await getAll('projects')).find(p=>p.title===title);
+  let targetId=null;
+  if(existing){
+    /* هذا هو الطريق الطبيعيّ: تنزّل نسخةً أحدث من أداتك وتفتحها. السؤال ليس
+       «متأكّد؟» بل «نسخةٌ في تاريخه، أم مشروعٌ مستقلّ؟». */
+    const vc=existing.versionCount||1;
+    const choice=await confirmAction({
+      title:`«${title}» موجود عندك`,
+      lede:'تبيه نسخةً جديدةً داخل المشروع الموجود فيبقى تاريخه كله ويصير هذا هو المعتمد؟ أو مشروعًا مستقلًّا بتاريخٍ خاصٍّ به؟',
+      cost:[['المشروع الموجود',`${fmtNumber(vc)} ${plural(vc,'نسخة','نسختان','نسخ','نسخة')}`],
+            ['الملف المفتوح',fmtBytes(first.size||0)]],
+      okLabel:'نسخة جديدة',
+      altLabel:'مشروع مستقل',
+      tone:'neutral'});
+    if(choice==='cancel')return;
+    targetId=choice==='ok'?existing.id:null;
+  }
+  openImport(targetId,existing?.title||'');
+  await handleImport(kind,files);
+}
+
+if('launchQueue' in window && 'files' in (window.LaunchParams?.prototype||{})){
+  launchQueue.setConsumer(async (params)=>{
+    if(!params?.files?.length)return;
+    try{
+      const files=await Promise.all(params.files.map(h=>h.getFile()));
+      await openLaunchedFiles(files);
+    }catch(err){
+      console.error(err);
+      toast('تعذر فتح الملف');
+    }
+  });
+}

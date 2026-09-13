@@ -7,6 +7,7 @@ Local is a local-first web-project launcher and visual version timeline.
 - Import a static web project as ZIP, folder, or a single HTML file.
 - Once installed, Local registers with the desktop OS as a handler for `.html` and `.zip`, so it appears in "Open with" beside the browsers and editors. Android has no such API, so there it registers as a share target and appears in the share sheet instead. Either way, a file whose title matches an existing project is offered as a new version of that project rather than a duplicate.
 - Keep project files in browser IndexedDB on the current device.
+- Give every project its own corner of storage. The runtime injected into a project prefixes the name of every store it opens with the project's id, so two projects can both use a key called `settings` without touching each other, a project cannot reach Local's own database by name, and deleting a project takes its data with it. This is attribution, not a security sandbox: a script on the same origin can still work around any wrapper. Real isolation needs a separate origin, which needs a domain.
 - Deduplicate identical files by SHA-256 across versions.
 - Add updates without destroying old versions.
 - Adding an update adopts it immediately; the timeline is where you go back to an older version and adopt that instead.

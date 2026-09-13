@@ -10,7 +10,7 @@
    نصّيّةً تقتل الذاكرة قبل أن تُكتب.
    =========================================================================== */
 
-import { getAll, getOne, putOne, uuid } from './core.js';
+import { getAll, getOne, putOne, uuid, projectPrefix, legacyToolDatabases } from './core.js';
 import { unzip } from './importer.js';
 
 export const ARCHIVE_VERSION = 1;
@@ -141,6 +141,43 @@ function decodeValue(v, load){
 
 const OWN_DB = 'local-launcher-v1';
 
+async function dumpOneDatabase(name, emit, onProgress = () => {}){
+  const db = await new Promise((res, rej) => {
+    const r = indexedDB.open(name);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error('blocked'));
+  });
+  /* الاسم يحمل صاحبَه: `lp:<معرّف المشروع>:<الاسم>`. يُفكّ ليُحفظ منسوبًا،
+     فتعود القاعدة إلى ركن مشروعها ولو أُعيد ترقيم المشاريع. */
+  const m = /^lp:([^:]+):([\s\S]*)$/.exec(name);
+  const dump = { name, version: db.version, stores: [],
+                 projectId: m ? m[1] : null, bareName: m ? m[2] : name };
+  for (const sName of [...db.objectStoreNames]){
+    const os = db.transaction(sName).objectStore(sName);
+    const rows = await new Promise((res, rej) => {
+      const q = os.getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    });
+    let keys = null;
+    if (!os.keyPath){
+      keys = await new Promise((res) => {
+        const q = os.getAllKeys(); q.onsuccess = () => res(q.result); q.onerror = () => res(null);
+      });
+    }
+    dump.stores.push({
+      name: sName, keyPath: os.keyPath, autoIncrement: os.autoIncrement,
+      indexes: [...os.indexNames].map(n => {
+        const ix = os.index(n);
+        return { name: n, keyPath: ix.keyPath, unique: ix.unique, multiEntry: ix.multiEntry };
+      }),
+      keys, rows: await encodeValue(rows, emit),
+    });
+    onProgress(name, sName);
+  }
+  db.close();
+  return dump;
+}
+
 async function readToolDatabases(emit, onProgress = () => {}){
   if (!indexedDB.databases) return [];
   let list = [];
@@ -148,39 +185,8 @@ async function readToolDatabases(emit, onProgress = () => {}){
   const out = [];
   for (const info of list){
     if (!info.name || info.name === OWN_DB) continue;
-    try{
-      const db = await new Promise((res, rej) => {
-        const r = indexedDB.open(info.name);
-        r.onsuccess = () => res(r.result);
-        r.onerror = () => rej(r.error);
-        r.onblocked = () => rej(new Error('blocked'));
-      });
-      const stores = [...db.objectStoreNames];
-      const dump = { name: info.name, version: db.version, stores: [] };
-      for (const s of stores){
-        const os = db.transaction(s).objectStore(s);
-        const rows = await new Promise((res, rej) => {
-          const q = os.getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
-        });
-        let keys = null;
-        if (!os.keyPath){
-          keys = await new Promise((res) => {
-            const q = os.getAllKeys(); q.onsuccess = () => res(q.result); q.onerror = () => res(null);
-          });
-        }
-        dump.stores.push({
-          name: s, keyPath: os.keyPath, autoIncrement: os.autoIncrement,
-          indexes: [...os.indexNames].map(n => {
-            const ix = os.index(n);
-            return { name: n, keyPath: ix.keyPath, unique: ix.unique, multiEntry: ix.multiEntry };
-          }),
-          keys, rows: await encodeValue(rows, emit),
-        });
-        onProgress(info.name, s);
-      }
-      db.close();
-      out.push(dump);
-    }catch{ /* قاعدةٌ لا تُقرأ تُتخطّى ويُذكر ذلك في البيان */ }
+    try{ out.push(await dumpOneDatabase(info.name, emit, onProgress)) }
+    catch{ /* قاعدةٌ لا تُقرأ تُتخطّى والبقيّة تكمل */ }
   }
   return out;
 }
@@ -268,6 +274,9 @@ const txDone = (tx) => new Promise((res, rej) => {
 });
 
 async function restoreToolDatabase(dump, load){
+  /* يُعاد بناء الاسم من صاحبه لا يُؤخذ حرفيًّا، فالأرشيف يبقى صالحًا ولو
+     أُعيد ترقيم المشاريع. */
+  if (dump.projectId && dump.bareName) dump = { ...dump, name: projectPrefix(dump.projectId) + dump.bareName };
   /* لا تُفتح للاستكشاف: `indexedDB.open(name)` على قاعدةٍ غير موجودة **ينشئها**
      بالنسخة ١، فلا تُطلق الترقيةُ في الفتحة التالية وتبقى القاعدة بلا مخازن. */
   let existing = 0;
@@ -394,4 +403,48 @@ export async function importLibrary(file, onProgress = () => {}){
   }
 
   return { manifest, report };
+}
+
+
+/* ── استيعاب بياناتٍ من قبل النَّسْب ────────────────────────────────────────
+   ما كُتب قبل أن يصير لكلّ مشروعٍ ركنُه لا بادئة له، فلا يراه المشروع بعد
+   التحديث ويبدو ضائعًا — وهو موجود. يُنقل إلى ركنه بإذنٍ صريحٍ من صاحبه، لأنّ
+   Local لا يعرف لأيّ مشروعٍ هو. */
+
+export async function legacyStorage(){
+  const dbs = await legacyToolDatabases();
+  const keys = [];
+  try{
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (k && k !== 'local-theme' && !k.startsWith('lp:')) keys.push(k);
+    }
+  }catch{}
+  return { dbs, keys };
+}
+
+export async function adoptLegacy(projectId, onProgress = () => {}){
+  const pfx = projectPrefix(projectId);
+  const { dbs, keys } = await legacyStorage();
+  let movedDbs = 0, movedKeys = 0;
+  for (const d of dbs){
+    onProgress(`أنقل ${d.name}…`);
+    const bin = new Map();
+    const emit = async (blob) => { const id = 'mem:' + uuid(); bin.set(id, blob); return id };
+    let dump;
+    try{ dump = await dumpOneDatabase(d.name, emit) }catch{ continue }
+    dump = { ...dump, name: pfx + d.name, projectId, bareName: d.name };
+    try{
+      await restoreToolDatabase(dump, (ref) => bin.get(ref) || null);
+      await new Promise(res => { const q = indexedDB.deleteDatabase(d.name); q.onsuccess = q.onerror = q.onblocked = () => res() });
+      movedDbs++;
+    }catch{}
+  }
+  for (const k of keys){
+    try{
+      const v = localStorage.getItem(k);
+      if (v !== null){ localStorage.setItem(pfx + k, v); localStorage.removeItem(k); movedKeys++ }
+    }catch{}
+  }
+  return { dbs: movedDbs, keys: movedKeys };
 }

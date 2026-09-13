@@ -41,6 +41,52 @@ export async function deleteOne(store,key){const db=await openDB();const tx=db.t
 
 async function deleteLogsFor(versionIds){const db=await openDB();const ids=new Set(versionIds);const tx=db.transaction('logs','readwrite');const idx=tx.objectStore('logs').index('versionId');const store=tx.objectStore('logs');for(const id of ids){const r=idx.getAllKeys(id);r.onsuccess=()=>{for(const k of r.result)store.delete(k)}}return done(tx)}
 
+/* ── تخزين المشاريع المنسوب ──────────────────────────────────────────────
+   عاملُ الخدمة يحقن في كلّ مشروعٍ ما يُسبِق اسمَ مخازنه بهذي البادئة، فيصير
+   لكلِّ مشروعٍ ركنُه. وهذي الدوالّ هي الطرف الآخر: تعدّها وتحذفها معه. */
+
+export const projectPrefix = (projectId) => `lp:${projectId}:`;
+
+async function listDatabases(){ try{ return (await indexedDB.databases?.()) || [] }catch{ return [] } }
+
+/** ما تملكه أداةُ مشروعٍ من مخازن — قبل أن يُعرض الحذف على المستخدم. */
+export async function projectStorageFootprint(projectId){
+  const pfx = projectPrefix(projectId);
+  let keys = 0;
+  try{ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith(pfx)) keys++ } }catch{}
+  const dbs = (await listDatabases()).filter(d => d.name && d.name.startsWith(pfx)).length;
+  let cacheNames = 0;
+  try{ cacheNames = (await caches.keys()).filter(n => n.startsWith(pfx)).length }catch{}
+  return { keys, dbs, caches: cacheNames, any: keys + dbs + cacheNames > 0 };
+}
+
+/** يحذف ركنَ المشروع كلَّه. يُقاس المحرَّر فعليًّا لا يُقدَّر. */
+export async function purgeProjectStorage(projectId){
+  const pfx = projectPrefix(projectId);
+  let before = 0;
+  try{ before = (await navigator.storage.estimate()).usage || 0 }catch{}
+  try{
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith(pfx)) doomed.push(k) }
+    for (const k of doomed) localStorage.removeItem(k);
+  }catch{}
+  for (const d of await listDatabases()){
+    if (!d.name || !d.name.startsWith(pfx)) continue;
+    await new Promise(res => { const q = indexedDB.deleteDatabase(d.name); q.onsuccess = q.onerror = q.onblocked = () => res() });
+  }
+  try{ for (const n of await caches.keys()) if (n.startsWith(pfx)) await caches.delete(n) }catch{}
+  let after = before;
+  try{ after = (await navigator.storage.estimate()).usage || 0 }catch{}
+  return { freed: Math.max(0, before - after) };
+}
+
+/** قواعدُ أدواتٍ من قبل النَّسْب: لا بادئة لها، ولا يُعرف لأيّ مشروعٍ هي. */
+export async function legacyToolDatabases(){
+  return (await listDatabases())
+    .filter(d => d.name && d.name !== DB_NAME && !d.name.startsWith('lp:'))
+    .map(d => ({ name: d.name, version: d.version || 1 }));
+}
+
 export async function sweepObjects(){
   const [versions,projects]=await Promise.all([getAll('versions'),getAll('projects')]);
   const keep=new Set();

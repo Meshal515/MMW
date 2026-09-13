@@ -53,16 +53,15 @@
     .exit.is-open svg{opacity:1}
     .exit:focus-visible{outline:2px solid #86A37C;outline-offset:3px}
 
-    /* **لا مقبض على اللمس.** الأندرويد يخرج بزرّ الرجوع أو بإيماءته، وإيماءتُه
-       تبدأ من حافّة الشاشة — وهو المكان نفسه الذي كان المقبض يجلس فيه، فيزاحم
-       ما لا حاجة إليه أصلًا.
+    /* **لا مقبض على اللمس، ولا استثناء.** الأندرويد يخرج بزرّ الرجوع أو
+       بإيماءته، وإيماءتُه تبدأ من حافّة الشاشة — وهو المكان نفسه الذي كان
+       المقبض يجلس فيه، فيزاحم ما لا حاجة إليه.
 
-       ويبقى في التثبيت المستقلّ: هناك قد لا يكون في الواجهة زرُّ رجوعٍ ظاهر،
-       فحذفُه هناك يترك المستخدم بلا مخرج. */
+       وكان يُستثنى التثبيت المستقلّ خوفًا أن يُحبَس المستخدم بلا مخرج، وهو
+       الوضع الذي يعمل فيه التطبيق المثبَّت فعلًا — فكان يرجع حيث لا يُراد.
+       وزرُّ الرجوع في أندرويد موجودٌ في التثبيت المستقلّ كما هو في المتصفّح،
+       فلا حبس. */
     @media (hover: none) and (pointer: coarse) { .exit { display: none; } }
-    @media all and (display-mode: standalone),
-           all and (display-mode: fullscreen),
-           all and (display-mode: minimal-ui) { .exit { display: grid; } }
 
     .error{height:100%;display:grid;place-items:center;color:#F0EFEA;background:#171c1c;text-align:center;padding:30px}
     .error h2{margin:0 0 8px;font-size:20px}

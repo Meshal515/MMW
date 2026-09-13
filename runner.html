@@ -64,27 +64,12 @@
            all and (display-mode: fullscreen),
            all and (display-mode: minimal-ui) { .exit { display: grid; } }
 
-    /* Says what is running, then gets out of the way. */
-    .flash{
-      position:fixed;z-index:2147483646;inset-block-end:calc(18px + env(safe-area-inset-bottom,0px));
-      inset-inline-start:50%;transform:translateX(-50%);
-      max-inline-size:min(86vw,420px);
-      padding:9px 15px;border-radius:999px;
-      background:rgba(23,28,28,.92);color:#F0EFEA;
-      -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
-      font-size:13px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-      box-shadow:0 8px 26px rgba(0,0,0,.34);pointer-events:none;
-      opacity:0;animation:flash 3.4s cubic-bezier(.16,1,.3,1) forwards;
-    }
-        @keyframes flash{0%{opacity:0;transform:translate(-50%,10px)}12%{opacity:1;transform:translate(-50%,0)}72%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,6px)}}
-
     .error{height:100%;display:grid;place-items:center;color:#F0EFEA;background:#171c1c;text-align:center;padding:30px}
     .error h2{margin:0 0 8px;font-size:20px}
     .error p{color:#A8AEAA;margin:0 0 20px;line-height:1.7}
     .error a{color:#86A37C}
     @media (prefers-reduced-motion:reduce){
       .exit{transition-duration:.01ms}
-      .flash{animation-duration:.01ms;animation-delay:3s;opacity:1}
     }
   </style>
 </head>
@@ -150,18 +135,6 @@
         f.src=`./__local__/${encodeURIComponent(pid)}/${encodeURIComponent(vid)}/${String(v.entry).split('/').map(encodeURIComponent).join('/')}`;
         f.addEventListener('load',()=>placeHandle(f));
         root.appendChild(f);
-
-        const flash=document.createElement('div');
-        flash.className='flash';
-        const name=document.createElement('span'); name.textContent=p.title;
-        flash.appendChild(name);
-        /* يُقرأ من الأنماط لا من تخمين: ما كان المقبض مخفيًّا فالمخرج هو الرجوع. */
-        const handled=getComputedStyle(exitBtn).display!=='none';
-        flash.insertAdjacentHTML('beforeend', handled
-          ? ' — للخروج: المقبض على حافة الشاشة'
-          : ' — للخروج: زر الرجوع');
-        document.body.appendChild(flash);
-        flash.addEventListener('animationend',()=>flash.remove());
       }catch(e){
         exitBtn.hidden=true;
         root.innerHTML='<div class="error"><div><h2>تعذر تشغيل هذه النسخة</h2><p>الملفات المحفوظة لهذه النسخة غير مكتملة.<br>ارجع إلى Local واستورد المشروع من جديد.</p><a href="./">رجوع إلى Local</a></div></div>';

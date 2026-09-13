@@ -1,6 +1,6 @@
-import{getAll,getOne,logsFor,storageSnapshot,requestPersistentStorage,fmtBytes,fmtNumber,fmtDate,since,plural,esc,bdi,safeThemeGet,safeThemeSet,deleteProject,deleteImpact}from'./core.js';
+import{getAll,getOne,logsFor,storageSnapshot,requestPersistentStorage,fmtBytes,fmtNumber,fmtDate,since,plural,esc,bdi,safeThemeGet,safeThemeSet,deleteProject,deleteImpact,projectStorageFootprint,purgeProjectStorage,legacyToolDatabases}from'./core.js';
 import{unzip,fromFileList,persistVersion}from'./importer.js';
-import{exportLibrary,importLibrary}from'./archive.js';
+import{exportLibrary,importLibrary,legacyStorage,adoptLegacy}from'./archive.js';
 import{createTimeline}from'./timeline.js';
 
 const $=s=>document.querySelector(s),main=$('#main'),importDialog=$('#importDialog'),importProgress=$('#importProgress'),progressText=$('#progressText'),headerAdd=$('#headerAdd'),infoDialog=$('#infoDialog');
@@ -93,15 +93,22 @@ function confirmAction({title,lede,cost=[],okLabel='حذف',altLabel='',tone='da
 }
 
 async function removeProject(p){
-  const impact=await deleteImpact(p.id);
+  const [impact,foot]=await Promise.all([deleteImpact(p.id),projectStorageFootprint(p.id)]);
+  const cost=[['النسخ',fmtNumber(impact.versions)],['الملفات',fmtNumber(impact.files)],
+              ['المساحة المستعادة',fmtBytes(impact.bytes)]];
+  /* ما كتبته الأداة داخل نفسها يُذكر صراحةً: هو ما لا نسخةَ له في مكانٍ آخر. */
+  if(foot.any)cost.push(['بيانات الأداة نفسها',
+    `${fmtNumber(foot.dbs)} ${plural(foot.dbs,'قاعدة','قاعدتان','قواعد','قاعدة')} · ${fmtNumber(foot.keys)} مفتاح`]);
   const choice=await confirmAction({
     title:`حذف «${p.title}»؟`,
-    lede:'يُحذف المشروع وكل نسخه وملفاته من هذا الجهاز. لا نسخة احتياطية، ولا طريق للرجوع.',
-    cost:[['النسخ',fmtNumber(impact.versions)],['الملفات',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
-    okLabel:'احذف المشروع'});
+    lede:foot.any
+      ? 'يُحذف المشروع وكل نسخه وملفاته، ومعها ما كتبته الأداة نفسها من بيانات على هذا الجهاز. لا نسخة احتياطية، ولا طريق للرجوع.'
+      : 'يُحذف المشروع وكل نسخه وملفاته من هذا الجهاز. لا نسخة احتياطية، ولا طريق للرجوع.',
+    cost, okLabel:'احذف المشروع'});
   if(choice!=='ok')return;
   await deleteProject(p.id);
-  toast('حُذف المشروع');
+  const {freed}=await purgeProjectStorage(p.id);
+  toast(freed?`حُذف المشروع — تحرّر ${fmtBytes(freed)}`:'حُذف المشروع');
   await render();
 }
 
@@ -288,8 +295,33 @@ async function showBackup(){
     ['المتاح',storage.quota?bdi(fmtBytes(storage.quota)):'—'],
     ['تخزين دائم',storage.persisted?'نعم':'لا — قد يُمحى عند ضغط المساحة'],
   ].map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join('');
+  await showLegacy(projects);
   backupProgress.hidden=true;
   backupDialog.showModal();
+}
+
+/* ما كُتب قبل النَّسْب لا بادئة له، فلا يراه المشروع بعد التحديث ويبدو ضائعًا
+   وهو موجود. لا يُنقل تلقائيًّا: Local لا يعرف لأيّ مشروعٍ هو، فيسأل. */
+async function showLegacy(projects){
+  const box=$('#legacyBox');
+  const {dbs,keys}=await legacyStorage();
+  if((!dbs.length&&!keys.length)||!projects.length){ box.hidden=true; return }
+  box.hidden=false;
+  $('#legacyText').textContent=
+    `وجدت ${fmtNumber(dbs.length)} ${plural(dbs.length,'قاعدة','قاعدتين','قواعد','قاعدة')} و${fmtNumber(keys.length)} مفتاحًا كُتبت قبل أن يصير لكل مشروع ركنه الخاص. `+
+    `أدواتك لا تراها الآن. اختر المشروع الذي تخصه لتعود إليه.`;
+  const sel=$('#legacyTarget');
+  sel.innerHTML=projects.map(p=>`<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('');
+  $('#legacyAdopt').onclick=async()=>{
+    const id=sel.value; if(!id)return;
+    busy(true,'أنقل البيانات…');
+    try{
+      const r=await adoptLegacy(id,t=>{backupProgressText.textContent=t});
+      toast(`نُسبت ${fmtNumber(r.dbs)} ${plural(r.dbs,'قاعدة','قاعدتان','قواعد','قاعدة')} و${fmtNumber(r.keys)} مفتاحًا`);
+      await showBackup();
+    }catch(err){ console.error(err); backupProgressText.textContent=err.message||'تعذر النقل' }
+    finally{ busy(false) }
+  };
 }
 
 function busy(on,text=''){

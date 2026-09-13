@@ -122,6 +122,14 @@
       </div>
       <p class="confirm__lede">يشمل الملف مشاريعك ونسخها وملفاتها، <strong>وبيانات أدواتك نفسها</strong> — وهي ما لا نسخة له في مكان آخر.</p>
       <div class="confirm__cost" id="backupStats"></div>
+      <section class="legacy" id="legacyBox" hidden>
+        <h3>بيانات أدوات غير منسوبة</h3>
+        <p id="legacyText"></p>
+        <div class="legacy__row">
+          <select id="legacyTarget" aria-label="المشروع الذي تخصه"></select>
+          <button class="button button--outline" id="legacyAdopt" type="button">انسبها إليه</button>
+        </div>
+      </section>
       <div class="progress" id="backupProgress" hidden>
         <div class="progress__bar"><i></i></div>
         <span id="backupProgressText">…</span>

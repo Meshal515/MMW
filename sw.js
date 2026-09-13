@@ -1,6 +1,6 @@
 const DB_NAME='local-launcher-v1';
 const DB_VERSION=1;
-const SHELL='local-shell-v9';
+const SHELL='local-shell-v10';
 const SHELL_FILES=['./','./index.html','./styles.css','./styles/base.css','./styles/components.css','./styles/timeline.css','./app.js','./js/core.js','./js/importer.js','./js/timeline.js','./js/main.js','./runner.html','./manifest.webmanifest','./assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png'];
 
 self.addEventListener('install',event=>{event.waitUntil(caches.open(SHELL).then(c=>c.addAll(SHELL_FILES)).catch(()=>null));self.skipWaiting()});
@@ -49,4 +49,32 @@ async function saveLog(req){try{const data=JSON.parse(await req.text());if(!data
    created it, so the key lookup and the deletes need separate transactions. */
 async function pruneLogs(db,versionId){const keys=await new Promise((resolve,reject)=>{const r=db.transaction('logs').objectStore('logs').index('versionId').getAllKeys(versionId);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});if(keys.length<=300)return;const tx=db.transaction('logs','readwrite'),store=tx.objectStore('logs');for(const k of keys.slice(0,keys.length-300))store.delete(k);await new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
 
-self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(url.origin===location.origin&&url.pathname.startsWith('/__local__/')){event.respondWith(serveVirtual(event.request,url));return}if(url.origin===location.origin&&url.pathname==='/__local_api/log'&&event.request.method==='POST'){event.respondWith(saveLog(event.request));return}if(event.request.method==='GET'&&url.origin===location.origin){const ctx=referrerVirtualContext(event.request);if(ctx&&!url.pathname.startsWith('/__local_api/')){event.respondWith((async()=>{const local=await getVirtualResponse(ctx.projectId,ctx.versionId,cleanPath(url.pathname),event.request);if(local)return local;try{return await fetch(event.request)}catch{return new Response('Not found',{status:404})}})());return}event.respondWith((async()=>{try{const fresh=await fetch(event.request);if(fresh.ok){const cache=await caches.open(SHELL);cache.put(event.request,fresh.clone()).catch(()=>{})}return fresh}catch{const cached=await caches.match(event.request);return cached||(event.request.mode==='navigate'?await caches.match('./index.html'):Response.error())}})())}});
+/* ── ما يصل من قائمة المشاركة ───────────────────────────────────────────────
+   هدفُ مشاركةٍ بـPOST يستقبله عاملُ الخدمة لا الصفحة، فالملفّ يُودَع في مخزنٍ
+   مؤقّتٍ ثمّ يُحوَّل المتصفّح إلى الصفحة لتلتقطه.
+
+   والإيداعُ في Cache API لا في IndexedDB عمدًا: قاعدة البيانات مفتوحةٌ بالفعل
+   في الصفحة بنسختها الأولى، وإضافةُ مخزنٍ تعني رفعَ رقم النسخة — وترقيةٌ
+   محجوبةٌ باتّصالٍ مفتوح تعلّق كلَّ شيءٍ بلا خطأٍ ظاهر. */
+const INBOX='local-inbox';
+async function receiveShare(request){
+  try{
+    const form=await request.formData();
+    const files=form.getAll('file').filter(f=>f&&typeof f.size==='number'&&f.size>0);
+    if(files.length){
+      const cache=await caches.open(INBOX);
+      for(let i=0;i<files.length;i++){
+        const f=files[i];
+        /* ترويسات HTTP لاتينيّةٌ فقط، واسمُ الملفّ قد يكون عربيًّا. */
+        await cache.put(`${self.location.origin}/__inbox/${Date.now()}-${i}`,
+          new Response(f,{headers:{
+            'Content-Type':f.type||'application/octet-stream',
+            'X-Local-Name':encodeURIComponent(f.name||'shared'),
+          }}));
+      }
+    }
+  }catch(err){ /* يُحوَّل على أيّ حال، فالصفحة تخبره أنّ شيئًا لم يصل */ }
+  return Response.redirect('./?share=1',303);
+}
+
+self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(event.request.method==='POST'&&url.origin===location.origin&&url.pathname.endsWith('/share-target')){event.respondWith(receiveShare(event.request));return}if(url.origin===location.origin&&url.pathname.startsWith('/__local__/')){event.respondWith(serveVirtual(event.request,url));return}if(url.origin===location.origin&&url.pathname==='/__local_api/log'&&event.request.method==='POST'){event.respondWith(saveLog(event.request));return}if(event.request.method==='GET'&&url.origin===location.origin){const ctx=referrerVirtualContext(event.request);if(ctx&&!url.pathname.startsWith('/__local_api/')){event.respondWith((async()=>{const local=await getVirtualResponse(ctx.projectId,ctx.versionId,cleanPath(url.pathname),event.request);if(local)return local;try{return await fetch(event.request)}catch{return new Response('Not found',{status:404})}})());return}event.respondWith((async()=>{try{const fresh=await fetch(event.request);if(fresh.ok){const cache=await caches.open(SHELL);cache.put(event.request,fresh.clone()).catch(()=>{})}return fresh}catch{const cached=await caches.match(event.request);return cached||(event.request.mode==='navigate'?await caches.match('./index.html'):Response.error())}})())}});

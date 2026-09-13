@@ -241,3 +241,29 @@ if('launchQueue' in window && 'files' in (window.LaunchParams?.prototype||{})){
     }
   });
 }
+
+/* ── ما وصل من قائمة المشاركة ───────────────────────────────────────────────
+   عاملُ الخدمة أودع الملفّ في مخزنٍ مؤقّت ثمّ حوّل المتصفّح إلى هنا. والصندوق
+   يُستنزف في كلّ إقلاع، لا عند `?share=1` وحدها: التحويل قد يُفقد أو تُغلق
+   الصفحة قبله، والملفّ المودَع يجب ألّا يضيع بلا أثر. */
+async function drainInbox(){
+  if(!('caches' in window))return;
+  let cache,keys;
+  try{ cache=await caches.open('local-inbox'); keys=await cache.keys(); }catch{ return }
+  if(!keys.length)return;
+  const files=[];
+  for(const req of keys){
+    try{
+      const res=await cache.match(req);
+      if(!res)continue;
+      const name=decodeURIComponent(res.headers.get('X-Local-Name')||'shared');
+      const blob=await res.blob();
+      files.push(new File([blob],name,{type:blob.type||''}));
+    }catch{}
+  }
+  /* يُفرَّغ قبل الاستيراد: لو تعثّر الاستيراد لا يعيد المحاولة عند كل فتحة. */
+  await Promise.all(keys.map(k=>cache.delete(k).catch(()=>{})));
+  if(location.search){try{history.replaceState({},'',location.pathname)}catch{}}
+  if(files.length)await openLaunchedFiles(files);
+}
+await drainInbox();

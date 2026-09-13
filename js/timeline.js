@@ -69,14 +69,14 @@ export function createTimeline({runProject,toast,render,confirm}){
     if(state.versions.length<2){toast('هذه آخر نسخة — احذف المشروع نفسه من بطاقته');return}
     const impact=await deleteImpact(p.id,state.versions.filter(x=>x.id!==v.id).map(x=>x.id));
     const adopted=v.id===p.adoptedVersionId;
-    const ok=await confirm({
+    const choice=await confirm({
       title:`حذف النسخة ${fmtNumber(v.index)}؟`,
       lede:adopted
         ?'هذه هي النسخة المعتمدة. بحذفها تُعتمد أحدث نسخة باقية تلقائيًا. الملفات التي تشترك فيها نسخ أخرى تبقى كما هي.'
         :'تُحذف هذه النسخة وحدها. الملفات التي تشترك فيها نسخ أخرى تبقى كما هي.',
       cost:[['الملفات التي ستُحذف',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
       okLabel:'احذف النسخة'});
-    if(!ok)return;
+    if(choice!=='ok')return;
     await deleteVersions([v.id]);
     const remaining=state.versions.filter(x=>x.id!==v.id);
     const project=await getOne('projects',p.id);
@@ -93,12 +93,12 @@ export function createTimeline({runProject,toast,render,confirm}){
     const p=state.project;
     if(state.versions.length<2)return;
     const impact=await deleteImpact(p.id,[v.id]);
-    const ok=await confirm({
+    const choice=await confirm({
       title:`الإبقاء على النسخة ${fmtNumber(v.index)} وحدها؟`,
       lede:`تُحذف كل النسخ الأخرى ويبقى تاريخ المشروع نسخةً واحدة، وتصير هي المعتمدة.`,
       cost:[['النسخ التي ستُحذف',fmtNumber(impact.versions)],['الملفات',fmtNumber(impact.files)],['المساحة المستعادة',fmtBytes(impact.bytes)]],
       okLabel:'احذف ما عداها'});
-    if(!ok)return;
+    if(choice!=='ok')return;
     await keepOnlyVersion(p.id,v.id);
     toast('بقيت نسخة واحدة');
     await reload();

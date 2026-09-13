@@ -64,3 +64,10 @@
 .version-panel .icon-button--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, var(--line)); }
 .version-panel__danger { margin-top: 9px; display: grid; gap: 8px; }
 .version-panel__danger .button { min-height: 40px; font-size: 13px; }
+
+/* A third choice turns the pair into a row of three; the dialog is also used for
+   decisions that are not destructive, so the lead button changes tone. */
+.confirm__actions:has(#confirmAlt:not([hidden])) { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 520px) {
+  .confirm__actions:has(#confirmAlt:not([hidden])) { grid-template-columns: 1fr; }
+}

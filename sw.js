@@ -1,6 +1,6 @@
 const DB_NAME='local-launcher-v1';
 const DB_VERSION=1;
-const SHELL='local-shell-v10';
+const SHELL='local-shell-v11';
 const SHELL_FILES=['./','./index.html','./styles.css','./styles/base.css','./styles/components.css','./styles/timeline.css','./app.js','./js/core.js','./js/importer.js','./js/timeline.js','./js/main.js','./runner.html','./manifest.webmanifest','./assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-maskable-192.png','./assets/icon-maskable-512.png'];
 
 self.addEventListener('install',event=>{event.waitUntil(caches.open(SHELL).then(c=>c.addAll(SHELL_FILES)).catch(()=>null));self.skipWaiting()});

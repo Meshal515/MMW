@@ -12,7 +12,7 @@ Local is a local-first web-project launcher and visual version timeline.
 - Add updates without destroying old versions.
 - Adding an update adopts it immediately; the timeline is where you go back to an older version and adopt that instead.
 - Delete a whole project, a single version, or every version but one. Files shared with a surviving version are kept; only what nothing points to is freed, and the confirmation states the real cost before anything is removed.
-- Run a version full screen, with no Local chrome over it. On a touch device nothing is drawn over the project at all — the system back gesture is the way out. On a pointer device a handle sits on the screen edge, opposite the project's own scrollbar. No keyboard shortcut is taken, so the project keeps Escape and every other key for itself.
+- Run a version full screen, with no Local chrome over it. On a touch device nothing whatsoever is drawn over the project — the system back gesture is the way out. On a pointer device a handle sits on the screen edge, opposite the project's own scrollbar. No keyboard shortcut is taken, so the project keeps Escape and every other key for itself.
 - Explore the full project history on a pannable/zoomable timeline.
 - Inspect file counts, size, lines, characters, file types, runtime console messages, and errors.
 - Export the whole library to a single ZIP and restore it on another device. The archive carries the projects, their versions, their deduplicated files, `localStorage`, **and the IndexedDB databases the tools themselves wrote** — the last of these being the only data with no copy anywhere else. Restore merges: nothing already present is overwritten.

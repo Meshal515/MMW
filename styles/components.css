@@ -60,10 +60,6 @@
 .button--danger { background: var(--danger); color: #fff; border-color: transparent; }
 .popover button.is-danger { color: var(--danger); }
 .popover hr { border: 0; border-top: 1px solid var(--line); margin: 5px 7px; }
-.version-panel__actions--three { grid-template-columns: 1fr 1fr auto; }
-.version-panel .icon-button--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, var(--line)); }
-.version-panel__danger { margin-top: 9px; display: grid; gap: 8px; }
-.version-panel__danger .button { min-height: 40px; font-size: 13px; }
 
 /* A third choice turns the pair into a row of three; the dialog is also used for
    decisions that are not destructive, so the lead button changes tone. */

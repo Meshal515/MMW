@@ -160,28 +160,19 @@
     </form>
   </dialog>
 
-  <section class="timeline-view" id="timelineView" hidden aria-label="الخط الزمني">
+  <section class="timeline-view" id="timelineView" hidden aria-label="سجل النسخ">
     <header class="timeline-header">
       <button class="icon-button" id="closeTimeline" type="button" aria-label="رجوع">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
       </button>
       <div class="timeline-header__title">
-        <p class="eyebrow">الخط الزمني</p>
         <h2 id="timelineTitle">المشروع</h2>
-      </div>
-      <div class="timeline-tools">
-        <button class="icon-button" id="timelineZoomOut" type="button" aria-label="تصغير">−</button>
-        <button class="icon-button" id="timelineZoomIn" type="button" aria-label="تكبير">+</button>
+        <p id="timelineCount"></p>
       </div>
     </header>
-    <div class="timeline-canvas" id="timelineCanvas">
-      <div class="timeline-world" id="timelineWorld">
-        <div class="timeline-line"></div>
-        <div id="timelineNodes"></div>
-      </div>
-      <div class="timeline-hint">اسحب المساحة للتنقل · اضغط على أي نقطة لعرض النسخة</div>
+    <div class="timeline-scroll" id="timelineScroll">
+      <ol class="history" id="historyList"></ol>
     </div>
-    <aside class="version-panel" id="versionPanel" hidden></aside>
   </section>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

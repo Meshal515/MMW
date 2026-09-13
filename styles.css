@@ -7,7 +7,7 @@
 html, body, *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
 
 button, a, summary, [role="button"],
-.import-choice, .kebab, .timeline-node, .drop-zone {
+.import-choice, .kebab, .entry__head, .drop-zone {
   -webkit-touch-callout: none;
   touch-action: manipulation;
   user-select: none;
@@ -32,5 +32,5 @@ button, a, summary, [role="button"],
   .project-card:hover { transform: none; box-shadow: none; border-color: var(--line); }
   .kebab:hover, .popover button:hover { background: transparent; }
   .import-choice:hover { transform: none; border-color: var(--line); background: var(--surface); }
-  .timeline-node:hover { transform: none; }
+  .entry__head:hover { background: transparent; }
 }

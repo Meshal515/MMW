@@ -24,10 +24,17 @@ function coverPlate(size){
   if(!small)return'';
   return size.lum<0.42?'light':size.lum>0.62?'dark':'';
 }
-function coverMarkup(url,size){
+/* A project with no screenshot used to get a faded app logo in a 600px frame:
+   the same grey rectangle for every project. Its own initial is at least its
+   own, and it fills the frame the way a cover should. */
+function monogram(title=''){
+  const ch=[...title.trim()][0]||'؟';
+  return`<div class="project-cover__fallback"><span>${esc(ch)}</span></div>`;
+}
+function coverMarkup(url,size,title){
   /* A 16x16 favicon stretched across a 16:10 frame was the single ugliest thing
      on the home screen. Anything under 320px wide gets letterboxed instead. */
-  if(!url)return`<div class="project-cover__fallback"><img src="./assets/logo.svg" alt=""></div>`;
+  if(!url)return monogram(title);
   /* A vector is almost always a logo here, never a screenshot: letterbox it.
      A raster is judged on whether it has the pixels to fill a 16:10 frame. */
   const small=!!size&&(size.vector||size.w<320||size.h<200);
@@ -41,7 +48,7 @@ async function render(){
   headerAdd.hidden=projects.length===0;
   if(!projects.length){
     releaseUnusedURLs(new Set());
-    main.innerHTML=`<section class="hero-empty"><div class="hero-empty__inner"><img class="hero-empty__logo" src="./assets/logo.svg" alt=""><h1>مشاريعك، محليًا.</h1><p>أضف مشروع ويب مرة واحدة، شغّله مباشرة، ثم حدّثه كلما وصلت لنسخة جديدة. كل نسخة تبقى في خطك الزمني.</p><button class="button button--accent" id="firstAdd"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>أضف أول مشروع</button></div></section>`;
+    main.innerHTML=`<section class="hero-empty"><div class="hero-empty__inner"><img class="hero-empty__logo" src="./assets/logo.svg" alt=""><h1>مشاريعك،<br><b>محليًا.</b></h1><p>أضف مشروع ويب مرة واحدة، شغّله مباشرة، ثم حدّثه كلما وصلت لنسخة جديدة. كل نسخة تبقى في سجلّك.</p><button class="button button--accent" id="firstAdd"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>أضف أول مشروع</button></div></section>`;
     $('#firstAdd').onclick=()=>openImport();
     return;
   }
@@ -50,12 +57,12 @@ async function render(){
   if(token!==renderToken)return;
   releaseUnusedURLs(new Set(projects.map(p=>p.thumbnailHash).filter(Boolean)));
   const n=projects.length;
-  main.innerHTML=`<section class="section-head"><div><h1>مشاريعك</h1><p>${fmtNumber(n)} ${plural(n,'مشروع','مشروعان','مشاريع','مشروعًا')} محفوظة على هذا الجهاز.</p></div></section><section class="projects-grid" id="projectsGrid"></section>`;
+  main.innerHTML=`<section class="section-head"><h1>مشاريعك</h1><p>${fmtNumber(n)} ${plural(n,'مشروع','مشروعان','مشاريع','مشروعًا')} على هذا الجهاز</p></section><section class="projects-grid" id="projectsGrid"></section>`;
   const grid=$('#projectsGrid'),frag=document.createDocumentFragment();
   for(const p of projects){
     const vc=p.versionCount||1,card=document.createElement('article');
     card.className='project-card';
-    card.innerHTML=`<div class="project-cover" data-plate="${coverPlate(p.thumbSize)}">${coverMarkup(covers.get(p.id),p.thumbSize)}</div><div class="project-card__body"><div class="project-card__head"><div class="project-card__id"><h2>${esc(p.title)}</h2><div class="project-meta"><span>${fmtNumber(vc)} ${plural(vc,'نسخة','نسختان','نسخ','نسخة')}</span><span aria-hidden="true">·</span><span>آخر تحديث ${esc(since(p.updatedAt))}</span></div></div><div class="kebab-wrap"><button class="kebab" type="button" aria-label="خيارات ${esc(p.title)}" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></button></div></div><div class="project-actions"><button class="button enter" type="button">دخول</button><button class="button button--outline update" type="button">تحديث</button></div></div>`;
+    card.innerHTML=`<div class="project-cover" data-plate="${coverPlate(p.thumbSize)}">${coverMarkup(covers.get(p.id),p.thumbSize,p.title)}</div><div class="project-card__body"><div class="project-card__head"><div class="project-card__id"><h2>${esc(p.title)}</h2><div class="project-meta"><span>${fmtNumber(vc)} ${plural(vc,'نسخة','نسختان','نسخ','نسخة')}</span><span aria-hidden="true">·</span><span>آخر تحديث ${esc(since(p.updatedAt))}</span></div></div><div class="kebab-wrap"><button class="kebab" type="button" aria-label="خيارات ${esc(p.title)}" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></button></div></div><div class="project-actions"><button class="button enter" type="button">دخول</button><button class="button button--outline update" type="button">تحديث</button></div></div>`;
     card.querySelector('.enter').onclick=()=>runProject(p.id,p.adoptedVersionId);
     card.querySelector('.update').onclick=()=>openImport(p.id,p.title);
     card.querySelector('.kebab').onclick=e=>{e.stopPropagation();toggleMenu(card,p)};
@@ -84,11 +91,13 @@ function confirmAction({title,lede,cost=[],okLabel='حذف',altLabel='',tone='da
   ok.classList.toggle('button--accent',tone!=='danger');
   alt.hidden=!altLabel;
   alt.textContent=altLabel||'';
-  confirmDialog.querySelector('.eyebrow').textContent=tone==='danger'?'لا يمكن التراجع':'اختر';
+  $('#confirmWarn').textContent=tone==='danger'?'لا يمكن التراجع عن هذا.':'اختر ما يناسبك، ولا شيء يُحذف.';
   return new Promise(resolve=>{
     confirmDialog.addEventListener('close',()=>resolve(confirmDialog.returnValue||'cancel'),{once:true});
     confirmDialog.showModal();
-    ok.focus();
+    /* Never open a destructive dialog with the destructive button focused: one
+       stray Enter and the project is gone. The safe choice takes the focus. */
+    (tone==='danger'?confirmDialog.querySelector('[value="cancel"]'):ok)?.focus();
   });
 }
 
@@ -131,7 +140,7 @@ function toggleMenu(card,p){
   setTimeout(()=>{document.addEventListener('pointerdown',onDown);document.addEventListener('keydown',onKey)},0);
 }
 
-function openImport(projectId=null,title=''){requestPersistentStorage();importTargetProjectId=projectId;$('#importEyebrow').textContent=projectId?'تحديث جديد':'مشروع جديد';$('#importTitle').textContent=projectId?`تحديث ${title}`:'أضف مشروعك';importProgress.hidden=true;importDialog.showModal()}
+function openImport(projectId=null,title=''){requestPersistentStorage();importTargetProjectId=projectId;$('#importTitle').textContent=projectId?`تحديث ${title}`:'أضف مشروعك';importProgress.hidden=true;importDialog.showModal()}
 
 async function handleImport(kind,list){
   if(importing)return;
@@ -188,7 +197,7 @@ $('#closeInfo').onclick=()=>infoDialog.close();
 window.addEventListener('pagehide',()=>{for(const url of objectUrlCache.values())URL.revokeObjectURL(url)});
 
 const themeMeta=document.querySelector('meta[name="theme-color"]');
-$('#themeToggle').onclick=()=>{const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;safeThemeSet(n);themeMeta.content=n==='dark'?'#171C1C':'#F4F3EF';$('#themeToggle').setAttribute('aria-pressed',String(n==='dark'))};
+$('#themeToggle').onclick=()=>{const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;safeThemeSet(n);themeMeta.content=n==='dark'?'#101312':'#F7F6F2';$('#themeToggle').setAttribute('aria-pressed',String(n==='dark'))};
 $('#themeToggle').setAttribute('aria-pressed',String((safeThemeGet()||'light')==='dark'));
 requestPersistentStorage();
 if('serviceWorker'in navigator){try{await navigator.serviceWorker.register('./sw.js',{scope:'./'})}catch(e){console.warn('SW',e)}}

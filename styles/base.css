@@ -1,128 +1,169 @@
+/* ── Local ────────────────────────────────────────────────────────────────────
+   A workbench, not a toy. The old world was 26px bubbles, soft shadows and a
+   sage tint on mushy grey: safe, and indistinguishable from every other web app.
+   This one is drawn with hairlines, real scale and one saturated green, on a
+   single 4px corner. The projects supply the colour; the interface supplies the
+   structure. */
+
+@font-face { font-family: "Plex Arabic"; font-style: normal; font-weight: 400; font-display: swap; src: url("../assets/fonts/plex-ar-arabic-400.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Plex Arabic"; font-style: normal; font-weight: 400; font-display: swap; src: url("../assets/fonts/plex-ar-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "Plex Arabic"; font-style: normal; font-weight: 600; font-display: swap; src: url("../assets/fonts/plex-ar-arabic-600.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Plex Arabic"; font-style: normal; font-weight: 600; font-display: swap; src: url("../assets/fonts/plex-ar-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "Plex Arabic"; font-style: normal; font-weight: 700; font-display: swap; src: url("../assets/fonts/plex-ar-arabic-700.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Plex Arabic"; font-style: normal; font-weight: 700; font-display: swap; src: url("../assets/fonts/plex-ar-latin-700.woff2") format("woff2"); }
+
 :root {
-  --bg: #F4F3EF;
-  --surface: #ECEBE6;
-  --surface-2: #E5E4DE;
-  --ink: #303838;
-  --muted: #646B67;
-  --line: #D5D5CE;
-  --accent: #739068;
-  --accent-strong: #637D5A;
-  --accent-soft: #E3EADF;
-  --accent-ink: #455C3D;
-  --danger: #6E4640;
-  --shadow: 0 18px 50px rgba(48, 56, 56, .08);
-  --radius-lg: 26px;
-  --radius-md: 18px;
-  --radius-sm: 13px;
+  --bg: #F7F6F2;
+  --surface: #EDEBE4;
+  --surface-2: #E2DFD6;
+  --ink: #14181A;
+  --muted: #5C6360;
+  --line: #D8D5CB;
+  --hair: #C9C5B8;
+  --accent: #2F6B3F;
+  --accent-strong: #1E5C36;
+  --accent-soft: #E2EDE3;
+  --accent-ink: #1E5C36;
+  --on-accent: #FFFFFF;
+  --danger: #9B3B2E;
+  --danger-soft: #F2E2DD;
+  --shadow: 0 16px 40px -18px rgba(20, 24, 26, .30);
+  --radius: 4px;
+  --radius-lg: 4px;
+  --radius-md: 4px;
+  --radius-sm: 4px;
+  --ui: "Plex Arabic", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 html[data-theme="dark"] {
-  --bg: #171C1C;
-  --surface: #202626;
-  --surface-2: #272E2E;
-  --ink: #F0EFEA;
-  --muted: #A8AEAA;
-  --line: #343C3C;
-  --accent: #86A37C;
-  --accent-strong: #98B18E;
-  --accent-soft: #29362B;
-  --accent-ink: #98B18E;
-  --danger: #C98D83;
-  --shadow: 0 22px 60px rgba(0, 0, 0, .22);
+  --bg: #101312;
+  --surface: #191E1C;
+  --surface-2: #222926;
+  --ink: #F2F1EC;
+  --muted: #9CA4A0;
+  --line: #2C3431;
+  --hair: #38423E;
+  --accent: #5ED88E;
+  --accent-strong: #7FE0A4;
+  --accent-soft: #17291F;
+  --accent-ink: #7FE0A4;
+  --on-accent: #0B0F0D;
+  --danger: #E58B7A;
+  --danger-soft: #2E1D19;
+  --shadow: 0 20px 50px -18px rgba(0, 0, 0, .62);
 }
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--bg); }
 body {
   margin: 0;
   min-height: 100svh;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+  font-family: var(--ui);
+  font-size: 15px;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { color: inherit; }
-svg { width: 1.35em; height: 1.35em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.app-shell { width: min(1240px, 100%); margin: 0 auto; padding: 0 28px 64px; }
+svg { width: 1.35em; height: 1.35em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+h1, h2, h3 { font-weight: 700; letter-spacing: -.022em; }
+
+.app-shell { width: min(1280px, 100%); margin: 0 auto; padding: 0 32px 88px; }
+
+/* ── header ─────────────────────────────────────────────────────────────── */
 .app-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
   padding-top: env(safe-area-inset-top, 0px);
 }
-.app-header__inner {
-  width: min(1240px, 100%);
-  margin: 0 auto;
-  padding: 0 28px;
-  height: 88px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.brand { display: inline-flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; font-size: 22px; font-weight: 760; letter-spacing: -.02em; }
-.brand img { width: 38px; height: 38px; object-fit: contain; }
-.header-actions { display: flex; gap: 10px; align-items: center; }
-.main { min-height: calc(100svh - 130px); }
-.icon-button {
-  width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: transparent; display: inline-grid; place-items: center; cursor: pointer; transition: .2s ease;
-}
-.icon-button:hover { background: var(--surface); transform: translateY(-1px); }
-.button {
-  min-height: 48px; border: 1px solid transparent; border-radius: 15px; padding: 0 18px; display: inline-flex; gap: 9px; align-items: center; justify-content: center; font-weight: 720; cursor: pointer; transition: .22s ease; background: var(--ink); color: var(--bg);
-}
-.button:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
-.button--compact { min-height: 44px; padding-inline: 15px; }
-.button--outline { background: transparent; color: var(--ink); border-color: var(--line); }
-.button--accent { background: var(--accent); color: #fff; }
-.button--ghost { background: transparent; color: var(--ink); border-color: transparent; }
-.button svg { width: 18px; height: 18px; }
-.hero-empty { min-height: calc(100svh - 160px); display: grid; place-items: center; text-align: center; padding: 44px 0; }
-.hero-empty__inner { max-width: 560px; display: flex; flex-direction: column; align-items: center; }
-.hero-empty__logo { width: 126px; height: 126px; object-fit: contain; margin-bottom: 25px; }
-.hero-empty h1 { margin: 0; font-size: clamp(34px, 6vw, 58px); letter-spacing: -.055em; line-height: 1; }
-.hero-empty p { max-width: 470px; margin: 18px auto 28px; color: var(--muted); font-size: 17px; line-height: 1.85; }
-.hero-empty .button { min-width: 190px; }
-.section-head { padding: 48px 0 24px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
-.section-head h1 { margin: 0; font-size: clamp(30px, 5vw, 48px); letter-spacing: -.045em; }
-.section-head p { margin: 9px 0 0; color: var(--muted); }
-.projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 22px; }
-.project-card { position: relative; border: 1px solid var(--line); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--bg) 72%, var(--surface)); transition: .25s ease; }
-/* Not `overflow: hidden` — that clipped the card's own menu. The cover clips
-   itself and rounds its own top corners, which is all the hiding was for. */
-.project-card:has(.popover) { z-index: 30; }
-.project-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--accent) 38%, var(--line)); }
-.project-cover { aspect-ratio: 16 / 10; background: var(--surface); display: grid; place-items: center; overflow: hidden; position: relative; border-bottom: 1px solid var(--line); border-start-start-radius: calc(var(--radius-lg) - 1px); border-start-end-radius: calc(var(--radius-lg) - 1px); }
-.project-cover__img { width: 100%; height: 100%; object-fit: cover; }
-.project-cover__img[data-fit="contain"] {
-  width: auto; height: auto;
-  max-width: 58%; max-height: 58%;
-  object-fit: contain;
-  image-rendering: auto;
-}
-.project-cover__fallback { display: grid; place-items: center; width: 100%; height: 100%; background: radial-gradient(circle at 70% 30%, var(--accent-soft), transparent 35%), var(--surface); }
-.project-cover__fallback img { width: 94px; height: 94px; object-fit: contain; }
-.project-card__body { padding: 18px; }
-.project-card__head { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
-.project-card__id { min-width: 0; }
-.project-card h2 { overflow-wrap: anywhere; }
-.project-card h2 { margin: 0; font-size: 21px; letter-spacing: -.03em; }
-.project-meta { color: var(--muted); font-size: 13px; margin-top: 7px; display: flex; gap: 8px; flex-wrap: wrap; }
-.project-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
-.kebab { width: 38px; height: 38px; border: 0; border-radius: 12px; background: transparent; cursor: pointer; display: grid; place-items: center; }
-.kebab:hover { background: var(--surface); }
-.kebab svg { width: 20px; height: 20px; }
-.kebab-wrap { position: relative; flex: 0 0 auto; }
-/* Anchored under its own trigger. The old `top: calc(100% - 96px)` was measured
-   from the card's foot, so it drifted the moment the menu gained an item. */
-.popover { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 40; min-width: 190px; padding: 7px; border: 1px solid var(--line); border-radius: 15px; background: var(--bg); box-shadow: var(--shadow); animation: pop .16s ease; }
-@keyframes pop { from { opacity: 0; transform: translateY(-5px) scale(.98); } }
-.popover button { width: 100%; border: 0; background: transparent; border-radius: 10px; padding: 11px 12px; text-align: start; cursor: pointer; display: flex; gap: 10px; align-items: center; }
-.popover button:hover { background: var(--surface); }
+.app-header__inner { width: min(1280px, 100%); margin: 0 auto; padding: 0 32px; height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: inline-flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; font-size: 19px; font-weight: 700; letter-spacing: -.03em; }
+.brand img { width: 26px; height: 26px; object-fit: contain; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.main { min-height: calc(100svh - 190px); }
 
-/* A plated cover carries the same tone in both themes — the mark's legibility
-   depends on the mark, not on what the viewer set. */
+/* ── controls ───────────────────────────────────────────────────────────── */
+.icon-button {
+  width: 40px; height: 40px; border-radius: var(--radius); border: 1px solid var(--line);
+  background: transparent; display: inline-grid; place-items: center; cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.icon-button:hover { background: var(--surface); border-color: var(--hair); }
+.button {
+  min-height: 42px; border: 1px solid var(--ink); border-radius: var(--radius); padding: 0 18px;
+  display: inline-flex; gap: 9px; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 14px; letter-spacing: -.01em; cursor: pointer;
+  background: var(--ink); color: var(--bg);
+  transition: background .16s ease, color .16s ease, border-color .16s ease, opacity .16s ease;
+}
+.button:hover { background: color-mix(in srgb, var(--ink) 84%, var(--bg)); border-color: color-mix(in srgb, var(--ink) 84%, var(--bg)); }
+.button--compact { min-height: 40px; padding-inline: 14px; }
+.button--outline { background: transparent; color: var(--ink); border-color: var(--line); }
+.button--outline:hover { background: var(--surface); border-color: var(--hair); color: var(--ink); }
+.button--accent { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.button--accent:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--on-accent); }
+.button--ghost { background: transparent; color: var(--ink); border-color: transparent; }
+.button--ghost:hover { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.button svg { width: 17px; height: 17px; }
+/* A 45%-opacity label is unreadable; a disabled control should still be legible,
+   it just should not look pressable. */
+.button[disabled] { cursor: default; background: transparent; color: var(--muted); border-color: var(--line); }
+.button[disabled]:hover { background: transparent; color: var(--muted); border-color: var(--line); }
+
+/* ── first run ──────────────────────────────────────────────────────────── */
+.hero-empty { min-height: calc(100svh - 200px); display: grid; align-content: center; padding: 56px 0; }
+.hero-empty__inner { max-width: 46ch; }
+.hero-empty__logo { width: 46px; height: 46px; object-fit: contain; margin-bottom: 36px; }
+.hero-empty h1 { margin: 0; font-size: clamp(46px, 9vw, 104px); letter-spacing: -.05em; line-height: .93; }
+.hero-empty h1 b { font-weight: 700; color: var(--accent); }
+.hero-empty p { max-width: 46ch; margin: 26px 0 34px; color: var(--muted); font-size: 16px; line-height: 1.8; }
+
+/* ── library ────────────────────────────────────────────────────────────── */
+.section-head { padding: 64px 0 30px; display: flex; align-items: baseline; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--ink); }
+.section-head h1 { margin: 0; font-size: clamp(34px, 6vw, 60px); letter-spacing: -.045em; line-height: 1; }
+.section-head p { margin: 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr)); gap: 52px 34px; padding-top: 40px; }
+
+/* No card. The cover is the object; the hairline is the frame. */
+.project-card { position: relative; display: flex; flex-direction: column; }
+.project-card:has(.popover) { z-index: 30; }
+.project-cover {
+  aspect-ratio: 16 / 10; background: var(--surface); display: grid; place-items: center;
+  overflow: hidden; position: relative; border: 1px solid var(--line); border-radius: var(--radius);
+  transition: border-color .2s ease;
+}
+.project-card:hover .project-cover { border-color: var(--ink); }
+.project-cover__img { width: 100%; height: 100%; object-fit: cover; }
+.project-cover__img[data-fit="contain"] { width: auto; height: auto; max-width: 52%; max-height: 52%; object-fit: contain; }
+.project-cover__fallback { display: grid; place-items: center; width: 100%; height: 100%; background: var(--surface); }
+.project-cover__fallback span { font-size: clamp(72px, 18cqw, 150px); font-weight: 700; letter-spacing: -.06em; line-height: 1; color: color-mix(in srgb, var(--ink) 17%, transparent); }
+.project-cover { container-type: inline-size; }
+.project-card__body { padding: 17px 0 0; display: flex; flex-direction: column; flex: 1 1 auto; }
+.project-card__head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.project-card__id { min-width: 0; }
+.project-card h2 { margin: 0; font-size: 23px; letter-spacing: -.035em; line-height: 1.2; overflow-wrap: anywhere; }
+.project-meta { color: var(--muted); font-size: 13px; margin-top: 8px; display: flex; gap: 7px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.project-actions { display: flex; gap: 8px; margin-top: 16px; }
+.project-actions .button { flex: 0 1 auto; min-width: 96px; }
+.kebab { width: 34px; height: 34px; border: 0; border-radius: var(--radius); background: transparent; cursor: pointer; display: grid; place-items: center; color: var(--muted); transition: .16s ease; }
+.kebab:hover { background: var(--surface); color: var(--ink); }
+.kebab svg { width: 19px; height: 19px; }
+.kebab-wrap { position: relative; flex: 0 0 auto; margin-top: -4px; }
+.popover {
+  position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 40; min-width: 200px; padding: 5px;
+  border: 1px solid var(--hair); border-radius: var(--radius); background: var(--bg); box-shadow: var(--shadow);
+  animation: pop .16s cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
+.popover button { width: 100%; border: 0; background: transparent; border-radius: var(--radius); padding: 10px 11px; text-align: start; cursor: pointer; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.popover button:hover { background: var(--surface); }
+.popover button svg { width: 17px; height: 17px; color: var(--muted); }
+.popover hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.popover button.is-danger { color: var(--danger); }
+.popover button.is-danger svg { color: currentColor; }
+
 .project-cover[data-plate="light"] { background: #EFEEE9; }
-.project-cover[data-plate="dark"]  { background: #1C2222; }
+.project-cover[data-plate="dark"]  { background: #1A1F1E; }

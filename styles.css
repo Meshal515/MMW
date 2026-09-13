@@ -2,12 +2,25 @@
    Importing them from here made the browser fetch this file, parse it, and only
    then start on the other three — two round trips before anything was styled. */
 
-::selection { background: var(--accent-soft); color: var(--ink); }
+/* An author `display` beats the UA's `[hidden] { display: none }`, so every
+   element we style with display and toggle with .hidden was showing anyway:
+   the import progress bar sat in the dialog before any import started, and the
+   header's add button stayed up on the empty screen. */
+[hidden] { display: none !important; }
+
+::selection { background: var(--accent); color: var(--on-accent); }
 
 html, body, *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
 
+/* The parts we did not draw still carry the design. */
+* { scrollbar-width: thin; scrollbar-color: var(--hair) transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-thumb { background: var(--hair); border: 3px solid var(--bg); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-corner { background: transparent; }
+
 button, a, summary, [role="button"],
-.import-choice, .kebab, .entry__head, .drop-zone {
+.import-choice, .kebab, .entry__head, .overview__dot, .drop-zone {
   -webkit-touch-callout: none;
   touch-action: manipulation;
   user-select: none;
@@ -20,17 +33,19 @@ button, a, summary, [role="button"],
 :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus { outline: none; }
 :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 6px;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* Hover states on a touchscreen stick after the finger lifts, so they are lifts
    and shadows that never come back down. Drop the effect, keep the focus ring. */
 @media (hover: none) {
-  .icon-button:hover { background: transparent; transform: none; }
-  .button:hover { transform: none; box-shadow: none; }
-  .project-card:hover { transform: none; box-shadow: none; border-color: var(--line); }
+  .icon-button:hover { background: transparent; border-color: var(--line); }
+  .button:hover { background: var(--ink); border-color: var(--ink); }
+  .button--outline:hover { background: transparent; border-color: var(--line); }
+  .button--accent:hover { background: var(--accent); border-color: var(--accent); }
+  .project-card:hover .project-cover { border-color: var(--line); }
   .kebab:hover, .popover button:hover { background: transparent; }
-  .import-choice:hover { transform: none; border-color: var(--line); background: var(--surface); }
+  .import-choice:hover { border-color: var(--line); background: transparent; }
   .entry__head:hover { background: transparent; }
 }

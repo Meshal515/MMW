@@ -15,17 +15,13 @@
   -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
 }
 .timeline-header__title { min-width: 0; }
-.timeline-header__title h2 { margin: 0; font-size: 21px; letter-spacing: -.02em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-header__title h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-header__title p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
 
 .timeline-scroll {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 26px 22px calc(40px + env(safe-area-inset-bottom, 0px));
-  scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 26%, transparent) transparent;
 }
-.timeline-scroll::-webkit-scrollbar { width: 10px; }
-.timeline-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink) 24%, transparent); border: 3px solid var(--bg); border-radius: 999px; }
-.timeline-scroll::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--ink) 40%, transparent); }
 
 .history { width: min(680px, 100%); margin: 0 auto; padding: 0; list-style: none; }
 
@@ -33,7 +29,7 @@
    a single thread instead of a stack of cards. */
 .history__day {
   position: relative; padding: 22px 0 10px; padding-inline-start: 46px;
-  font-size: 12px; font-weight: 760; letter-spacing: .01em; color: var(--muted);
+  font-size: 12px; font-weight: 600; letter-spacing: .01em; color: var(--muted);
 }
 .history__day:first-child { padding-top: 0; }
 .history__day::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 14px; width: 2px; background: var(--line); }
@@ -65,9 +61,9 @@
 .entry__head:hover { background: color-mix(in srgb, var(--surface) 62%, transparent); }
 .entry.is-open > .entry__head { background: var(--surface); border-end-start-radius: 0; border-end-end-radius: 0; }
 .entry.is-open .entry__detail > div { background: var(--surface); border-radius: 0 0 var(--radius-md) var(--radius-md); }
-.entry__name { font-weight: 740; font-size: 15px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.entry__name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .entry__name em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entry__chip { flex: 0 0 auto; font-size: 11px; font-weight: 720; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
+.entry__chip { flex: 0 0 auto; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent-ink); }
 .entry__time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .entry__change { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 7px; }
 .entry__bar { display: flex; gap: 2px; flex: 0 0 96px; height: 4px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--ink) 10%, transparent); }
@@ -88,38 +84,38 @@
 .entry__shot img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .entry__shot img[data-fit="contain"] { object-fit: contain; padding: 14%; }
 .entry__facts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
-.entry__facts b { color: var(--ink); font-weight: 720; font-variant-numeric: tabular-nums; }
+.entry__facts b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .entry__gap { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
 .entry__actions { display: flex; flex-wrap: wrap; gap: 9px; }
 .entry__actions .button { flex: 0 1 200px; }
 .entry__danger { display: flex; flex-wrap: wrap; gap: 8px 30px; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
-.entry__danger button { background: none; border: 0; padding: 4px 0; font-size: 12.5px; font-weight: 700; color: var(--danger); cursor: pointer; border-radius: 6px; }
+.entry__danger button { background: none; border: 0; padding: 4px 0; font-size: 13px; font-weight: 600; color: var(--danger); cursor: pointer; border-radius: 6px; }
 .entry__danger button:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-.toast { position: fixed; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 120; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: 999px; padding: 11px 16px; font-weight: 700; font-size: 13px; transition: .24s ease; box-shadow: var(--shadow); }
+.toast { position: fixed; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 120; transform: translate(-50%, 14px); opacity: 0; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: var(--radius); padding: 11px 16px; font-weight: 600; font-size: 13.5px; transition: .26s cubic-bezier(.16, 1, .3, 1); box-shadow: var(--shadow); }
 .toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .import-choice:disabled { opacity: .55; cursor: progress; transform: none !important; }
 
-@media (max-width: 920px) { .projects-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 620px) {
-  .app-shell { padding: 0 16px 44px; }
-  .app-header { height: 72px; }
+@media (max-width: 980px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .stat-card:nth-child(3) { border-inline-start: 0; } }
+@media (max-width: 700px) {
+  .app-shell { padding: 0 18px 56px; }
+  .app-header__inner { height: 62px; padding: 0 18px; }
   .brand span { display: none; }
-  .brand img { width: 34px; height: 34px; }
   .header-actions .button span { display: none; }
-  .header-actions .button { width: 44px; padding: 0; }
-  .section-head { padding-top: 32px; }
-  .projects-grid { grid-template-columns: 1fr; gap: 16px; }
+  .header-actions .button { width: 40px; padding: 0; }
+  .section-head { padding: 38px 0 20px; }
+  .projects-grid { grid-template-columns: 1fr; gap: 42px; padding-top: 28px; }
+  .hero-empty h1 { font-size: clamp(42px, 13vw, 64px); }
   .import-grid { grid-template-columns: 1fr; }
-  .import-choice { min-height: 108px; }
+  .import-choice { min-height: 92px; }
   .drop-zone { align-items: flex-start; flex-wrap: wrap; }
-  .drop-zone span { width: 100%; margin-inline-start: 38px; }
-  .sheet__panel { padding: 20px; }
+  .drop-zone span { width: 100%; margin-inline-start: 36px; }
+  .sheet__panel, .modal__panel { padding: 20px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .console-row { grid-template-columns: 58px 45px 1fr; gap: 6px; }
-  .timeline-header { padding-inline: 14px; }
+  .timeline-header { padding-inline: 16px; }
   .timeline-header__title h2 { font-size: 19px; }
-  .timeline-scroll { padding-inline: 14px; }
+  .timeline-scroll { padding-inline: 16px; }
   .entry, .history__day { padding-inline-start: 40px; }
   .entry__head { padding-inline: 10px; }
   .entry__body { padding-inline: 10px; }
@@ -127,4 +123,39 @@
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* ── the overview strip ───────────────────────────────────────────────────
+   The record reads top-down, which is what a phone and a pair of eyes want.
+   But a project's whole life at one glance is genuinely spatial, and that is
+   the one thing a vertical list cannot show. So on a wide screen the horizontal
+   map comes back as a map: every version as a dot, placed by REAL elapsed time,
+   sized by how much changed. Pointer-only and redundant by design, so the list
+   below stays the accessible truth. */
+.overview { display: none; }
+@media (min-width: 900px) and (pointer: fine) {
+  .overview { display: block; flex: 0 0 auto; padding: 20px 34px 12px; border-bottom: 1px solid var(--line); }
+  .overview[hidden] { display: none; }
+  .overview__track { position: relative; height: 40px; }
+  /* The baseline fades toward the far end: the deeper past is less certain
+     ground, and a hairline that just stops looks like a rendering bug. */
+  .overview__track::before {
+    content: ""; position: absolute; inset-inline: 0; top: 50%; height: 1px; transform: translateY(-50%);
+    background: linear-gradient(to var(--ov-fade, left), var(--ink), color-mix(in srgb, var(--hair) 18%, transparent));
+  }
+  .overview__dot {
+    position: absolute; top: 50%; padding: 0; border: 0; cursor: pointer; border-radius: 50%;
+    width: calc(7px + var(--mag, 0) * 9px); height: calc(7px + var(--mag, 0) * 9px);
+    transform: translate(50%, -50%); background: var(--muted);
+    box-shadow: 0 0 0 3px var(--bg); transition: background .18s ease, box-shadow .18s ease;
+  }
+  [dir="ltr"] .overview__dot { transform: translate(-50%, -50%); }
+  .overview__dot:hover { background: var(--ink); }
+  .overview__dot[data-adopted] { background: var(--accent); }
+  .overview__dot.is-current { background: var(--ink); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--ink); }
+  .overview__dot[data-adopted].is-current { background: var(--accent); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--accent); }
+  .overview__scale { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+}
+@media (min-width: 900px) and (pointer: fine) {
+  [dir="ltr"] .overview__track::before { --ov-fade: right; }
 }

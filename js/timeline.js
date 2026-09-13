@@ -6,6 +6,7 @@ const LOCALE='ar-u-ca-gregory-nu-latn';
 const TIME=new Intl.DateTimeFormat(LOCALE,{hour:'numeric',minute:'2-digit'});
 const DAY=new Intl.DateTimeFormat(LOCALE,{weekday:'long',day:'numeric',month:'long'});
 const DAY_YEAR=new Intl.DateTimeFormat(LOCALE,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const DAY_TITLE=new Intl.DateTimeFormat(LOCALE,{dateStyle:'medium',timeStyle:'short'});
 const DAY_KEY=ts=>{const d=new Date(ts);return`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`};
 
 function dayLabel(ts){
@@ -57,6 +58,7 @@ export function createTimeline({runProject,toast,render,confirm}){
   }
   function releaseShots(){for(const u of shots.values())URL.revokeObjectURL(u);shots.clear()}
   const view=document.querySelector('#timelineView'),scroller=document.querySelector('#timelineScroll'),list=document.querySelector('#historyList');
+  const overview=document.querySelector('#overview'),track=document.querySelector('#overviewTrack'),thenLabel=document.querySelector('#overviewThen');
   let state={project:null,versions:[],openId:null};
 
   function build(){
@@ -94,8 +96,43 @@ export function createTimeline({runProject,toast,render,confirm}){
       frag.appendChild(li);
     });
     list.appendChild(frag);
+    buildOverview(newestFirst,total);
   }
 
+
+  /* Dots are placed by elapsed time, not by index: two versions minutes apart
+     sit on top of each other and a month of silence is a month of empty rail.
+     A floor of 13px keeps a busy afternoon from collapsing into one blob. */
+  function buildOverview(newestFirst,total){
+    if(!overview)return;
+    track.innerHTML='';
+    if(newestFirst.length<2){overview.hidden=true;return}
+    overview.hidden=false;
+    const newest=newestFirst[0].createdAt,oldest=newestFirst.at(-1).createdAt,span=Math.max(1,newest-oldest);
+    const width=track.clientWidth||600,usable=Math.max(1,width-24),MIN=13;
+    let last=-Infinity;
+    const frag=document.createDocumentFragment();
+    newestFirst.forEach(v=>{
+      let x=12+((newest-v.createdAt)/span)*usable;
+      if(x-last<MIN)x=last+MIN;
+      last=x;
+      const d=document.createElement('button');
+      d.type='button';d.className='overview__dot';d.tabIndex=-1;
+      d.dataset.versionId=v.id;
+      if(v.id===state.project.adoptedVersionId)d.dataset.adopted='';
+      d.style.setProperty('--mag',(total?weight(v)/total:0).toFixed(3));
+      d.style.insetInlineStart=`${Math.min(x,width-4)}px`;
+      const name=v.index===1?'أول نسخة':`النسخة ${fmtNumber(v.index)}`;
+      d.title=`${name} · ${DAY_TITLE.format(new Date(v.createdAt))}`;
+      d.onclick=()=>open(v.id);
+      frag.appendChild(d);
+    });
+    track.appendChild(frag);
+    thenLabel.textContent=dayLabel(oldest);
+  }
+  function markCurrent(id){
+    for(const d of track.querySelectorAll('.overview__dot'))d.classList.toggle('is-current',d.dataset.versionId===id);
+  }
   function factsMarkup(v){
     const s=v.stats||{files:0,size:0,lines:0},prev=state.versions.find(x=>x.index===v.index-1);
     const facts=[`<span><b>${fmtNumber(s.files)}</b> ${plural(s.files,'ملف','ملفان','ملفات','ملفًا')}</span>`,
@@ -140,6 +177,7 @@ export function createTimeline({runProject,toast,render,confirm}){
     }
     state.openId=id;
     li.classList.add('is-open');
+    markCurrent(id);
     li.querySelector('.entry__head').setAttribute('aria-expanded','true');
     fill(li,v);
     if(scroll)requestAnimationFrame(()=>li.scrollIntoView({block:'nearest',behavior:'smooth'}));
@@ -211,6 +249,9 @@ export function createTimeline({runProject,toast,render,confirm}){
     state={project:p,versions,openId:null};
     build();
     view.hidden=false;document.body.style.overflow='hidden';
+    /* The strip is laid out in pixels, and a hidden view measures zero — so the
+       map has to be drawn once the view is actually on screen. */
+    buildOverview([...versions].sort((a,b)=>b.index-a.index),Math.max(1,...versions.map(weight)));
     scroller.scrollTop=0;
     open(versions.find(v=>v.id===p.adoptedVersionId)?.id||versions.at(-1).id,{scroll:false});
     requestAnimationFrame(()=>document.querySelector('#closeTimeline')?.focus());
@@ -218,6 +259,16 @@ export function createTimeline({runProject,toast,render,confirm}){
   function close(){view.hidden=true;document.body.style.overflow='';releaseShots()}
 
   document.querySelector('#closeTimeline').onclick=close;
+  let resizeTimer=null;
+  addEventListener('resize',()=>{
+    if(view.hidden||!state.project)return;
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(()=>{
+      const newestFirst=[...state.versions].sort((a,b)=>b.index-a.index);
+      buildOverview(newestFirst,Math.max(1,...newestFirst.map(weight)));
+      if(state.openId)markCurrent(state.openId);
+    },140);
+  });
 
   /* Up and down walk the record; the row itself is a button, so Enter and Space
      already open it. */

@@ -52,6 +52,27 @@ start/end trim for pulling one recitation out of a long video. The player adds
 repeat (including repeat-one for memorising), shuffle, playback speed, a sleep
 timer, and lock-screen and media-key control through the Media Session API.
 
+### Covers
+
+Artwork is the interface here, so nothing is ever allowed to render blank. A
+recitation takes the first of these that exists: an image chosen from the
+device, an image pulled from the link (YouTube's sharpest stored thumbnail —
+`maxresdefault` where the upload was big enough, stepping down until one
+decodes), or one of the images shipped inside the app. The bundled set is
+matched against the reciter, falling back to a general cover, and it is
+precached by the service worker — which is why a card still has a face on a
+plane. A thumbnail that fails to load at runtime swaps to the same bundled art
+instead of leaving a grey tile.
+
+### Layout
+
+Near-black ground, elevated cards, square artwork, one saturated green. Three
+tabs — home, search, library — over a mini player that expands into a
+full-height now-playing sheet. Transport controls and the scrubber stay
+left-to-right inside the RTL page, the way Spotify's own Arabic build has
+them: a "previous" arrow pointing left, or a bar that fills from the right,
+reads as broken.
+
 Export writes the whole library to one JSON file. Device audio has no copy
 outside this browser, so those entries are left out of the export rather than
 restored as tracks that would never play.

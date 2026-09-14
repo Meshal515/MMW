@@ -68,6 +68,41 @@ export function parseSource(input) {
 export const youtubeThumb = id => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 export const youtubeWatch = id => `https://www.youtube.com/watch?v=${id}`;
 
+/* Biggest first. `maxresdefault` only exists for videos uploaded above 720p and
+   `sddefault` is missing on older ones, so the list is tried in order and the
+   first that actually decodes wins. `hqdefault` is the one that always exists. */
+const THUMB_SIZES = ['maxresdefault', 'sddefault', 'hqdefault', 'mqdefault'];
+
+export function youtubeThumbCandidates(id) {
+  return THUMB_SIZES.map(size => `https://i.ytimg.com/vi/${id}/${size}.jpg`);
+}
+
+/**
+ * The sharpest thumbnail YouTube actually has for this video. A missing size
+ * answers with a 120x90 grey placeholder rather than a 404, so the width is the
+ * only reliable test.
+ */
+export function bestYoutubeThumb(id) {
+  const candidates = youtubeThumbCandidates(id);
+  const tryAt = index => new Promise(resolve => {
+    if (index >= candidates.length) return resolve(youtubeThumb(id));
+    const img = new Image();
+    img.onload = () => (img.naturalWidth > 200 ? resolve(candidates[index]) : resolve(tryAt(index + 1)));
+    img.onerror = () => resolve(tryAt(index + 1));
+    img.src = candidates[index];
+  });
+  return tryAt(0);
+}
+
+/** A stable pair of hues per track, so a coverless recitation still has a face. */
+export function coverHues(seed) {
+  let hash = 0;
+  const text = String(seed || 'تلاوة');
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return [hue, (hue + 38) % 360];
+}
+
 /**
  * Title and channel straight from YouTube's oEmbed endpoint, which is public and
  * CORS-open. If it ever stops answering, the player reports the title itself

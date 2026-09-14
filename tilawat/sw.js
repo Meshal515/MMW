@@ -4,7 +4,7 @@
    device files and saved copies live in IndexedDB, and streams must reach the
    network untouched so range requests keep working. */
 
-const VERSION = 'tilawat-v1';
+const VERSION = 'tilawat-v2';
 const SHELL = `${VERSION}-shell`;
 const ART = `${VERSION}-art`;
 const SCOPE = new URL('./', self.location).pathname;
@@ -18,7 +18,12 @@ const PRECACHE = [
   './js/store.js',
   './js/player.js',
   './js/sources.js',
+  './js/covers.js',
   './assets/logo.svg',
+  // The bundled covers are what a card falls back to, so they must be on the
+  // device before the network is gone.
+  './assets/covers/default.jpg',
+  './assets/covers/dossari.jpg',
   './assets/icon-192.png',
   './assets/icon-512.png',
   '../assets/fonts/plex-ar-arabic-400.woff2',

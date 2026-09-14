@@ -26,6 +26,7 @@ jobs:
           node --check tilawat/js/store.js
           node --check tilawat/js/player.js
           node --check tilawat/js/sources.js
+          node --check tilawat/js/covers.js
       - name: Check HTML and required files
         run: |
           python - <<'PY'
@@ -39,7 +40,9 @@ jobs:
               json.loads(Path(m).read_text())
           required=['styles.css','manifest.webmanifest','assets/logo.svg','sw.js',
                     'tilawat/styles.css','tilawat/sw.js','tilawat/assets/logo.svg',
-                    'tilawat/assets/icon-192.png','tilawat/assets/icon-512.png']
+                    'tilawat/assets/icon-192.png','tilawat/assets/icon-512.png',
+                    'tilawat/js/covers.js',
+                    'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

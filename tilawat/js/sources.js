@@ -174,7 +174,13 @@ export function normalizeTrack(raw = {}) {
     addedAt: Number(raw.addedAt || Date.now()), lastPlayedAt: Number(raw.lastPlayedAt || 0),
     lastPosition: Number(raw.lastPosition || 0), playCount: Number(raw.playCount || 0),
     order: Number.isFinite(raw.order) ? raw.order : Date.now(),
-    bytes: Number(raw.bytes || 0)
+    bytes: Number(raw.bytes || 0),
+    // Every copy ever found of this recording, plus which one the listener
+    // pinned. Rebuilt from the three fields above only when absent, so a
+    // reload must carry them through here or the extra copies are lost.
+    variants: Array.isArray(raw.variants) ? raw.variants : [],
+    preferredVariantId: raw.preferredVariantId || '',
+    defaultVariantId: raw.defaultVariantId || ''
   };
 
   // Legacy v1 migration: kind/src/blobKey represented mutually-exclusive sources.

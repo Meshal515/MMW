@@ -186,8 +186,76 @@
       <button class="chipbtn" id="offlineBtn" type="button" aria-pressed="false" title="تنزيل"><svg id="offlineIcon" viewBox="0 0 24 24"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
       <button class="chipbtn" id="videoBtn" type="button" hidden aria-pressed="false" title="الفيديو"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 11 5-3v8l-5-3z"/></svg></button>
     </div>
+    <div class="now__scrollcue" id="nowCue" aria-hidden="true">
+      <span>نسخ أخرى من هذه التلاوة</span>
+      <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+  </div>
+
+  <div class="strata" id="nowStrata">
+    <section class="strat" id="variantSection" data-reveal>
+      <div class="strat__head">
+        <h3 class="strat__h">نسخ أخرى من هذه التلاوة</h3>
+        <button class="btn btn--sm" type="button" id="addSourceBtn">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>أضف نسخة</span>
+        </button>
+      </div>
+      <p class="strat__note" id="variantNote"></p>
+      <div class="vgrid" id="variantGrid"></div>
+    </section>
+
+    <section class="strat" id="suggestSection" data-reveal hidden>
+      <div class="strat__head"><h3 class="strat__h">قد يعجبك أيضًا</h3></div>
+      <div class="vgrid vgrid--sug" id="suggestGrid"></div>
+    </section>
   </div>
 </section>
+
+<dialog id="sourceDialog" aria-labelledby="sourceTitle">
+  <form method="dialog" id="sourceForm">
+    <div class="dlg__head">
+      <h2 id="sourceTitle">أضف نسخة لهذه التلاوة</h2>
+      <button class="iconbtn" type="button" data-close aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="dlg__body">
+      <p class="hint" id="sourceFor"></p>
+      <div class="field">
+        <label for="srcUrl">رابط النسخة</label>
+        <input id="srcUrl" type="url" dir="ltr" inputmode="url" placeholder="https://…/surah.mp3  أو  رابط يوتيوب" autocomplete="off" />
+        <p class="hint">رابط MP3 مباشر يُشغَّل ويُنزَّل ويعمل والشاشة مطفأة. رابط يوتيوب يُحفظ كمرجع وصورة.</p>
+      </div>
+      <div class="field">
+        <label for="srcFile">أو ملف من جهازك</label>
+        <input id="srcFile" type="file" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac" />
+      </div>
+      <div class="field">
+        <label for="srcLabel">وصف النسخة</label>
+        <input id="srcLabel" type="text" list="srcLabels" placeholder="مثال: نسخة مزامير — من الشريط الأصلي" />
+        <datalist id="srcLabels">
+          <option value="نسخة أصلية"></option><option value="من الشريط الأصلي"></option>
+          <option value="نسخة منقّحة"></option><option value="نسخة مصحّحة"></option>
+          <option value="أعلى جودة"></option><option value="نسخة مرمّمة"></option>
+        </datalist>
+      </div>
+      <div class="flags">
+        <label class="flag"><input type="checkbox" id="srcOriginal" /><span>أصلية</span></label>
+        <label class="flag"><input type="checkbox" id="srcRefined" /><span>منقّحة</span></label>
+        <label class="flag"><input type="checkbox" id="srcRare" /><span>نادرة</span></label>
+        <label class="flag"><input type="checkbox" id="srcPartial" /><span>ناقصة</span></label>
+      </div>
+      <div class="field">
+        <label for="srcFrom">من أين وجدتها <span class="hint">(اختياري)</span></label>
+        <input id="srcFrom" type="text" placeholder="مزامير آل داود / موقع القارئ / أرشيف" />
+      </div>
+      <p class="hint hint--warn" id="srcError" hidden></p>
+    </div>
+    <div class="dlg__foot">
+      <span class="spacer"></span>
+      <button class="btn" type="button" data-close>إلغاء</button>
+      <button class="btn btn--primary" type="submit">أضف النسخة</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="addDialog" aria-labelledby="addTitle">
   <form method="dialog" id="addForm">

@@ -11,6 +11,10 @@ import { SURAHS, parseYoutube, parseAudioUrl, fetchYoutubeMeta, bestYoutubeThumb
 import { coverSrc, coverFallbackAttr, fallbackCover, hasOwnCover, loadCoverUrls,
          refreshCoverUrl, releaseCoverUrl } from './covers.js';
 import { Player, bindMediaSession } from './player.js';
+import { ensureVariants, syncPrimary, addVariant, removeVariant, setPreferred,
+         useVariant, suggestFor, badgesFor } from './variants.js';
+import { coverSVG } from './cover.js';
+import { bindSheet, refresh as refreshMotion, clearSheet } from './motion.js';
 import { makeSortable } from './reorder.js';
 
 const $ = id => document.getElementById(id);
@@ -495,6 +499,7 @@ $('repeatBtn').addEventListener('click', () => { state.repeat = REPEAT_ORDER[(RE
 $('shuffleBtn').addEventListener('click', () => { state.shuffle = !state.shuffle; setPref('shuffle', state.shuffle); $('shuffleBtn').setAttribute('aria-pressed', String(state.shuffle)); toast(state.shuffle ? 'الترتيب العشوائي يعمل.' : 'الترتيب العشوائي متوقف.'); });
 
 function syncNow() {
+  if (!$('now').hidden) queueMicrotask(renderStrata);
   const track = current();
   if (!track) { $('mini').hidden = true; closeNow(); return; }
   const src = coverSrc(track); const fallback = fallbackCover(track);
@@ -506,8 +511,235 @@ function syncNow() {
   $('videoBtn').hidden = !(track.youtubeId && player.source === 'youtube');
   syncDownloadButton();
 }
-function openNow() { if (!current()) return; $('now').hidden = false; document.body.classList.add('is-locked'); }
-function closeNow() { $('now').hidden = true; document.body.classList.remove('is-locked'); }
+function openNow() {
+  if (!current()) return;
+  $('now').hidden = false;
+  document.body.classList.add('is-locked');
+  $('now').scrollTop = 0;
+  renderStrata();
+  bindSheet($('now'));
+}
+function closeNow() {
+  clearSheet();
+  $('now').hidden = true;
+  document.body.classList.remove('is-locked');
+}
+
+/* ── the copies of this recording, and what to hear after it ─────────────── */
+
+const PROVIDER_NAME = {
+  local: 'ملف على جهازك', youtube: 'يوتيوب', mp3quran: 'MP3Quran', quranicaudio: 'QuranicAudio',
+  islamway: 'طريق الإسلام', archive: 'أرشيف الإنترنت', mazameer: 'مزامير آل داود',
+  assabile: 'السبيل', tvquran: 'TVQuran', everyayah: 'EveryAyah', soundcloud: 'SoundCloud',
+  generic: 'رابط مباشر'
+};
+
+function variantArt(track, variant) {
+  if (variant.thumbnail) {
+    return `<img src="${esc(variant.thumbnail)}" alt="" loading="lazy"
+                 onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'cvwrap',innerHTML:this.dataset.fb}))"
+                 data-fb="${esc(coverSVG(track))}" />`;
+  }
+  return coverSVG(track);
+}
+
+function variantCard(track, variant) {
+  const playing = track.defaultVariantId === variant.id;
+  const preferred = track.preferredVariantId === variant.id;
+  const bits = [
+    variant.duration ? formatTime(variant.duration) : '',
+    variant.bitrate ? variant.bitrate + 'kbps' : '',
+    variant.fileSize ? formatBytes(variant.fileSize) : '',
+    track.year || ''
+  ].filter(Boolean).join(' · ');
+  return `
+  <article class="vcard" data-variant="${esc(variant.id)}" data-playing="${playing}" data-reveal-item>
+    <div class="vcard__art">${variantArt(track, variant)}
+      ${playing ? '<span class="vcard__mark">تُشغَّل الآن</span>' : ''}</div>
+    <div class="vcard__body">
+      <span class="vcard__src">${esc(variant.qualityLabel || PROVIDER_NAME[variant.provider] || variant.provider)}</span>
+      ${bits ? `<span class="vcard__meta">${esc(bits)}</span>` : ''}
+      <span class="vbadges">${badgesFor(variant).map(b =>
+        `<span class="vbadge" data-tone="${b.tone}">${esc(b.text)}</span>`).join('')}</span>
+      <span class="vcard__acts">
+        <button class="iconbtn" type="button" data-vact="play" aria-label="شغّل هذه النسخة">
+          <svg viewBox="0 0 24 24"><path d="M7 4.5 19 12 7 19.5z" fill="currentColor" stroke="none"/></svg></button>
+        <button class="iconbtn vcard__star" type="button" data-vact="prefer" aria-pressed="${preferred}"
+                aria-label="اجعلها المفضّلة" title="اجعل هذه النسخة المفضّلة">
+          <svg viewBox="0 0 24 24"><path d="m12 4 2.4 5 5.6.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.6-.8z"/></svg></button>
+        ${variant.audioUrl && !variant.localKey ? `
+        <button class="iconbtn" type="button" data-vact="download" aria-label="نزّل هذه النسخة">
+          <svg viewBox="0 0 24 24"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>` : ''}
+        ${variant.sourceUrl ? `
+        <a class="iconbtn" href="${esc(variant.sourceUrl)}" target="_blank" rel="noopener noreferrer" aria-label="المصدر">
+          <svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>` : ''}
+        <span class="spacer"></span>
+        <button class="iconbtn" type="button" data-vact="remove" aria-label="احذف هذه النسخة">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </span>
+    </div>
+  </article>`;
+}
+
+function renderStrata() {
+  const track = current();
+  if (!track) return;
+  ensureVariants(track);
+
+  $('variantGrid').innerHTML = track.variants.map(v => variantCard(track, v)).join('');
+  const count = track.variants.length;
+  $('variantNote').textContent = count > 1
+    ? `${count} نسخ محفوظة لهذا التسجيل. المشغّل يبدأ بأفضلها، والباقي يبقى كما هو.`
+    : 'نسخة واحدة محفوظة. أضف نسخة أخرى من موقع آخر لتظهر هنا جنبها.';
+
+  const suggestions = suggestFor(track, state.tracks);
+  $('suggestSection').hidden = suggestions.length === 0;
+  $('suggestGrid').innerHTML = suggestions.map(({ track: item, reason }) => `
+    <article class="vcard" data-id="${esc(item.id)}" data-reveal-item>
+      <div class="vcard__art">${item.thumb
+        ? `<img src="${esc(item.thumb)}" alt="" loading="lazy" />`
+        : coverSVG(item)}
+        <button class="card__play" type="button" data-act="play" aria-label="تشغيل">
+          <svg viewBox="0 0 24 24"><path d="M7 4.5 19 12 7 19.5z"/></svg></button>
+      </div>
+      <div class="vcard__body">
+        <span class="vcard__src">${esc(item.title || 'تلاوة')}</span>
+        <span class="vcard__meta">${esc(item.reciter || '')}</span>
+        <span class="vbadges"><span class="vbadge">${esc(reason)}</span></span>
+      </div>
+    </article>`).join('');
+  refreshMotion();
+}
+
+$('variantGrid').addEventListener('click', async event => {
+  const card = event.target.closest('[data-variant]');
+  const action = event.target.closest('[data-vact]');
+  const track = current();
+  if (!card || !action || !track) return;
+  const id = card.dataset.variant;
+
+  switch (action.dataset.vact) {
+    case 'play':
+      useVariant(track, id);
+      await putTrack(track);
+      await playTrack(track);
+      renderStrata();
+      break;
+    case 'prefer':
+      setPreferred(track, id);
+      await putTrack(track);
+      renderStrata();
+      toast(track.preferredVariantId ? 'صارت هذه نسختك المفضّلة لهذه التلاوة.' : 'رجع الاختيار تلقائيًا.');
+      break;
+    case 'download': {
+      const variant = track.variants.find(v => v.id === id);
+      if (variant) await downloadVariant(track, variant);
+      break;
+    }
+    case 'remove': {
+      if (track.variants.length < 2) { toast('لا يمكن حذف النسخة الوحيدة.'); return; }
+      if (!confirm('حذف هذه النسخة من التلاوة؟ باقي النسخ تبقى.')) return;
+      removeVariant(track, id);
+      await putTrack(track);
+      renderStrata();
+      render();
+      break;
+    }
+  }
+});
+
+$('suggestGrid').addEventListener('click', event => {
+  const card = event.target.closest('[data-id]');
+  if (!card) return;
+  const next = state.tracks.find(t => t.id === card.dataset.id);
+  if (!next) return;
+  $('now').scrollTop = 0;
+  playTrack(next);
+});
+
+async function downloadVariant(track, variant) {
+  toast('جارٍ التنزيل…', 60000);
+  try {
+    const res = await fetch(variant.audioUrl, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    if (!blob.size) throw new Error('empty');
+    const key = 'b-' + track.id + '-' + variant.id;
+    await putBlob(key, blob);
+    variant.localKey = key;
+    variant.localSize = blob.size;
+    variant.fileSize = variant.fileSize || blob.size;
+    syncPrimary(track);
+    await putTrack(track);
+    renderStrata();
+    render();
+    toast(`نُزّلت (${formatBytes(blob.size)}) — تعمل بلا إنترنت والشاشة مطفأة.`, 4200);
+  } catch (err) {
+    toast('تعذّر التنزيل — الخادم لا يسمح بالنسخ من المتصفح. التشغيل المباشر يعمل.', 5200);
+    console.warn('variant download failed', err);
+  }
+}
+
+/* ── attaching another copy ──────────────────────────────────────────────── */
+
+$('addSourceBtn').addEventListener('click', () => {
+  const track = current();
+  if (!track) return;
+  $('sourceForm').reset();
+  $('srcError').hidden = true;
+  $('sourceFor').textContent = `تُضاف إلى: ${track.title || 'هذه التلاوة'}`;
+  $('sourceDialog').showModal();
+});
+
+$('sourceForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const track = current();
+  if (!track) return;
+  const url = $('srcUrl').value.trim();
+  const file = $('srcFile').files[0];
+  if (!url && !file) {
+    $('srcError').hidden = false;
+    $('srcError').textContent = 'الصق رابطًا أو اختر ملفًا.';
+    return;
+  }
+
+  const flags = {
+    original: $('srcOriginal').checked, refined: $('srcRefined').checked,
+    rare: $('srcRare').checked, partial: $('srcPartial').checked
+  };
+  const label = $('srcLabel').value.trim();
+  const from = $('srcFrom').value.trim();
+  let fields;
+
+  if (file) {
+    const key = 'b-' + track.id + '-' + Date.now().toString(36);
+    await putBlob(key, file);
+    fields = { provider: 'local', localKey: key, localName: file.name, localSize: file.size,
+               fileSize: file.size, downloadable: false,
+               provenance: { originalSource: 'device', discoveredFrom: from, verified: true, confidence: 1 } };
+  } else {
+    const yt = parseYoutube(url);
+    fields = yt
+      ? { provider: 'youtube', videoId: yt.id, sourceUrl: youtubeWatch(yt.id),
+          embedUrl: `https://www.youtube-nocookie.com/embed/${yt.id}`,
+          thumbnail: youtubeThumb(yt.id), downloadable: false,
+          provenance: { originalSource: url, discoveredFrom: from, confidence: 0.7 } }
+      : { sourceUrl: url, audioUrl: url,
+          provenance: { originalSource: url, discoveredFrom: from, confidence: 0.75 } };
+  }
+
+  const added = addVariant(track, { ...fields, ...flags, qualityLabel: label, title: label });
+  if (!added) {
+    $('srcError').hidden = false;
+    $('srcError').textContent = 'هذه النسخة مضافة مسبقًا لهذه التلاوة.';
+    return;
+  }
+  await putTrack(track);
+  $('sourceDialog').close();
+  renderStrata();
+  render();
+  toast('أُضيفت النسخة. المشغّل اختار الأفضل تلقائيًا.', 4000);
+});
 $('miniOpen').addEventListener('click', openNow); $('nowClose').addEventListener('click', closeNow); $('nowEdit').addEventListener('click', () => current() && openEdit(current()));
 $('nowFav').addEventListener('click', () => current() && toggleFavorite(current())); $('miniFav').addEventListener('click', () => current() && toggleFavorite(current()));
 function showVideo(on) { $('ytPark').classList.toggle('is-shown', on); $('videoBtn').setAttribute('aria-pressed', String(on)); }
@@ -752,7 +984,7 @@ function handleLaunchParams() {
 (async function start() {
   try {
     const raw = await allTracks();
-    state.tracks = raw.map(normalizeTrack);
+    state.tracks = raw.map(normalizeTrack).map(ensureVariants);
     // Persist migrated v1 records once so future starts are native v2.
     await Promise.all(state.tracks.map(putTrack));
     await loadCoverUrls(state.tracks);

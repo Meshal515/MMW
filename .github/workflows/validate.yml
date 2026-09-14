@@ -27,6 +27,12 @@ jobs:
           node --check tilawat/js/player.js
           node --check tilawat/js/sources.js
           node --check tilawat/js/covers.js
+          node --check tilawat/js/motion.js
+          node --check tilawat/js/variants.js
+          node --check tilawat/js/cover.js
+          node --check tilawat/js/quality.js
+          node --check tilawat/js/model.js
+          node --check tilawat/js/arabic.js
           node --check tilawat/js/reorder.js
       - name: Check HTML and required files
         run: |
@@ -43,6 +49,8 @@ jobs:
                     'tilawat/styles.css','tilawat/sw.js','tilawat/assets/logo.svg',
                     'tilawat/assets/icon-192.png','tilawat/assets/icon-512.png',
                     'tilawat/js/covers.js','tilawat/js/reorder.js',
+                    'tilawat/js/variants.js','tilawat/js/quality.js','tilawat/js/cover.js',
+                    'tilawat/vendor/gsap.min.js','tilawat/vendor/ScrollTrigger.min.js',
                     'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'

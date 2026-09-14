@@ -47,6 +47,32 @@ Legacy v1 entries are migrated automatically on startup:
 
 The IndexedDB database itself is unchanged, so existing libraries stay on the device.
 
+### One recording, every copy of it
+
+A catalogue entry carries `variants[]`: every copy of that recording anyone has
+found. Five sites holding سورة الكهف — ياسر الدوسري — 1425 is one entry with
+five variants, not five entries.
+
+Nothing is ever merged away. The resolver in `quality.js` only decides which
+variant playback *starts* from; the rest stay listed under the player, because
+a 64kbps rip off a dead forum may be the only one taken from the original tape.
+Playback order is fixed by what the listener actually gets — a file on the
+device, then a copy they pinned themselves, then the best direct audio, and an
+embed last, since an embed cannot survive a locked screen.
+
+Words on a page are evidence, not proof, so «أصلية», «منقّحة», «من الشريط
+الأصلي» and the rest weigh less than bitrate, codec and sample rate; and a
+larger file only counts in its favour once its length is known, because an hour
+at 64kbps outweighs ten minutes at 320.
+
+Grouping is strict in one direction on purpose: a 1425 تراويح never absorbs a
+modern مصحف of the same surah just because the modern one is cleaner. Reciter,
+surah, collection, mosque and occasion must all agree, and when one side has no
+year only a near-identical duration is allowed to bridge the gap.
+
+The three playback fields above are derived from `variants[]` and written back
+by `syncPrimary`, so the player needs no knowledge of any of this.
+
 ### Catalogue structure
 
 Entries can now be indexed by:

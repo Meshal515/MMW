@@ -1,0 +1,184 @@
+/* ── worker ───────────────────────────────────────────────────────────────────
+   The small piece of server the catalogue cannot do without.
+
+   A browser cannot read another site's page — CORS forbids it — so metadata
+   about a recording has to be read somewhere else. That is all this does: it
+   fetches a public page the listener pasted, reads what the page publishes
+   about itself, and returns the description.
+
+   Two rules keep it from becoming something worse:
+
+   1. It returns descriptions, never bytes. Audio is handed back as a URL for
+      the browser to play directly, so this can never be used as a general
+      proxy or a way to launder someone else's bandwidth.
+   2. It refuses anything that is not a public http(s) host — loopback, private
+      ranges and the cloud metadata address above all.
+
+   It does not log in anywhere, bypass any protection, or extract media a site
+   has not published as a plain link. */
+
+import { checkTarget, describe, fromArchiveMetadata, looksAudio } from './parse.js';
+
+const MAX_BYTES = 2_000_000;
+const TIMEOUT_MS = 9000;
+const UA = 'TilawatCatalogue/1.0 (+metadata reader; contact via site)';
+
+const json = (body, status = 200, extra = {}) => new Response(JSON.stringify(body), {
+  status,
+  headers: {
+    'content-type': 'application/json; charset=utf-8',
+    'access-control-allow-origin': '*',
+    'cache-control': status === 200 ? 'public, max-age=3600' : 'no-store',
+    ...extra
+  }
+});
+
+const fail = (reason, status = 400) => json({ ok: false, reason }, status);
+
+/** Fetches a page, giving up on time and on size rather than trusting either. */
+async function readPage(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/json' }
+    });
+    if (!res.ok) return { error: `المصدر ردّ بـ ${res.status}` };
+
+    const type = res.headers.get('content-type') || '';
+    if (/^audio\//i.test(type)) {
+      return { direct: { url: res.url, type, size: Number(res.headers.get('content-length')) || 0 } };
+    }
+    if (!/html|json|xml|text/i.test(type)) return { error: 'نوع محتوى غير مدعوم: ' + type };
+
+    // Read with a ceiling instead of res.text(), so a huge page cannot exhaust
+    // the Worker's memory before the size check ever runs.
+    const reader = res.body.getReader();
+    const chunks = [];
+    let total = 0;
+    while (total < MAX_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      chunks.push(value);
+    }
+    try { await reader.cancel(); } catch {}
+    const buffer = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { buffer.set(chunk.subarray(0, Math.min(chunk.length, total - offset)), offset); offset += chunk.length; }
+    return { html: new TextDecoder('utf-8').decode(buffer), finalUrl: res.url };
+  } catch (err) {
+    return { error: err.name === 'AbortError' ? 'انتهت المهلة' : 'تعذّر الوصول' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ── routes ─────────────────────────────────────────────────────────────── */
+
+/** Reads any public page and reports what it says about itself. */
+async function resolve(request) {
+  const target = new URL(request.url).searchParams.get('url');
+  const check = checkTarget(target);
+  if (!check.ok) return fail(check.reason);
+
+  // A link straight to a file needs no parsing at all.
+  if (looksAudio(check.url.href)) {
+    return json({ ok: true, kind: 'audio', audio: [{ url: check.url.href, from: 'direct' }], title: '', thumbnail: '' });
+  }
+
+  const page = await readPage(check.url.href);
+  if (page.error) return fail(page.error, 502);
+  if (page.direct) {
+    return json({ ok: true, kind: 'audio', audio: [{ url: page.direct.url, from: 'direct', fileSize: page.direct.size }] });
+  }
+  return json({ ok: true, kind: 'page', ...describe(page.html, page.finalUrl || check.url.href) });
+}
+
+/** archive.org publishes a complete file listing; this just reshapes it. */
+async function archive(request) {
+  const id = new URL(request.url).searchParams.get('id');
+  if (!id || !/^[\w.\-]{1,120}$/.test(id)) return fail('معرّف أرشيف غير صالح');
+  const page = await readPage(`https://archive.org/metadata/${encodeURIComponent(id)}`);
+  if (page.error) return fail(page.error, 502);
+  let data;
+  try { data = JSON.parse(page.html); } catch { return fail('ردّ غير مفهوم من الأرشيف', 502); }
+  if (!data || !data.files) return fail('لا ملفات في هذا العنصر', 404);
+  return json({
+    ok: true,
+    title: (data.metadata && data.metadata.title) || '',
+    creator: (data.metadata && data.metadata.creator) || '',
+    date: (data.metadata && data.metadata.date) || '',
+    files: fromArchiveMetadata(data)
+  });
+}
+
+/**
+ * Where a dead page went. A link that rotted is still evidence the recording
+ * existed, so the original URL is kept and the snapshot recorded beside it.
+ */
+async function wayback(request) {
+  const target = new URL(request.url).searchParams.get('url');
+  const check = checkTarget(target);
+  if (!check.ok) return fail(check.reason);
+  const api = `https://archive.org/wayback/available?url=${encodeURIComponent(check.url.href)}`;
+  const page = await readPage(api);
+  if (page.error) return fail(page.error, 502);
+  let data;
+  try { data = JSON.parse(page.html); } catch { return fail('ردّ غير مفهوم', 502); }
+  const snap = data && data.archived_snapshots && data.archived_snapshots.closest;
+  return json({ ok: true, found: !!(snap && snap.available), snapshot: snap ? snap.url : '', when: snap ? snap.timestamp : '' });
+}
+
+/** oEmbed, for the providers that publish one. Metadata only, never media. */
+const OEMBED = {
+  'youtube.com': 'https://www.youtube.com/oembed?format=json&url=',
+  'youtu.be': 'https://www.youtube.com/oembed?format=json&url=',
+  'soundcloud.com': 'https://soundcloud.com/oembed?format=json&url=',
+  'vimeo.com': 'https://vimeo.com/api/oembed.json?url=',
+  'dailymotion.com': 'https://www.dailymotion.com/services/oembed?url=',
+  'tiktok.com': 'https://www.tiktok.com/oembed?url='
+};
+
+async function oembed(request) {
+  const target = new URL(request.url).searchParams.get('url');
+  const check = checkTarget(target);
+  if (!check.ok) return fail(check.reason);
+  const host = check.url.hostname.replace(/^www\./, '');
+  const endpoint = OEMBED[host] || OEMBED[host.split('.').slice(-2).join('.')];
+  if (!endpoint) return fail('لا يوفّر هذا الموقع oEmbed', 404);
+  const page = await readPage(endpoint + encodeURIComponent(check.url.href));
+  if (page.error) return fail(page.error, 502);
+  try { return json({ ok: true, ...JSON.parse(page.html) }); }
+  catch { return fail('ردّ غير مفهوم', 502); }
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET, OPTIONS',
+          'access-control-allow-headers': 'content-type',
+          'access-control-max-age': '86400'
+        }
+      });
+    }
+    if (request.method !== 'GET') return fail('GET فقط', 405);
+
+    const { pathname } = new URL(request.url);
+    try {
+      if (pathname === '/api/resolve') return await resolve(request);
+      if (pathname === '/api/archive') return await archive(request);
+      if (pathname === '/api/wayback') return await wayback(request);
+      if (pathname === '/api/oembed') return await oembed(request);
+      if (pathname === '/api/health') return json({ ok: true, service: 'tilawat-catalog', d1: !!env.DB });
+      return fail('مسار غير معروف', 404);
+    } catch (err) {
+      return fail('خطأ داخلي', 500);
+    }
+  }
+};

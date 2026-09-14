@@ -146,6 +146,18 @@
     <h2 class="group">التطبيق</h2>
     <button class="btn btn--primary wide" type="button" id="installBtn" hidden>ثبّت تلاوات</button>
     <p class="muted" id="installNote">يمكن تثبيته من قائمة كروم ليعمل كتطبيق مستقل.</p>
+    <h2 class="group">خادم الكتالوج</h2>
+    <p class="muted">المتصفح ممنوع من قراءة صفحات المواقع الأخرى (CORS)، فخادم صغير على Cloudflare يقرأ الصفحة ويعيد وصفها فقط — لا ينقل الصوت ولا يخزّنه. بدونه يعمل كل شيء عدا قراءة الروابط غير المباشرة.</p>
+    <div class="field">
+      <label for="apiInput">عنوان الخادم</label>
+      <input id="apiInput" type="url" dir="ltr" placeholder="https://tilawat-catalog.NAME.workers.dev" autocomplete="off" />
+    </div>
+    <div class="twocol" style="margin-top:9px">
+      <button class="btn" type="button" id="apiSave">احفظ</button>
+      <button class="btn" type="button" id="apiTest">اختبر الاتصال</button>
+    </div>
+    <p class="hint" id="apiState" style="margin-top:8px"></p>
+
     <h2 class="group">كيف بُني</h2>
     <div class="panel panel--read"><p><b>التلاوة كيان واحد وليست رابطًا واحدًا.</b> يمكن أن تحمل نفس التلاوة رابط يوتيوب للمرجع والغلاف، ورابط MP3 للبث، ونسخة محلية للتشغيل بلا إنترنت. المشغّل يختار الأفضل تلقائيًا.</p><p>الخلفية تعمل عندما يكون هناك صوت مباشر أو نسخة محلية. يوتيوب يبقى مرجعًا وFallback داخل المشغّل.</p></div>
   </section>
@@ -246,6 +258,10 @@
       <div class="field">
         <label for="srcFrom">من أين وجدتها <span class="hint">(اختياري)</span></label>
         <input id="srcFrom" type="text" placeholder="مزامير آل داود / موقع القارئ / أرشيف" />
+      </div>
+      <div id="srcFound" hidden>
+        <p class="hint" id="srcFoundNote"></p>
+        <div class="picker" id="srcCandidates"></div>
       </div>
       <p class="hint hint--warn" id="srcError" hidden></p>
     </div>

@@ -1,0 +1,15 @@
+name = "tilawat-catalog"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# The catalogue index. Create it once with:
+#   npx wrangler d1 create tilawat-catalog
+# then paste the id it prints below and apply the schema:
+#   npx wrangler d1 execute tilawat-catalog --file=./schema.sql --remote
+[[d1_databases]]
+binding = "DB"
+database_name = "tilawat-catalog"
+database_id = "PASTE_ID_AFTER_CREATING"
+
+[observability]
+enabled = true

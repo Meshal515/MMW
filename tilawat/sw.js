@@ -1,6 +1,6 @@
 /* App shell only. Audio files live in IndexedDB when the user explicitly
    downloads/attaches them; network audio keeps native range requests intact. */
-const VERSION = 'tilawat-v6';
+const VERSION = 'tilawat-v7';
 const SHELL = `${VERSION}-shell`;
 const ART = `${VERSION}-art`;
 const SCOPE = new URL('./', self.location).pathname;
@@ -8,7 +8,7 @@ const SCOPE = new URL('./', self.location).pathname;
 const PRECACHE = [
   './','./index.html','./styles.css','./manifest.webmanifest',
   './js/app.js','./js/store.js','./js/player.js','./js/sources.js','./js/covers.js','./js/reorder.js',
-  './js/arabic.js','./js/model.js','./js/quality.js','./js/cover.js','./js/variants.js','./js/motion.js',
+  './js/arabic.js','./js/model.js','./js/quality.js','./js/cover.js','./js/variants.js','./js/motion.js','./js/catalog/resolve.js',
   './vendor/gsap.min.js','./vendor/ScrollTrigger.min.js',
   './assets/logo.svg','./assets/covers/default.jpg','./assets/covers/dossari.jpg',
   './assets/icon-192.png','./assets/icon-512.png',

@@ -15,6 +15,7 @@ import { ensureVariants, syncPrimary, addVariant, removeVariant, setPreferred,
          useVariant, suggestFor, badgesFor } from './variants.js';
 import { coverSVG } from './cover.js';
 import { bindSheet, refresh as refreshMotion, clearSheet } from './motion.js';
+import { resolveUrl, toVariants, apiBase, setApiBase, hasApi } from './catalog/resolve.js';
 import { makeSortable } from './reorder.js';
 
 const $ = id => document.getElementById(id);
@@ -691,6 +692,88 @@ $('addSourceBtn').addEventListener('click', () => {
   $('sourceDialog').showModal();
 });
 
+let srcResolved = null;
+
+let resolveTimer = null;
+$('srcUrl').addEventListener('input', () => {
+  clearTimeout(resolveTimer);
+  srcResolved = null;
+  $('srcFound').hidden = true;
+  resolveTimer = setTimeout(lookUpSource, 500);
+});
+
+/** Asks the Worker what a pasted page holds, and offers what it found. */
+async function lookUpSource() {
+  const url = $('srcUrl').value.trim();
+  $('srcError').hidden = true;
+  if (!url || !/^https?:\/\//i.test(url)) return;
+  // parseAudioUrl answers for any valid http(s) link, so the extension check
+  // is what actually decides whether this is already a file we understand.
+  const direct = parseAudioUrl(url);
+  if (parseYoutube(url) || (direct && direct.looksLikeAudio)) return;
+  if (!(await hasApi())) {
+    // Saying nothing here would look like a bug: the listener pasted a page
+    // and watched the dialog do nothing at all.
+    $('srcError').hidden = false;
+    $('srcError').textContent = 'لقراءة هذا الرابط اضبط خادم الكتالوج من الإعدادات — أو الصق رابط MP3 مباشر أو اختر ملفًا.';
+    return;
+  }
+
+  $('srcFound').hidden = false;
+  $('srcFoundNote').textContent = 'جارٍ قراءة الصفحة…';
+  $('srcCandidates').innerHTML = '';
+
+  const result = await resolveUrl(url);
+  if ($('srcUrl').value.trim() !== url) return;          // the field moved on
+  if (!result.ok) {
+    $('srcFound').hidden = true;
+    $('srcError').hidden = false;
+    $('srcError').textContent = result.reason === 'no-api'
+      ? 'اضبط عنوان خادم الكتالوج من الإعدادات لقراءة هذا النوع من الروابط.'
+      : result.reason;
+    return;
+  }
+
+  srcResolved = { result, url };
+  const variants = toVariants(result, url);
+  const claims = Object.keys(result.claims || {});
+  $('srcFoundNote').textContent = [
+    result.title ? `«${result.title}»` : 'الصفحة',
+    variants.length && variants[0].audioUrl ? `— ${variants.length} ملف صوتي` : '— بلا ملف صوتي مباشر',
+    (result.years || []).length ? `— ${result.years.join('، ')}هـ` : '',
+    claims.length ? `— ${claims.length} وصف من نصّ الصفحة` : ''
+  ].filter(Boolean).join(' ');
+
+  if (!result.title && !variants.some(v => v.audioUrl)) { $('srcFound').hidden = true; return; }
+  if (!$('srcLabel').value && result.title) $('srcLabel').value = result.title;
+
+  $('srcCandidates').innerHTML = variants.slice(0, 12).map((v, i) => `
+    <button class="pick" type="button" data-cand="${i}">
+      <span class="pick__t">${esc(v.qualityLabel || v.title || 'ملف صوتي')}</span>
+      <span class="pick__s">${esc([
+        v.bitrate ? v.bitrate + 'kbps' : '',
+        v.duration ? formatTime(v.duration) : '',
+        v.fileSize ? formatBytes(v.fileSize) : '',
+        v.audioUrl ? '' : 'مرجع فقط'
+      ].filter(Boolean).join(' · ') || 'أضفه')}</span>
+    </button>`).join('');
+}
+
+$('srcCandidates').addEventListener('click', async event => {
+  const pick = event.target.closest('[data-cand]');
+  const track = current();
+  if (!pick || !track || !srcResolved) return;
+  const variant = toVariants(srcResolved.result, srcResolved.url)[Number(pick.dataset.cand)];
+  if (!variant) return;
+  const added = addVariant(track, { ...variant, rare: $('srcRare').checked || variant.rare });
+  if (!added) { toast('هذه النسخة مضافة مسبقًا.'); return; }
+  await putTrack(track);
+  $('sourceDialog').close();
+  renderStrata();
+  render();
+  toast('أُضيفت النسخة من الصفحة.', 3600);
+});
+
 $('sourceForm').addEventListener('submit', async event => {
   event.preventDefault();
   const track = current();
@@ -947,6 +1030,29 @@ $('deleteBtn').addEventListener('click', async () => {
 document.addEventListener('click', e => { const close = e.target.closest('[data-close]'); if (close) close.closest('dialog').close(); });
 
 /* ── backup / install ──────────────────────────────────────────────────── */
+apiBase().then(url => { if ($('apiInput')) $('apiInput').value = url; });
+
+$('apiSave').addEventListener('click', async () => {
+  await setApiBase($('apiInput').value);
+  $('apiState').textContent = $('apiInput').value.trim() ? 'حُفظ.' : 'أُلغي — سيعمل التطبيق بدون خادم.';
+});
+
+$('apiTest').addEventListener('click', async () => {
+  await setApiBase($('apiInput').value);
+  const base = await apiBase();
+  if (!base) { $('apiState').textContent = 'لا عنوان محفوظ.'; return; }
+  $('apiState').textContent = 'جارٍ الاختبار…';
+  try {
+    const res = await fetch(base + '/api/health', { mode: 'cors' });
+    const data = await res.json();
+    $('apiState').textContent = data && data.ok
+      ? `متصل. فهرس D1: ${data.d1 ? 'مربوط' : 'غير مربوط'}.`
+      : 'ردّ غير متوقّع.';
+  } catch {
+    $('apiState').textContent = 'تعذّر الاتصال — تأكّد من العنوان ومن نشر الخادم.';
+  }
+});
+
 $('exportBtn').addEventListener('click', () => {
   const portable = state.tracks.filter(t => t.youtubeId || t.audioUrl).map(t => { const { localAudioKey, localOrigin, bytes, coverKey, ...rest } = t; return rest; });
   const payload = { app: 'tilawat', version: 3, exportedAt: new Date().toISOString(), tracks: portable };

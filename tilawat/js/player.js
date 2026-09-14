@@ -12,6 +12,37 @@
 
 import { getBlob } from './store.js';
 
+/**
+ * Where a track's sound actually comes from, in order of preference.
+ *
+ * A downloaded copy first, then a direct audio URL, and only then YouTube's
+ * embedded player. That order is the whole design: the first two run on a real
+ * <audio> element, which keeps playing with the screen off and drives the lock
+ * screen, while the YouTube embed does neither. A track carrying both a
+ * `youtubeUrl` (for its title and artwork) and an `audioUrl` therefore plays
+ * like a normal audio file and merely *looks* like its YouTube page.
+ */
+export function sourceOf(track) {
+  if (!track) return null;
+  // A file the listener attached is the recording itself; a downloaded copy is
+  // the same bytes as audioUrl, already here; audioUrl streams; and YouTube is
+  // the last resort because it is the only one that cannot survive a locked
+  // screen. The archive entry keeps its YouTube identity either way.
+  if (track.localFile && track.localFile.key) return { engine: 'audio', via: 'blob', value: track.localFile.key };
+  if (track.offlineKey) return { engine: 'audio', via: 'blob', value: track.offlineKey };
+  if (track.audioUrl) return { engine: 'audio', via: 'url', value: track.audioUrl };
+  if (track.videoId) return { engine: 'youtube', via: 'youtube', value: track.videoId };
+  if (track.kind === 'youtube' && track.src) return { engine: 'youtube', via: 'youtube', value: track.src };
+  if (track.src) return { engine: 'audio', via: 'url', value: track.src };
+  return null;
+}
+
+/** True when playback survives a locked screen. */
+export const playsInBackground = track => {
+  const source = sourceOf(track);
+  return !!source && source.engine === 'audio';
+};
+
 const YT_API = 'https://www.youtube.com/iframe_api';
 const TICK_MS = 250;
 
@@ -32,6 +63,43 @@ function loadYouTubeApi() {
     document.head.appendChild(script);
   });
   return ytApi;
+}
+
+/**
+ * Title, channel and length for a video, without playing it.
+ *
+ * `cueVideoById` loads the player without starting playback, which is the only
+ * way to learn a duration: oEmbed does not carry one. This runs on a player of
+ * its own so it can never disturb whatever is currently playing.
+ */
+let probePlayer = null;
+export async function probeYouTube(videoId, mountId, timeout = 15000) {
+  const YT = await loadYouTubeApi();
+  if (!probePlayer) {
+    probePlayer = await new Promise((resolve, reject) => {
+      const player = new YT.Player(mountId, {
+        host: 'https://www.youtube-nocookie.com',
+        width: 200, height: 113,
+        playerVars: { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, rel: 0 },
+        events: { onReady: () => resolve(player), onError: () => reject(new Error('yt-probe')) }
+      });
+      setTimeout(() => reject(new Error('yt-probe-timeout')), timeout);
+    });
+  }
+  probePlayer.cueVideoById(videoId);
+  const started = Date.now();
+  // The player reports 0 until the video's data has arrived.
+  while (Date.now() - started < timeout) {
+    await new Promise(r => setTimeout(r, 220));
+    const duration = probePlayer.getDuration ? probePlayer.getDuration() : 0;
+    const data = probePlayer.getVideoData ? probePlayer.getVideoData() : null;
+    if (duration > 0 && data && data.video_id === videoId) {
+      try { probePlayer.stopVideo(); } catch {}
+      return { duration: Math.round(duration), title: data.title || '', channel: data.author || '' };
+    }
+  }
+  try { probePlayer.stopVideo(); } catch {}
+  return null;
 }
 
 export class Player {
@@ -131,24 +199,29 @@ export class Player {
     this.emit('state');
 
     try {
-      if (track.kind === 'youtube') await this._loadYouTube(track, seq);
-      else await this._loadAudio(track, seq);
+      const source = sourceOf(track);
+      if (!source) throw new Error('no-source');
+      if (source.engine === 'youtube') await this._loadYouTube(track, source, seq);
+      else await this._loadAudio(track, source, seq);
     } catch (err) {
       if (seq === this._seq) this.emit('error', err);
     }
   }
 
-  async _loadAudio(track, seq) {
-    let src = track.src;
-    // A saved copy always wins over the network: it is the same audio, already here.
-    if (track.kind === 'file' || track.blobKey) {
-      const blob = await getBlob(track.blobKey || track.src);
+  async _loadAudio(track, source, seq) {
+    let src = source.value;
+    if (source.via === 'blob') {
+      const blob = await getBlob(source.value);
       if (seq !== this._seq) return;
-      if (!blob) {
-        if (track.kind === 'file') throw new Error('file-missing');
-      } else {
+      if (blob) {
         this.objectUrl = URL.createObjectURL(blob);
         src = this.objectUrl;
+      } else if (track.localFile && track.localFile.key === source.value) {
+        throw new Error('file-missing');
+      } else {
+        // The copy is gone but the original link is not; fall back to streaming.
+        src = track.audioUrl || track.src;
+        if (!src) throw new Error('file-missing');
       }
     }
     if (seq !== this._seq) return;
@@ -164,7 +237,7 @@ export class Player {
     if (this._wantPlay) this.play();
   }
 
-  async _loadYouTube(track, seq) {
+  async _loadYouTube(track, source, seq) {
     const YT = await loadYouTubeApi();
     if (seq !== this._seq) return;
     this.engine = 'youtube';
@@ -187,7 +260,7 @@ export class Player {
       if (seq !== this._seq) return;
     }
 
-    this.yt.loadVideoById({ videoId: track.src, startSeconds: this.start });
+    this.yt.loadVideoById({ videoId: source.value, startSeconds: this.start });
     try { this.yt.setPlaybackRate(this.rate); } catch {}
     try { this.yt.setVolume(Math.round(this.volume * 100)); } catch {}
     if (!this._wantPlay) {

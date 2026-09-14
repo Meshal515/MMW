@@ -162,3 +162,30 @@ export function formatBytes(bytes) {
   const value = bytes / Math.pow(1024, i);
   return `${value >= 10 || i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`;
 }
+
+/**
+ * How long is this audio? Reads only the header the browser needs, so a
+ * range-serving host answers in a few kilobytes. Resolves 0 rather than
+ * throwing: a missing duration is cosmetic, and playback fills it in later.
+ */
+export function probeDuration(url, timeout = 12000) {
+  return new Promise(resolve => {
+    const audio = new Audio();
+    let settled = false;
+    const done = value => {
+      if (settled) return;
+      settled = true;
+      audio.removeAttribute('src');
+      try { audio.load(); } catch {}
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(0), timeout);
+    audio.preload = 'metadata';
+    audio.addEventListener('loadedmetadata', () => {
+      clearTimeout(timer);
+      done(Number.isFinite(audio.duration) ? Math.round(audio.duration) : 0);
+    });
+    audio.addEventListener('error', () => { clearTimeout(timer); done(0); });
+    audio.src = url;
+  });
+}

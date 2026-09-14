@@ -304,10 +304,17 @@
     </div>
 
     <div class="dlg__body">
+      <div class="pane" id="linkPane">
       <div class="field" id="linkField">
         <label for="linkInput">الرابط</label>
         <input id="linkInput" type="url" inputmode="url" dir="ltr" placeholder="https://youtu.be/…" autocomplete="off" />
-        <p class="hint" id="linkHint">رابط يوتيوب يُشغَّل من يوتيوب. رابط ملف صوتي يُشغَّل — ويمكن حفظ نسخة منه للاستماع بلا إنترنت.</p>
+        <p class="hint" id="linkHint">رابط يوتيوب يجلب العنوان والغلاف واسم القناة. رابط ملف صوتي يُشغَّل مباشرة.</p>
+      </div>
+
+      <div class="field" id="audioField">
+        <label for="audioInput">رابط الصوت <span class="hint">(اختياري)</span></label>
+        <input id="audioInput" type="url" inputmode="url" dir="ltr" placeholder="https://…/surah.mp3" autocomplete="off" />
+        <p class="hint" id="audioHint">إن وضعت رابط MP3 هنا مع رابط يوتيوب، يُشغَّل الصوت من هذا الرابط — فيكمل والشاشة مطفأة — وتبقى صورة يوتيوب وعنوانه للواجهة.</p>
       </div>
 
       <div class="field" id="fileField">
@@ -375,6 +382,7 @@
       </div>
       <p class="hint">قصّ المقطع إن كانت التلاوة جزءًا من فيديو طويل — اكتب <span dir="ltr">1:23</span> أو <span dir="ltr">83</span>.</p>
       <p class="hint hint--warn" id="formError" hidden></p>
+      </div>
     </div>
 
     <div class="dlg__foot">

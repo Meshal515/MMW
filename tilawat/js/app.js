@@ -6,10 +6,10 @@ import { allTracks, putTrack, deleteTrack, putBlob, deleteBlob,
          blobsSize, getPref, setPref, newId } from './store.js';
 import { SURAHS, parseSource, fetchYoutubeMeta, youtubeThumb, bestYoutubeThumb,
          youtubeWatch, titleFromFilename, parseTime, formatTime, formatBytes,
-         coverHues } from './sources.js';
+         coverHues, probeDuration } from './sources.js';
 import { coverSrc, coverFallbackAttr, fallbackCover, hasOwnCover, loadCoverUrls,
          refreshCoverUrl, releaseCoverUrl } from './covers.js';
-import { Player, bindMediaSession } from './player.js';
+import { Player, bindMediaSession, sourceOf, playsInBackground } from './player.js';
 import { makeSortable } from './reorder.js';
 
 const $ = id => document.getElementById(id);
@@ -17,6 +17,15 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const KIND_LABEL = { youtube: 'يوتيوب', url: 'رابط', file: 'جهازك' };
+
+/** What the badge says — the source that will actually be heard. */
+function sourceLabel(track) {
+  const source = sourceOf(track);
+  if (!source) return '—';
+  if (source.via === 'blob') return 'مُنزَّلة';
+  if (source.engine === 'youtube') return 'يوتيوب';
+  return 'صوت مباشر';
+}
 const RATES = [0.75, 1, 1.25, 1.5, 2];
 /* The library's own segments, independent of the chips on the home screen. */
 const LIB_SEGS = [
@@ -142,8 +151,7 @@ const sortTracks = list => list.slice().sort(SORTS[state.sort] || SORTS.added);
 function cardHTML(track) {
   const playing = state.currentId === track.id;
   const badges = [
-    `<span class="badge">${esc(KIND_LABEL[track.kind])}</span>`,
-    isOffline(track) ? '<span class="badge badge--off">بلا نت</span>' : '',
+    `<span class="badge${isOffline(track) ? ' badge--off' : ''}">${esc(sourceLabel(track))}</span>`,
     (track.start > 0 || track.end > 0) ? '<span class="badge">مقصوص</span>' : ''
   ].join('');
   return `
@@ -173,7 +181,7 @@ function rowHTML(track) {
     <img class="row__art" src="${esc(coverSrc(track))}" alt="" loading="lazy" ${coverFallbackAttr(track)} />
     <button class="row__text" type="button" data-act="play">
       <span class="row__t">${esc(track.title || 'بلا عنوان')}</span>
-      <span class="row__s">${esc(subtitle(track))}${isOffline(track) ? ' · مُنزَّلة' : ''}</span>
+      <span class="row__s">${esc(subtitle(track))} · ${esc(sourceLabel(track))}</span>
     </button>
     <span class="row__acts">
       <button class="iconbtn" type="button" data-act="download" data-state="${down}"
@@ -684,7 +692,9 @@ function syncNow() {
   $('miniTitle').textContent = track.title || 'بلا عنوان';
   $('nowSub').textContent = subtitle(track);
   $('miniSub').textContent = subtitle(track);
-  $('nowFrom').textContent = 'من مكتبتك · ' + KIND_LABEL[track.kind];
+  $('nowFrom').textContent = playsInBackground(track)
+    ? 'من مكتبتك · ' + sourceLabel(track)
+    : 'من مكتبتك · يوتيوب · يتوقّف عند قفل الشاشة';
 
   $('nowFav').setAttribute('aria-pressed', String(!!track.favorite));
   $('miniFav').setAttribute('aria-pressed', String(!!track.favorite));
@@ -822,7 +832,7 @@ function paintCoverPreview() {
 }
 
 function resetForm() {
-  ['linkInput', 'titleInput', 'reciterInput', 'surahInput', 'tagsInput', 'startInput', 'endInput']
+  ['linkInput', 'audioInput', 'titleInput', 'reciterInput', 'surahInput', 'tagsInput', 'startInput', 'endInput']
     .forEach(id => { $(id).value = ''; });
   $('fileInput').value = '';
   $('coverFileInput').value = '';
@@ -873,8 +883,11 @@ function openEdit(track) {
   $('tagsInput').value = (track.tags || []).join('، ');
   $('startInput').value = track.start ? formatTime(track.start) : '';
   $('endInput').value = track.end ? formatTime(track.end) : '';
-  $('coverFromLink').disabled = track.kind !== 'youtube';
+  $('coverFromLink').disabled = !track.youtubeUrl && track.kind !== 'youtube';
+  $('audioInput').value = track.audioUrl || '';
   paintCoverPreview();
+  $('linkField').hidden = true;
+  $('fileField').hidden = true;
   $('addDialog').showModal();
 }
 
@@ -994,11 +1007,23 @@ $('fileInput').addEventListener('change', async () => {
   toast(`أُضيفت ${added} تلاوة من جهازك.`);
 });
 
+/**
+ * One recitation.
+ *
+ * `audioUrl` is what actually plays when there is one — a real file the browser
+ * can stream, seek, copy for offline use and keep running with the screen off.
+ * `youtubeUrl` and `thumbnail` only decorate: a track may carry a YouTube page
+ * for its title and artwork while its sound comes from somewhere else entirely.
+ * `metadata` holds whatever the source knew that has no column of its own.
+ */
 function blankTrack(kind) {
   return {
-    id: newId(), kind, src: '', title: '', reciter: '', surah: '', tags: [],
-    order: Date.now(),
-    start: 0, end: 0, duration: 0, thumb: '', cover: '', favorite: false,
+    id: newId(), kind, src: '',
+    title: '', reciter: '', surah: '', tags: [],
+    thumbnail: '', cover: '',
+    duration: 0, start: 0, end: 0,
+    youtubeUrl: '', audioUrl: '', metadata: {},
+    order: Date.now(), favorite: false,
     addedAt: Date.now(), lastPlayedAt: 0, playCount: 0
   };
 }
@@ -1037,18 +1062,34 @@ $('addForm').addEventListener('submit', async event => {
   const times = readTimes();
   if (times.error) { $('formError').hidden = false; $('formError').textContent = times.error; return; }
 
+  const audioUrl = $('audioInput').value.trim();
+  if (audioUrl && !/^https?:\/\//i.test(audioUrl)) {
+    $('formError').hidden = false;
+    $('formError').textContent = 'رابط الصوت لازم يبدأ بـ http أو https.';
+    return;
+  }
   const common = {
     title: $('titleInput').value.trim(),
     reciter: $('reciterInput').value.trim(),
     surah: $('surahInput').value.trim(),
     tags: $('tagsInput').value.split(/[،,]/).map(s => s.trim()).filter(Boolean),
     start: times.start,
-    end: times.end
+    end: times.end,
+    audioUrl
   };
 
   if (editing) {
+    const hadAudio = !!editing.audioUrl;
     Object.assign(editing, common);
     await commitCover(editing);
+    if (!hadAudio && editing.audioUrl && !editing.duration) {
+      probeDuration(editing.audioUrl).then(seconds => {
+        if (!seconds) return;
+        editing.duration = seconds;
+        putTrack(editing);
+        render();
+      });
+    }
     await putTrack(editing);
     $('addDialog').close();
     render();
@@ -1067,7 +1108,17 @@ $('addForm').addEventListener('submit', async event => {
   } else if (detected) {
     track = blankTrack(detected.kind);
     track.src = detected.src;
-    track.thumb = detected.kind === 'youtube' ? youtubeThumb(detected.src) : '';
+    if (detected.kind === 'youtube') {
+      track.thumbnail = youtubeThumb(detected.src);
+      track.youtubeUrl = youtubeWatch(detected.src);
+      track.metadata = { source: 'youtube', videoId: detected.src, channel: $('reciterInput').value.trim() };
+    } else {
+      track.audioUrl = track.audioUrl || detected.src;
+    }
+  } else if (audioUrl) {
+    // An audio link on its own is a perfectly good recitation.
+    track = blankTrack('url');
+    track.src = audioUrl;
   } else {
     $('formError').hidden = false;
     $('formError').textContent = 'الصق رابطًا أو اختر ملفًا أولًا.';
@@ -1075,13 +1126,25 @@ $('addForm').addEventListener('submit', async event => {
   }
 
   Object.assign(track, common);
+  if (track.kind === 'url' && !track.audioUrl) track.audioUrl = track.src;
   if (!track.title) track.title = track.kind === 'youtube' ? 'تلاوة من يوتيوب' : 'تلاوة';
   await commitCover(track);
   await putTrack(track);
   state.tracks.push(track);
   $('addDialog').close();
   render();
-  toast('أُضيفت التلاوة.');
+  toast(playsInBackground(track)
+    ? 'أُضيفت — تعمل والشاشة مطفأة.'
+    : 'أُضيفت — تلاوات يوتيوب تتوقّف عند قفل الشاشة.', 4000);
+
+  if (track.audioUrl && !track.duration) {
+    probeDuration(track.audioUrl).then(seconds => {
+      if (!seconds) return;
+      track.duration = seconds;
+      putTrack(track);
+      render();
+    });
+  }
 });
 
 $('deleteBtn').addEventListener('click', async () => {
@@ -1184,6 +1247,18 @@ addEventListener('appinstalled', () => {
 
 /* ── start ──────────────────────────────────────────────────────────────── */
 
+/** Brings tracks saved before `thumbnail`/`audioUrl` existed up to the model. */
+async function migrateTracks(tracks) {
+  const stale = tracks.filter(t => (t.thumb && !t.thumbnail) || (t.kind === 'url' && !t.audioUrl));
+  await Promise.all(stale.map(track => {
+    if (track.thumb && !track.thumbnail) track.thumbnail = track.thumb;
+    if (track.kind === 'youtube' && !track.youtubeUrl) track.youtubeUrl = youtubeWatch(track.src);
+    if (track.kind === 'url' && !track.audioUrl) track.audioUrl = track.src;
+    if (!track.metadata) track.metadata = {};
+    return putTrack(track);
+  }));
+}
+
 async function restorePrefs() {
   const [sort, repeat, shuffle, rate] = await Promise.all(
     ['sort', 'repeat', 'shuffle', 'rate'].map(k => getPref(k).catch(() => undefined)));
@@ -1210,6 +1285,7 @@ function handleLaunchParams() {
 (async function start() {
   try {
     state.tracks = await allTracks();
+    await migrateTracks(state.tracks);
     await loadCoverUrls(state.tracks);
   } catch (err) {
     console.error(err);

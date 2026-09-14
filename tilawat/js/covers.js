@@ -49,12 +49,13 @@ export function releaseCoverUrl(id) {
 
 /** True when the track carries a picture of its own, rather than a fallback. */
 export function hasOwnCover(track) {
-  return !!(track.coverKey || track.cover || track.thumb);
+  return !!(track.coverKey || track.cover || track.thumbnail || track.thumb);
 }
 
 /** What the <img> should point at right now. */
 export function coverSrc(track) {
-  return objectUrls.get(track.id) || track.cover || track.thumb || fallbackCover(track);
+  // `thumb` is what tracks added before the field was renamed still carry.
+  return objectUrls.get(track.id) || track.cover || track.thumbnail || track.thumb || fallbackCover(track);
 }
 
 /**

@@ -545,6 +545,31 @@ dialog::backdrop { background: rgba(4, 6, 5, .62); backdrop-filter: blur(4px); }
 .coverpick__btns { display: flex; flex-direction: column; gap: 7px; align-items: stretch; flex: 1; min-width: 0; }
 .coverpick__btns .btn { justify-content: flex-start; }
 
+/* ── picker (the reciter catalogue) ─────────────────────────────────────── */
+
+.pane { display: flex; flex-direction: column; gap: 16px; }
+.search--sm { margin-bottom: 11px; }
+.search--sm input { padding: 10px 40px 10px 13px; font-size: 14px; }
+.search--sm svg { inset-inline-start: 12px; width: 16px; height: 16px; }
+
+.picker {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 46svh; overflow-y: auto; overscroll-behavior: contain;
+  margin-inline: -4px; padding-inline: 4px;
+}
+.pick {
+  display: flex; flex-direction: column; gap: 2px; text-align: start;
+  padding: 10px 12px; border-radius: var(--r-xs); border: 1px solid transparent;
+  transition: background .14s var(--ease), border-color .14s var(--ease);
+}
+.pick:hover { background: var(--surface); border-color: var(--border); }
+.pick__t { font-size: 14px; font-weight: 600; }
+.pick__s { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick[disabled] { opacity: .5; }
+
+.browse__bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.browse__who { font-size: 13px; font-weight: 600; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ── toast ──────────────────────────────────────────────────────────────── */
 
 .toast {

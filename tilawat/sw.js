@@ -4,7 +4,7 @@
    device files and saved copies live in IndexedDB, and streams must reach the
    network untouched so range requests keep working. */
 
-const VERSION = 'tilawat-v3';
+const VERSION = 'tilawat-v5';
 const SHELL = `${VERSION}-shell`;
 const ART = `${VERSION}-art`;
 const SCOPE = new URL('./', self.location).pathname;

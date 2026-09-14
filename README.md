@@ -1,4 +1,11 @@
-# Local
+# MMW
+
+Two local-first web apps, deployed together from this repository.
+
+- **Local** (`/`) — a web-project launcher and visual version timeline.
+- **تلاوات** (`/tilawat/`) — a personal library of Qur'an recitations.
+
+## Local
 
 Local is a local-first web-project launcher and visual version timeline.
 
@@ -18,6 +25,37 @@ Local is a local-first web-project launcher and visual version timeline.
 - Export the whole library to a single ZIP and restore it on another device. The archive carries the projects, their versions, their deduplicated files, `localStorage`, **and the IndexedDB databases the tools themselves wrote** — the last of these being the only data with no copy anywhere else. Restore merges: nothing already present is overwritten.
 - Install as a PWA and continue using the app offline after the shell is cached.
 
+## تلاوات
+
+A private shelf of recitations, installable from Chrome as an app. No account, no
+server of its own, and nothing uploaded anywhere: the library lives in this
+browser's IndexedDB.
+
+A recitation gets in one of three ways:
+
+- **A YouTube link.** It plays through YouTube's own IFrame player, parked
+  off-screen so only the sound reaches you, with a toggle to bring the video
+  back. There is deliberately **no MP3 conversion**: YouTube serves no CORS
+  headers and signs its stream URLs, so no page can turn a video into a file
+  without a server in the middle. Apps that appear to do it in the browser are
+  calling someone else's converter, which is why they keep breaking. These
+  tracks need a connection.
+- **A direct link to an audio file.** Streamed by `<audio>`, which is exempt from
+  CORS. One button saves a copy into the browser for offline listening — that
+  copy *does* need the host to allow CORS, and the app says so plainly when it
+  cannot.
+- **A file from the device.** Kept whole in IndexedDB and played with no network
+  at all.
+
+Either way the entry carries a title, reciter, surah, tags, and an optional
+start/end trim for pulling one recitation out of a long video. The player adds
+repeat (including repeat-one for memorising), shuffle, playback speed, a sleep
+timer, and lock-screen and media-key control through the Media Session API.
+
+Export writes the whole library to one JSON file. Device audio has no copy
+outside this browser, so those entries are left out of the export rather than
+restored as tracks that would never play.
+
 ## Cloudflare Pages
 
 This repository is static and requires no build step.
@@ -27,4 +65,4 @@ This repository is static and requires no build step.
 - Build output directory: `/`
 - Production deployment is triggered automatically from GitHub Actions on pushes to `main`.
 
-The imported projects stay local to the browser. They are not uploaded to this repository or Cloudflare.
+Imported projects and the recitation library both stay local to the browser. Neither is uploaded to this repository or to Cloudflare.

@@ -1,6 +1,9 @@
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate
 
+/tilawat/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

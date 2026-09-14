@@ -1,4 +1,4 @@
-name: Validate Local
+name: Validate
 
 on:
   push:
@@ -21,15 +21,25 @@ jobs:
           node --check js/importer.js
           node --check js/main.js
           node --check js/timeline.js
+          node --check tilawat/sw.js
+          node --check tilawat/js/app.js
+          node --check tilawat/js/store.js
+          node --check tilawat/js/player.js
+          node --check tilawat/js/sources.js
       - name: Check HTML and required files
         run: |
           python - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
           class P(HTMLParser): pass
-          for f in ['index.html','runner.html']:
+          for f in ['index.html','runner.html','tilawat/index.html']:
               p=P(); p.feed(Path(f).read_text())
-          required=['styles.css','manifest.webmanifest','assets/logo.svg','sw.js']
+          import json
+          for m in ['manifest.webmanifest','tilawat/manifest.webmanifest']:
+              json.loads(Path(m).read_text())
+          required=['styles.css','manifest.webmanifest','assets/logo.svg','sw.js',
+                    'tilawat/styles.css','tilawat/sw.js','tilawat/assets/logo.svg',
+                    'tilawat/assets/icon-192.png','tilawat/assets/icon-512.png']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

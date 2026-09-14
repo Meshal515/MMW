@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="تلاوات">
+  <rect width="512" height="512" rx="115" fill="#122A24"/>
+  <g transform="translate(256 256) scale(409.6) translate(-0.5 -0.5)" fill="#6FDFC0">
+    <path d="M0.225 0.84 L0.225 0.47 A0.275 0.275 0 0 1 0.775 0.47 L0.775 0.84 L0.72 0.84 L0.72 0.47 A0.22 0.22 0 0 0 0.28 0.47 L0.28 0.84 Z"/>
+    <rect x="0.3265" y="0.462" width="0.047" height="0.196" rx="0.0235"/>
+    <rect x="0.4015" y="0.408" width="0.047" height="0.304" rx="0.0235"/>
+    <rect x="0.4765" y="0.355" width="0.047" height="0.410" rx="0.0235"/>
+    <rect x="0.5515" y="0.408" width="0.047" height="0.304" rx="0.0235"/>
+    <rect x="0.6265" y="0.462" width="0.047" height="0.196" rx="0.0235"/>
+  </g>
+</svg>

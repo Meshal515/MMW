@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#F5F3ED" />
+  <meta name="color-scheme" content="light dark" />
+  <title>تلاوات</title>
+  <meta name="description" content="مكتبتك الخاصة من تلاوات القرآن: رابط يوتيوب، أو رابط صوتي، أو ملف من جهازك — تُحفظ في متصفحك وحدك." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./assets/logo.svg" />
+  <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="تلاوات" />
+  <script>
+    /* Before first paint, so a dark-mode load never flashes the paper palette. */
+    (function () {
+      try {
+        var t = localStorage.getItem('tilawat-theme');
+        if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.content = t === 'dark' ? '#0D1512' : '#F5F3ED';
+      } catch (e) { document.documentElement.dataset.theme = 'light'; }
+    })();
+  </script>
+  <link rel="preload" href="../assets/fonts/plex-ar-arabic-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/plex-ar-arabic-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preconnect" href="https://i.ytimg.com" crossorigin>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<header class="top">
+  <div class="top__inner">
+    <span class="brand"><img src="./assets/logo.svg" alt="" /><span>تلاوات</span></span>
+    <span class="top__spacer"></span>
+    <button class="btn icon-btn btn--ghost" id="themeToggle" type="button" aria-label="تغيير المظهر" title="تغيير المظهر">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.1A8.8 8.8 0 0 1 8.9 3.8a9 9 0 1 0 11.3 11.3Z"/></svg>
+    </button>
+    <button class="btn icon-btn btn--ghost" id="libraryBtn" type="button" aria-label="المكتبة والنسخ الاحتياطي" title="المكتبة والنسخ الاحتياطي">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+    </button>
+    <button class="btn btn--primary" id="addBtn" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>أضف تلاوة</span>
+    </button>
+  </div>
+</header>
+
+<main class="shell">
+  <div class="controls">
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+      <input id="search" type="search" placeholder="ابحث بالعنوان أو القارئ أو السورة أو الوسم…" aria-label="بحث" />
+    </div>
+    <div class="chips" id="filters" role="group" aria-label="تصفية"></div>
+    <select class="sort" id="sort" aria-label="الترتيب">
+      <option value="added">الأحدث إضافة</option>
+      <option value="title">العنوان</option>
+      <option value="reciter">القارئ</option>
+      <option value="played">الأكثر استماعًا</option>
+      <option value="recent">آخر استماع</option>
+    </select>
+  </div>
+
+  <section id="grid" class="grid" aria-label="المكتبة"></section>
+
+  <div id="empty" class="empty" hidden>
+    <h2>المكتبة فاضية</h2>
+    <p>الصق رابط تلاوة من يوتيوب، أو رابط ملف صوتي مباشر، أو اختر ملفًا من جهازك. كل شيء يُحفظ في هذا المتصفح وحده — بلا حساب وبلا سيرفر.</p>
+    <button class="btn btn--primary" id="emptyAdd" type="button">أضف أول تلاوة</button>
+  </div>
+</main>
+
+<footer class="player" id="player" hidden>
+  <div class="player__inner">
+    <div class="player__now">
+      <img class="player__art" id="nowArt" alt="" />
+      <div class="player__text">
+        <div class="player__title" id="nowTitle"></div>
+        <div class="player__sub" id="nowSub"></div>
+      </div>
+      <button class="btn icon-btn btn--ghost" id="closePlayer" type="button" aria-label="إيقاف وإغلاق المشغّل" title="إغلاق">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="player__seek">
+      <span id="curTime">0:00</span>
+      <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="موضع التشغيل" />
+      <span id="durTime">0:00</span>
+    </div>
+
+    <div class="player__controls">
+      <button class="btn icon-btn" id="prevBtn" type="button" aria-label="السابق" title="السابق">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M16 12 7 5.5v13z" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="btn icon-btn" id="back10" type="button" aria-label="رجوع ١٠ ثوانٍ" title="رجوع ١٠ ثوانٍ">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h5V4"/><path d="M4.6 9A8 8 0 1 1 4 12.5"/></svg>
+      </button>
+      <button class="play-btn" id="playBtn" type="button" aria-label="تشغيل">
+        <svg id="playIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5 19 12 7 19.5z"/></svg>
+      </button>
+      <button class="btn icon-btn" id="fwd10" type="button" aria-label="تقدّم ١٠ ثوانٍ" title="تقدّم ١٠ ثوانٍ">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 9h-5V4"/><path d="M19.4 9A8 8 0 1 0 20 12.5"/></svg>
+      </button>
+      <button class="btn icon-btn" id="nextBtn" type="button" aria-label="التالي" title="التالي">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M8 12 17 5.5v13z" fill="currentColor" stroke="none"/></svg>
+      </button>
+
+      <span class="grow"></span>
+
+      <button class="rate-btn" id="rateBtn" type="button" aria-label="سرعة التشغيل" title="سرعة التشغيل">1.0×</button>
+      <button class="btn icon-btn" id="repeatBtn" type="button" aria-pressed="false" aria-label="التكرار: بلا" title="التكرار">
+        <svg id="repeatIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l3 3-3 3"/><path d="M20 6H8a4 4 0 0 0-4 4v1"/><path d="M7 21l-3-3 3-3"/><path d="M4 18h12a4 4 0 0 0 4-4v-1"/></svg>
+      </button>
+      <button class="btn icon-btn" id="shuffleBtn" type="button" aria-pressed="false" aria-label="ترتيب عشوائي" title="ترتيب عشوائي">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 4l3 3-3 3"/><path d="M17 14l3 3-3 3"/><path d="M4 7h4l8 10h4"/><path d="M4 17h4l2.2-2.8"/><path d="M13.8 9.8 16 7h4"/></svg>
+      </button>
+      <button class="btn icon-btn" id="timerBtn" type="button" aria-pressed="false" aria-label="مؤقّت النوم" title="مؤقّت النوم">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>
+      </button>
+      <button class="btn icon-btn" id="videoBtn" type="button" aria-pressed="false" hidden aria-label="إظهار الفيديو" title="إظهار الفيديو">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 11 5-3v8l-5-3z"/></svg>
+      </button>
+    </div>
+  </div>
+</footer>
+
+<div class="yt-park" id="ytPark" aria-hidden="true"><div id="ytMount"></div></div>
+
+<!-- ── add / edit ─────────────────────────────────────────────────────────── -->
+<dialog id="addDialog" aria-labelledby="addTitle">
+  <form method="dialog" id="addForm">
+    <div class="dlg__head">
+      <h2 id="addTitle">أضف تلاوة</h2>
+      <button class="btn icon-btn btn--ghost" type="button" data-close aria-label="إغلاق">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="dlg__body">
+      <div class="field" id="linkField">
+        <label for="linkInput">الرابط</label>
+        <input id="linkInput" type="url" inputmode="url" dir="ltr"
+               placeholder="https://youtu.be/…" autocomplete="off" />
+        <p class="hint" id="linkHint">رابط يوتيوب يُشغَّل مباشرة من يوتيوب. رابط ملف صوتي يُشغَّل — ويمكن حفظ نسخة منه للاستماع بلا إنترنت.</p>
+      </div>
+
+      <div class="field" id="fileField">
+        <label for="fileInput">أو ملف من جهازك</label>
+        <input id="fileInput" type="file" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac" multiple />
+        <p class="hint">يُحفظ داخل المتصفح ويشتغل بلا إنترنت نهائيًا. يمكن اختيار أكثر من ملف.</p>
+      </div>
+
+      <div class="preview" id="preview" hidden>
+        <img id="previewArt" alt="" />
+        <div>
+          <div class="preview__kind" id="previewKind"></div>
+          <div class="preview__name" id="previewName"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="titleInput">العنوان</label>
+        <input id="titleInput" type="text" placeholder="مثال: سورة الرحمن — تراويح ١٤٤٥" />
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="reciterInput">القارئ</label>
+          <input id="reciterInput" type="text" list="reciterList" placeholder="اسم القارئ" />
+          <datalist id="reciterList"></datalist>
+        </div>
+        <div class="field">
+          <label for="surahInput">السورة</label>
+          <input id="surahInput" type="text" list="surahList" placeholder="اختر أو اكتب" />
+          <datalist id="surahList"></datalist>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="tagsInput">وسوم <span class="hint">(افصل بفاصلة)</span></label>
+        <input id="tagsInput" type="text" list="tagList" placeholder="تراويح، حفظ، مفضلة الجمعة" />
+        <datalist id="tagList"></datalist>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="startInput">يبدأ عند</label>
+          <input id="startInput" type="text" dir="ltr" inputmode="numeric" placeholder="0:00" />
+        </div>
+        <div class="field">
+          <label for="endInput">ينتهي عند</label>
+          <input id="endInput" type="text" dir="ltr" inputmode="numeric" placeholder="حتى النهاية" />
+        </div>
+      </div>
+      <p class="hint">قصّ المقطع إن كانت التلاوة جزءًا من فيديو طويل — اكتب <span dir="ltr">1:23</span> أو <span dir="ltr">83</span>.</p>
+      <p class="hint hint--warn" id="formError" hidden></p>
+    </div>
+
+    <div class="dlg__foot">
+      <button class="btn btn--danger" type="button" id="deleteBtn" hidden>حذف</button>
+      <span class="grow"></span>
+      <button class="btn" type="button" data-close>إلغاء</button>
+      <button class="btn btn--primary" type="submit" id="saveBtn">حفظ</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ── library / backup ───────────────────────────────────────────────────── -->
+<dialog id="libDialog" aria-labelledby="libTitle">
+  <div class="dlg__head">
+    <h2 id="libTitle">المكتبة</h2>
+    <button class="btn icon-btn btn--ghost" type="button" data-close aria-label="إغلاق">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div class="dlg__body">
+    <div>
+      <div class="stat"><span>التلاوات</span><b id="statCount">0</b></div>
+      <div class="stat"><span>من يوتيوب</span><b id="statYt">0</b></div>
+      <div class="stat"><span>روابط صوتية</span><b id="statUrl">0</b></div>
+      <div class="stat"><span>ملفات من الجهاز</span><b id="statFile">0</b></div>
+      <div class="stat"><span>متاح بلا إنترنت</span><b id="statOffline">0</b></div>
+      <div class="stat"><span>الصوت المحفوظ في المتصفح</span><b id="statSize">0</b></div>
+    </div>
+
+    <div class="note">
+      التصدير يحفظ بيانات المكتبة كلها: الروابط والعناوين والقرّاء والوسوم والقصّ. ملفات الصوت التي جلبتها من جهازك تبقى في هذا المتصفح ولا تدخل في ملف النسخة — أعِد اختيارها بعد الاستعادة.
+    </div>
+
+    <div class="row2">
+      <button class="btn" type="button" id="exportBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <span>تصدير نسخة</span>
+      </button>
+      <button class="btn" type="button" id="importBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14V3m0 0L8 7m4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <span>استعادة نسخة</span>
+      </button>
+    </div>
+    <input id="importInput" type="file" accept="application/json,.json" class="sr" />
+
+    <div class="note note--warn" id="installNote" hidden>
+      لتثبيته كتطبيق: من قائمة كروم اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».
+    </div>
+    <button class="btn btn--primary" type="button" id="installBtn" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <span>ثبّت التطبيق</span>
+    </button>
+
+    <p class="hint">
+      يوتيوب لا يسمح بتحويل مقاطعه إلى ملفات داخل المتصفح، فتلاوات يوتيوب تُشغَّل من يوتيوب نفسه وتحتاج إنترنت.
+      الروابط الصوتية المباشرة وملفات جهازك تعمل بلا إنترنت بعد حفظها.
+    </p>
+  </div>
+</dialog>
+
+<!-- ── sleep timer ────────────────────────────────────────────────────────── -->
+<dialog id="timerDialog" aria-labelledby="timerTitle">
+  <div class="dlg__head">
+    <h2 id="timerTitle">مؤقّت النوم</h2>
+    <button class="btn icon-btn btn--ghost" type="button" data-close aria-label="إغلاق">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div class="dlg__body">
+    <p class="hint" id="timerStatus"></p>
+    <div class="chips">
+      <button class="chip" type="button" data-min="10">١٠ دقائق</button>
+      <button class="chip" type="button" data-min="20">٢٠ دقيقة</button>
+      <button class="chip" type="button" data-min="30">٣٠ دقيقة</button>
+      <button class="chip" type="button" data-min="45">٤٥ دقيقة</button>
+      <button class="chip" type="button" data-min="60">ساعة</button>
+      <button class="chip" type="button" data-min="end">بعد هذه التلاوة</button>
+    </div>
+  </div>
+  <div class="dlg__foot">
+    <button class="btn btn--danger" type="button" id="timerOff">أوقف المؤقّت</button>
+    <span class="grow"></span>
+    <button class="btn" type="button" data-close>تم</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

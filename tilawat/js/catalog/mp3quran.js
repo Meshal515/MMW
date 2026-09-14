@@ -1,3 +1,4 @@
+import '../ui-restoration.js';
 import { SURAHS, normalizeVariant, makeCover } from './core.js';
 
 const API='https://www.mp3quran.net/api/v3/reciters?language=ar';

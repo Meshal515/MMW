@@ -1,0 +1,11 @@
+name = "tilawat-catalog"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tilawat-catalog"
+database_id = "PASTE_ID_AFTER_CREATING"
+
+[observability]
+enabled = true

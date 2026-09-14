@@ -87,30 +87,67 @@
   <section class="view" id="viewLib" hidden>
     <h1 class="view__h">مكتبتي</h1>
 
+    <div class="segs" id="libSegs" role="tablist" aria-label="عرض المكتبة"></div>
+
     <div class="libbar">
       <select class="sel" id="sort" aria-label="الترتيب">
+        <option value="manual">ترتيبي</option>
         <option value="added">الأحدث إضافة</option>
         <option value="title">العنوان</option>
         <option value="reciter">القارئ</option>
         <option value="played">الأكثر استماعًا</option>
         <option value="recent">آخر استماع</option>
       </select>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="arrangeBtn" type="button" aria-pressed="false"
+              aria-controls="libtools" aria-label="ترتيب يدوي" title="ترتيب يدوي">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M14.5 7.5 16.5 9.5"/></svg>
+      </button>
+    </div>
+
+    <div class="libtools" id="libtools" hidden>
+      <p class="hint" id="arrangeHint"></p>
     </div>
 
     <div class="rows" id="rowsLib"></div>
+    <div class="blank" id="libBlank" hidden><p id="libBlankText"></p></div>
+  </section>
 
-    <h2 class="shelf__h shelf__h--alone">التخزين</h2>
+  <!-- ── settings ──────────────────────────────────────────────────────── -->
+  <section class="view" id="viewSettings" hidden>
+    <h1 class="view__h">الإعدادات</h1>
+
+    <h2 class="group">المظهر</h2>
+    <div class="panel">
+      <div class="opt">
+        <span class="opt__t">الوضع الداكن<em>أهدأ للعين في القيام والليل.</em></span>
+        <button class="switch" id="themeSwitch" type="button" role="switch" aria-checked="true" aria-label="الوضع الداكن"><span></span></button>
+      </div>
+    </div>
+
+    <h2 class="group">التشغيل</h2>
+    <div class="panel">
+      <div class="opt">
+        <span class="opt__t">متابعة التشغيل والشاشة مطفأة<em id="bgState"></em></span>
+      </div>
+      <div class="opt">
+        <span class="opt__t">تشغيل التالي تلقائيًا<em>عند انتهاء التلاوة تبدأ التي بعدها في ترتيب مكتبتك.</em></span>
+        <span class="pillstate">دائمًا</span>
+      </div>
+    </div>
+
+    <h2 class="group">التخزين</h2>
     <div class="panel">
       <div class="stat"><span>التلاوات</span><b id="statCount">0</b></div>
+      <div class="stat"><span>التنزيلات</span><b id="statOffline">0</b></div>
       <div class="stat"><span>من يوتيوب</span><b id="statYt">0</b></div>
       <div class="stat"><span>روابط صوتية</span><b id="statUrl">0</b></div>
       <div class="stat"><span>ملفات من الجهاز</span><b id="statFile">0</b></div>
-      <div class="stat"><span>متاح بلا إنترنت</span><b id="statOffline">0</b></div>
       <div class="stat"><span>المحفوظ في المتصفح</span><b id="statSize">0</b></div>
     </div>
 
-    <h2 class="shelf__h shelf__h--alone">نسخة احتياطية</h2>
-    <p class="muted">تُحفظ الروابط والعناوين والقرّاء والوسوم والقصّ والأغلفة المجلوبة. ملفات الصوت والصور التي جلبتها من جهازك تبقى في هذا المتصفح ولا تدخل في ملف النسخة.</p>
+    <h2 class="group">نسخة احتياطية</h2>
+    <p class="muted">تُحفظ الروابط والعناوين والقرّاء والوسوم والقصّ والترتيب والأغلفة المجلوبة. الصوت والصور التي جلبتها من جهازك تبقى في هذا المتصفح ولا تدخل في ملف النسخة.</p>
     <div class="twocol">
       <button class="btn" type="button" id="exportBtn">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
@@ -123,13 +160,19 @@
     </div>
     <input id="importInput" type="file" accept="application/json,.json" class="sr" />
 
-    <h2 class="shelf__h shelf__h--alone">التطبيق</h2>
+    <h2 class="group">التطبيق</h2>
     <button class="btn btn--primary wide" type="button" id="installBtn" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
       <span>ثبّت التطبيق</span>
     </button>
     <p class="muted" id="installNote">لتثبيته: من قائمة كروم اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</p>
-    <p class="muted">يوتيوب لا يسمح بتحويل مقاطعه إلى ملفات داخل المتصفح، فتلاوات يوتيوب تُشغَّل من يوتيوب وتحتاج إنترنت. الروابط الصوتية وملفات جهازك تعمل بلا إنترنت بعد حفظها.</p>
+
+    <h2 class="group">كيف يعمل</h2>
+    <div class="panel panel--read">
+      <p><b>يوتيوب لا يمكن تنزيله.</b> لا يرسل ترويسات CORS، وروابط بثّه موقَّعة، فلا صفحة ويب تحوّله إلى ملف بلا سيرفر وسيط. تلاوات يوتيوب تُشغَّل من يوتيوب، وتحتاج إنترنت، <b>وتتوقّف عند إطفاء الشاشة</b> — هذا قيد من يوتيوب لا حيلة فيه.</p>
+      <p><b>ما يعمل والشاشة مطفأة:</b> ما نزّلته، وملفات جهازك، والروابط الصوتية المباشرة. هذه تُكمل وتنتقل للتالية وحدها، وتتحكّم بها من شاشة القفل.</p>
+      <p>كل شيء يُحفظ في هذا المتصفح وحده — بلا حساب، وبلا سيرفر، وبلا رفع.</p>
+    </div>
   </section>
 </main>
 
@@ -161,15 +204,19 @@
   </button>
   <button class="tab" type="button" data-tab="search">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
-    <span>بحث</span>
+    <span>البحث</span>
+  </button>
+  <button class="tab tab--add" type="button" data-tab="add">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    <span>أضف</span>
   </button>
   <button class="tab" type="button" data-tab="lib">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/></svg>
     <span>مكتبتي</span>
   </button>
-  <button class="tab" type="button" data-tab="add">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-    <span>أضف</span>
+  <button class="tab" type="button" data-tab="settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.6a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3.3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3.3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.1z"/></svg>
+    <span>الإعدادات</span>
   </button>
 </nav>
 
@@ -236,8 +283,8 @@
       <button class="chipbtn" id="timerBtn" type="button" aria-pressed="false" aria-label="مؤقّت النوم" title="مؤقّت النوم">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>
       </button>
-      <button class="chipbtn" id="offlineBtn" type="button" hidden aria-pressed="false" aria-label="احفظ للاستماع بلا إنترنت" title="حفظ بلا إنترنت">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <button class="chipbtn" id="offlineBtn" type="button" aria-pressed="false" aria-label="تنزيل التلاوة" title="تنزيل">
+        <svg id="offlineIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
       </button>
       <button class="chipbtn" id="videoBtn" type="button" hidden aria-pressed="false" aria-label="إظهار الفيديو" title="الفيديو">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 11 5-3v8l-5-3z"/></svg>

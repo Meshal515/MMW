@@ -94,13 +94,20 @@ export function bestYoutubeThumb(id) {
   return tryAt(0);
 }
 
-/** A stable pair of hues per track, so a coverless recitation still has a face. */
+/* Deep, quiet pairs — jade, teal, steel, indigo, plum, moss, slate, bronze.
+   Hashing to any hue at all eventually lands on a sour yellow or a hot red
+   behind the artwork; this keeps every one of them calm. */
+const GLOW_PAIRS = [
+  [158, 190], [186, 212], [206, 236], [232, 258],
+  [276, 300], [120, 152], [212, 190], [34, 16]
+];
+
+/** A stable pair of hues per track, so a recitation always has an atmosphere. */
 export function coverHues(seed) {
   let hash = 0;
   const text = String(seed || 'تلاوة');
   for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  const hue = hash % 360;
-  return [hue, (hue + 38) % 360];
+  return GLOW_PAIRS[hash % GLOW_PAIRS.length];
 }
 
 /**

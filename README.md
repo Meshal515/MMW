@@ -64,14 +64,47 @@ precached by the service worker — which is why a card still has a face on a
 plane. A thumbnail that fails to load at runtime swaps to the same bundled art
 instead of leaving a grey tile.
 
+### Playing with the screen off
+
+Downloads are not a convenience here, they are the answer to background
+playback. A saved copy or a device file plays through one long-lived `<audio>`
+element — never replaced, so the permission the first tap granted survives
+every handover — and the queue advances on the element's own `ended` event. A
+trimmed track needs its own cut-off, and that runs on `timeupdate` rather than
+a timer: a backgrounded tab throttles `setInterval` to roughly once a minute,
+which would strand a trimmed recitation for up to a minute past its end. Media
+Session supplies the lock screen with title, reciter, artwork and transport.
+
+YouTube tracks stop when the screen locks. That is YouTube's embedded player,
+not something a page can work around, and the app says so in Settings rather
+than pretending otherwise.
+
 ### Layout
 
-Near-black ground, elevated cards, square artwork, one saturated green. Three
-tabs — home, search, library — over a mini player that expands into a
-full-height now-playing sheet. Transport controls and the scrubber stay
-left-to-right inside the RTL page, the way Spotify's own Arabic build has
-them: a "previous" arrow pointing left, or a bar that fills from the right,
-reads as broken.
+Spotify's distribution — home shortcuts, shelves, a mini player that expands
+into a full-height sheet, a bottom tab bar — carrying Linear's surface
+language instead of Spotify's: near-black ground, elevation by hairline border
+and a whisper of inner light rather than by shadow, generous radii, one
+restrained jade, and two wide low-opacity lights behind the top of the page.
+
+Five tabs: home, search, add, library, settings. The library is only a list —
+four segments (all, favourites, downloads, recent), a sort, and a pencil that
+reveals drag handles. Storage, backup, install and the honest notes live in
+settings.
+
+Transport controls and the scrubber stay left-to-right inside the RTL page,
+the way Spotify's own Arabic build has them: a "previous" arrow pointing left,
+or a bar that fills from the right, reads as broken.
+
+### Reordering
+
+The pencil in the library turns on manual order and reveals a handle on every
+row. Dragging is built on pointer events, so one path covers touch and mouse,
+and moves nothing but `transform`: the dragged row follows the finger with no
+transition while the rows it displaces slide on a short eased one, and the list
+auto-scrolls when the drag reaches an edge. A move made under a segment only
+trades slots between the rows on screen, so filtering never disturbs what it
+hides.
 
 Export writes the whole library to one JSON file. Device audio has no copy
 outside this browser, so those entries are left out of the export rather than

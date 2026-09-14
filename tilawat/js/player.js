@@ -46,10 +46,18 @@ export class Player {
     this._wantPlay = false;
     this._seq = 0;               // guards against a slow load landing after a newer one
 
+    // One element for the whole session. Replacing it would lose the autoplay
+    // permission the first tap granted, and with it every background handover.
     this.audio = new Audio();
     this.audio.preload = 'metadata';
     this.audio.crossOrigin = null;
-    this.audio.addEventListener('ended', () => this.emit('ended'));
+    this.audio.addEventListener('ended', () => this._finish());
+    // Timers are throttled to about once a minute in a backgrounded tab, so a
+    // trimmed track must end on the media element's own clock: `timeupdate`
+    // comes from the audio pipeline and keeps firing with the screen off.
+    this.audio.addEventListener('timeupdate', () => {
+      if (this.engine === 'audio') this._checkTrimEnd();
+    });
     this.audio.addEventListener('play', () => this.emit('state'));
     this.audio.addEventListener('pause', () => this.emit('state'));
     this.audio.addEventListener('loadedmetadata', () => this.emit('duration'));
@@ -115,6 +123,7 @@ export class Player {
 
   async load(track, { autoplay = true } = {}) {
     const seq = ++this._seq;
+    this._ended = false;
     this._wantPlay = autoplay;
     this._stopEverything();
     this.track = track;
@@ -196,12 +205,27 @@ export class Player {
     }, 900);
   }
 
+  /** Fires `ended` exactly once per load, whichever clock noticed first. */
+  _finish() {
+    if (this._ended) return;
+    this._ended = true;
+    this.emit('ended');
+  }
+
+  /** A trimmed end is ours to enforce; neither engine knows about it. */
+  _checkTrimEnd() {
+    const limit = this.track && this.track.end > 0 ? this.track.end : 0;
+    if (!limit || !this.playing) return false;
+    if (this.time >= limit - 0.15) { this._finish(); return true; }
+    return false;
+  }
+
   _onYtState(event) {
     // Tearing a video down makes the player report a state change too. Without
     // this guard a stop during load() reads as "ended" and skips a track.
     if (this.engine !== 'youtube') return;
     this.ytState = event.data;
-    if (event.data === 0) this.emit('ended');
+    if (event.data === 0) this._finish();
     if (event.data === 1) this.emit('duration');
     this.emit('state');
   }
@@ -268,11 +292,12 @@ export class Player {
     this.emit('state');
   }
 
+  /* Drives the on-screen clock, and the trim cut-off for YouTube — which has no
+     media element of its own to listen to. Throttled in the background, which
+     is fine: nothing here is needed while the screen is off. */
   _tick() {
     if (!this.track || !this.engine) return;
-    // A trimmed end is ours to enforce; neither engine knows about it.
-    const limit = this.track.end > 0 ? this.track.end : 0;
-    if (limit && this.playing && this.time >= limit - 0.15) { this.emit('ended'); return; }
+    if (this.engine === 'youtube' && this._checkTrimEnd()) return;
     if (this.playing || this.engine === 'audio') this.emit('time');
   }
 }

@@ -10,6 +10,7 @@ import { SURAHS, parseSource, fetchYoutubeMeta, youtubeThumb, bestYoutubeThumb,
 import { coverSrc, coverFallbackAttr, fallbackCover, hasOwnCover, loadCoverUrls,
          refreshCoverUrl, releaseCoverUrl } from './covers.js';
 import { Player, bindMediaSession } from './player.js';
+import { makeSortable } from './reorder.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -17,6 +18,14 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
 
 const KIND_LABEL = { youtube: 'يوتيوب', url: 'رابط', file: 'جهازك' };
 const RATES = [0.75, 1, 1.25, 1.5, 2];
+/* The library's own segments, independent of the chips on the home screen. */
+const LIB_SEGS = [
+  { id: 'all',        label: 'جميع التلاوات' },
+  { id: 'favorite',   label: 'المفضّلة' },
+  { id: 'downloaded', label: 'التنزيلات' },
+  { id: 'recent',     label: 'الأخيرة' }
+];
+
 const FILTERS = [
   { id: 'all',      label: 'الكل' },
   { id: 'favorite', label: 'المفضّلة' },
@@ -32,6 +41,8 @@ const state = {
   filter: 'all',
   query: '',
   sort: 'added',
+  libSeg: 'all',
+  arrange: false,
   queue: [],
   currentId: null,
   repeat: 'off',
@@ -40,9 +51,28 @@ const state = {
 };
 
 const player = new Player('ytMount');
+let libVisible = [];
 const trackById = id => state.tracks.find(t => t.id === id);
 const current = () => trackById(state.currentId);
 const isOffline = track => track.kind === 'file' || !!track.blobKey;
+
+/**
+ * What the download control means for this track.
+ *   local   already a file on this device — nothing to fetch
+ *   done    a copy has been saved
+ *   blocked YouTube, which cannot become a file in a browser at all
+ *   idle    a direct link we can try to copy
+ */
+function downloadState(track) {
+  if (track.kind === 'file') return 'local';
+  if (track.blobKey) return 'done';
+  if (track.kind === 'youtube') return 'blocked';
+  return 'idle';
+}
+
+const DOWNLOAD_LABEL = {
+  local: 'على جهازك', done: 'مُنزَّلة', blocked: 'لا يمكن تنزيلها', idle: 'تنزيل'
+};
 const subtitle = track => [track.reciter, track.surah].filter(Boolean).join(' · ') || KIND_LABEL[track.kind];
 
 let toastTimer = null;
@@ -56,15 +86,27 @@ function toast(message, ms = 3200) {
 
 /* ── theme ──────────────────────────────────────────────────────────────── */
 
-$('themeToggle').addEventListener('click', () => {
-  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+function setTheme(next) {
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem('tilawat-theme', next); } catch {}
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = next === 'dark' ? '#0A0C0B' : '#F5F3ED';
-});
+  if (meta) meta.content = next === 'dark' ? '#08090A' : '#FCFCFD';
+  $('themeSwitch').setAttribute('aria-checked', String(next === 'dark'));
+}
+
+$('themeToggle').addEventListener('click', () =>
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 
 /* ── selection ──────────────────────────────────────────────────────────── */
+
+function matchesLibSeg(track) {
+  switch (state.libSeg) {
+    case 'favorite':   return !!track.favorite;
+    case 'downloaded': return isOffline(track);
+    case 'recent':     return !!track.lastPlayedAt;
+    default:           return true;
+  }
+}
 
 function matchesFilter(track) {
   switch (state.filter) {
@@ -85,6 +127,7 @@ function matchesQuery(track, query) {
 }
 
 const SORTS = {
+  manual:  (a, b) => (a.order ?? 0) - (b.order ?? 0),
   added:   (a, b) => (b.addedAt || 0) - (a.addedAt || 0),
   title:   (a, b) => (a.title || '').localeCompare(b.title || '', 'ar'),
   reciter: (a, b) => (a.reciter || '').localeCompare(b.reciter || '', 'ar') ||
@@ -121,14 +164,24 @@ function cardHTML(track) {
 }
 
 function rowHTML(track) {
+  const down = downloadState(track);
   return `
   <div class="row" data-id="${esc(track.id)}" data-current="${state.currentId === track.id}">
+    <span class="row__drag" data-drag role="button" tabindex="-1" aria-label="اسحب لإعادة الترتيب">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg>
+    </span>
     <img class="row__art" src="${esc(coverSrc(track))}" alt="" loading="lazy" ${coverFallbackAttr(track)} />
     <button class="row__text" type="button" data-act="play">
       <span class="row__t">${esc(track.title || 'بلا عنوان')}</span>
-      <span class="row__s">${esc(subtitle(track))}${isOffline(track) ? ' · بلا نت' : ''}</span>
+      <span class="row__s">${esc(subtitle(track))}${isOffline(track) ? ' · مُنزَّلة' : ''}</span>
     </button>
     <span class="row__acts">
+      <button class="iconbtn" type="button" data-act="download" data-state="${down}"
+              aria-pressed="${down === 'done' || down === 'local'}" aria-label="${esc(DOWNLOAD_LABEL[down])}" title="${esc(DOWNLOAD_LABEL[down])}">
+        ${down === 'done' || down === 'local'
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.4 12.2 2.4 2.4 4.8-4.8"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'}
+      </button>
       <button class="iconbtn heart" type="button" data-act="favorite" aria-pressed="${!!track.favorite}" aria-label="مفضّلة">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20.5-7-6.6a4.3 4.3 0 0 1 6-6.1l1 .9 1-.9a4.3 4.3 0 0 1 6 6.1Z"/></svg>
       </button>
@@ -139,8 +192,35 @@ function rowHTML(track) {
   </div>`;
 }
 
-function renderFilters() {
-  const counts = {
+/* Manual order is only meaningful once every track has a slot. Seed it from
+   whatever order is on screen, so switching to it changes nothing at first. */
+async function ensureManualOrder() {
+  if (state.tracks.every(t => typeof t.order === 'number')) return;
+  const seeded = sortTracks(state.tracks);
+  await Promise.all(seeded.map((track, index) => {
+    track.order = index * 10;
+    return putTrack(track);
+  }));
+}
+
+/**
+ * Moves one track within the rows currently on screen. Only the visible tracks
+ * trade slots with each other, so a move made under a filter leaves everything
+ * it hides exactly where it was.
+ */
+async function applyManualMove(visible, from, to) {
+  const slots = visible.map(t => t.order).sort((a, b) => a - b);
+  const moved = visible.slice();
+  moved.splice(to, 0, ...moved.splice(from, 1));
+  const touched = [];
+  moved.forEach((track, index) => {
+    if (track.order !== slots[index]) { track.order = slots[index]; touched.push(track); }
+  });
+  await Promise.all(touched.map(putTrack));
+}
+
+function filterCounts() {
+  return {
     all: state.tracks.length,
     favorite: state.tracks.filter(t => t.favorite).length,
     youtube: state.tracks.filter(t => t.kind === 'youtube').length,
@@ -148,10 +228,18 @@ function renderFilters() {
     file: state.tracks.filter(t => t.kind === 'file').length,
     offline: state.tracks.filter(isOffline).length
   };
-  $('filters').innerHTML = FILTERS
+}
+
+function filterChipsHTML() {
+  const counts = filterCounts();
+  return FILTERS
     .filter(f => f.id === 'all' || counts[f.id] > 0)
     .map(f => `<button class="chip" type="button" data-filter="${f.id}" aria-pressed="${state.filter === f.id}">
                  ${esc(f.label)}<span class="chip__n">${counts[f.id]}</span></button>`).join('');
+}
+
+function renderFilters() {
+  $('filters').innerHTML = filterChipsHTML();
 }
 
 function renderHome() {
@@ -204,15 +292,55 @@ function renderSearch() {
     : 'ابحث بالعنوان أو القارئ أو السورة أو الوسم.';
 }
 
+function renderSegs() {
+  const counts = {
+    all: state.tracks.length,
+    favorite: state.tracks.filter(t => t.favorite).length,
+    downloaded: state.tracks.filter(isOffline).length,
+    recent: state.tracks.filter(t => t.lastPlayedAt).length
+  };
+  $('libSegs').innerHTML = LIB_SEGS.map(seg => `
+    <button class="seg" type="button" role="tab" data-seg="${seg.id}" aria-selected="${state.libSeg === seg.id}">
+      ${esc(seg.label)}<span class="seg__n">${counts[seg.id]}</span>
+    </button>`).join('');
+}
+
+const LIB_BLANK = {
+  all: 'المكتبة فاضية. أضف تلاوة من زرّ «أضف».',
+  favorite: 'ما في مفضّلة بعد. اضغط ♥ على أي تلاوة.',
+  downloaded: 'ما نزّلت شيئًا بعد. زرّ التنزيل يحفظ نسخة تشتغل بلا إنترنت — وتُكمل والشاشة مطفأة.',
+  recent: 'ما سمعت شيئًا بعد.'
+};
+
 function renderLibrary() {
-  const list = sortTracks(state.tracks);
+  renderSegs();
+  const list = sortTracks(state.tracks.filter(matchesLibSeg));
+  libVisible = list;
   $('rowsLib').innerHTML = list.map(rowHTML).join('');
+  $('rowsLib').classList.toggle('is-arranging', state.arrange);
+  $('libBlank').hidden = list.length > 0;
+  $('libBlankText').textContent = LIB_BLANK[state.libSeg];
+  $('arrangeHint').textContent = state.libSeg === 'all'
+    ? 'اسحب التلاوة من المقبض ≡ لترتيبها كما تحب.'
+    : 'اسحب لترتيب الظاهر هنا — البقية تبقى في أماكنها.';
+}
+
+function renderSettings() {
   $('statCount').textContent = state.tracks.length;
   $('statYt').textContent = state.tracks.filter(t => t.kind === 'youtube').length;
   $('statUrl').textContent = state.tracks.filter(t => t.kind === 'url').length;
   $('statFile').textContent = state.tracks.filter(t => t.kind === 'file').length;
   $('statOffline').textContent = state.tracks.filter(isOffline).length;
   blobsSize().then(size => { $('statSize').textContent = formatBytes(size); }).catch(() => {});
+
+  const ready = state.tracks.filter(t => t.kind !== 'youtube').length;
+  const yt = state.tracks.filter(t => t.kind === 'youtube').length;
+  $('bgState').textContent = yt
+    ? `${ready} من ${state.tracks.length} جاهزة. تلاوات يوتيوب (${yt}) تتوقّف عند إطفاء الشاشة — قيد من يوتيوب.`
+    : 'كل تلاواتك تُكمل والشاشة مطفأة، وتنتقل للتالية وحدها.';
+
+  const dark = document.documentElement.dataset.theme === 'dark';
+  $('themeSwitch').setAttribute('aria-checked', String(dark));
 }
 
 function render() {
@@ -220,6 +348,7 @@ function render() {
   if (state.tab === 'home') renderHome();
   else if (state.tab === 'search') renderSearch();
   else if (state.tab === 'lib') renderLibrary();
+  else if (state.tab === 'settings') renderSettings();
   syncNow();
 }
 
@@ -231,6 +360,7 @@ function showTab(tab) {
   $('viewHome').hidden = tab !== 'home';
   $('viewSearch').hidden = tab !== 'search';
   $('viewLib').hidden = tab !== 'lib';
+  $('viewSettings').hidden = tab !== 'settings';
   $('filters').hidden = tab !== 'home';
   document.querySelectorAll('.tab').forEach(button => {
     if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page');
@@ -253,9 +383,49 @@ $('filters').addEventListener('click', event => {
   render();
 });
 
+$('libSegs').addEventListener('click', event => {
+  const seg = event.target.closest('[data-seg]');
+  if (!seg) return;
+  state.libSeg = seg.dataset.seg;
+  setPref('libSeg', state.libSeg);
+  renderLibrary();
+});
+
+$('themeSwitch').addEventListener('click', () => setTheme(
+  document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+
+$('arrangeBtn').addEventListener('click', async () => {
+  state.arrange = !state.arrange;
+  $('arrangeBtn').setAttribute('aria-pressed', String(state.arrange));
+  $('libtools').hidden = !state.arrange;
+  if (state.arrange && state.sort !== 'manual') {
+    await ensureManualOrder();
+    state.sort = 'manual';
+    $('sort').value = 'manual';
+    setPref('sort', 'manual');
+  }
+  renderLibrary();
+});
+
 $('search').addEventListener('input', event => {
   state.query = event.target.value;
   renderSearch();
+});
+
+makeSortable($('rowsLib'), {
+  handle: '[data-drag]',
+  item: '.row',
+  onDrop: async (from, to) => {
+    if (state.sort !== 'manual') {
+      await ensureManualOrder();
+      state.sort = 'manual';
+      $('sort').value = 'manual';
+      setPref('sort', 'manual');
+      // The seeding above matched what was on screen, so the indices still hold.
+    }
+    await applyManualMove(libVisible, from, to);
+    renderLibrary();
+  }
 });
 
 $('sort').addEventListener('change', event => {
@@ -282,7 +452,20 @@ async function handleListClick(event) {
     case 'play': playTrack(track); break;
     case 'edit': openEdit(track); break;
     case 'favorite': await toggleFavorite(track); break;
+    case 'download': await handleDownload(track); break;
   }
+}
+
+/** One entry point for every download control, including the ones that can't. */
+async function handleDownload(track) {
+  const stateNow = downloadState(track);
+  if (stateNow === 'local') { toast('هذه تلاوة من جهازك — موجودة أصلًا.', 2600); return; }
+  if (stateNow === 'blocked') {
+    toast('يوتيوب لا يسمح بتحويل مقاطعه إلى ملف داخل المتصفح. أضفها برابط صوتي مباشر أو ملف لتشتغل بلا إنترنت.', 6000);
+    return;
+  }
+  if (stateNow === 'done') { await dropOfflineCopy(track); return; }
+  await saveOfflineCopy(track);
 }
 ['shortcuts', 'railFav', 'gridAll', 'gridSearch', 'rowsLib'].forEach(id =>
   $(id).addEventListener('click', handleListClick));
@@ -297,7 +480,7 @@ async function toggleFavorite(track) {
 /* ── offline copies ─────────────────────────────────────────────────────── */
 
 async function saveOfflineCopy(track) {
-  toast('جارٍ حفظ نسخة…', 60000);
+  toast('جارٍ التنزيل…', 60000);
   try {
     const res = await fetch(track.src, { mode: 'cors', credentials: 'omit' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -309,10 +492,10 @@ async function saveOfflineCopy(track) {
     track.bytes = blob.size;
     await putTrack(track);
     render();
-    toast(`حُفظت للاستماع بلا إنترنت (${formatBytes(blob.size)})`);
+    toast(`نُزّلت (${formatBytes(blob.size)}) — تشتغل بلا إنترنت والشاشة مطفأة.`, 4200);
   } catch (err) {
     // Streaming through <audio> is exempt from CORS; copying the bytes is not.
-    toast('تعذّر حفظ نسخة — الخادم لا يسمح بالتحميل من المتصفح. التشغيل المباشر يعمل كالمعتاد.', 5200);
+    toast('تعذّر التنزيل — الخادم لا يسمح بالنسخ من المتصفح. التشغيل المباشر يعمل كالمعتاد.', 5200);
     console.warn('offline copy failed', err);
   }
 }
@@ -323,7 +506,7 @@ async function dropOfflineCopy(track) {
   delete track.bytes;
   await putTrack(track);
   render();
-  toast('حُذفت النسخة المحفوظة.');
+  toast('حُذف التنزيل.');
 }
 
 /* ── playback ───────────────────────────────────────────────────────────── */
@@ -509,13 +692,19 @@ function syncNow() {
   const [h1, h2] = coverHues(track.title || track.id);
   $('now').style.setProperty('--glow', `hsl(${h1} 52% 26%)`);
   $('nowGlow').style.background =
-    `radial-gradient(120% 70% at 50% 0%, hsl(${h1} 54% 28%) 0%, hsl(${h2} 46% 16%) 38%, transparent 74%)`;
+    `radial-gradient(118% 66% at 50% 0%, hsl(${h1} 42% 26%) 0%, hsl(${h2} 34% 14%) 40%, transparent 76%)`;
 
   const isYt = track.kind === 'youtube';
   $('videoBtn').hidden = !isYt;
-  $('offlineBtn').hidden = track.kind !== 'url';
-  $('offlineBtn').setAttribute('aria-pressed', String(isOffline(track)));
-  $('offlineBtn').title = isOffline(track) ? 'محفوظة بلا إنترنت' : 'حفظ بلا إنترنت';
+  const down = downloadState(track);
+  const chip = $('offlineBtn');
+  chip.dataset.state = down;
+  chip.setAttribute('aria-pressed', String(down === 'done' || down === 'local'));
+  chip.setAttribute('aria-label', DOWNLOAD_LABEL[down]);
+  chip.title = DOWNLOAD_LABEL[down];
+  $('offlineIcon').innerHTML = (down === 'done' || down === 'local')
+    ? '<circle cx="12" cy="12" r="9"/><path d="m8.4 12.2 2.4 2.4 4.8-4.8"/>'
+    : '<path d="M12 3v11m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>';
 }
 
 function openNow() {
@@ -535,8 +724,7 @@ $('nowFav').addEventListener('click', () => { const t = current(); if (t) toggle
 $('miniFav').addEventListener('click', () => { const t = current(); if (t) toggleFavorite(t); });
 $('offlineBtn').addEventListener('click', () => {
   const track = current();
-  if (!track || track.kind !== 'url') return;
-  isOffline(track) ? dropOfflineCopy(track) : saveOfflineCopy(track);
+  if (track) handleDownload(track);
 });
 
 function showVideo(on) {
@@ -809,6 +997,7 @@ $('fileInput').addEventListener('change', async () => {
 function blankTrack(kind) {
   return {
     id: newId(), kind, src: '', title: '', reciter: '', surah: '', tags: [],
+    order: Date.now(),
     start: 0, end: 0, duration: 0, thumb: '', cover: '', favorite: false,
     addedAt: Date.now(), lastPlayedAt: 0, playCount: 0
   };
@@ -999,6 +1188,8 @@ async function restorePrefs() {
   const [sort, repeat, shuffle, rate] = await Promise.all(
     ['sort', 'repeat', 'shuffle', 'rate'].map(k => getPref(k).catch(() => undefined)));
   if (sort && SORTS[sort]) { state.sort = sort; $('sort').value = sort; }
+  const seg = await getPref('libSeg').catch(() => undefined);
+  if (seg && LIB_SEGS.some(x => x.id === seg)) state.libSeg = seg;
   if (repeat) state.repeat = repeat;
   if (shuffle) { state.shuffle = true; $('shuffleBtn').setAttribute('aria-pressed', 'true'); }
   if (rate && RATES.includes(rate)) player.setRate(rate);

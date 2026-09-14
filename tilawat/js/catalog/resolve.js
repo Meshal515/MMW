@@ -1,7 +1,9 @@
 import { getPref, setPref } from '../store.js';
-const PREF='catalogApi';let endpoint;
-export async function apiBase(){if(endpoint===undefined)endpoint=(await getPref(PREF).catch(()=>''))||'';return endpoint}
-export async function setApiBase(url){endpoint=String(url||'').trim().replace(/\/+$/,'');await setPref(PREF,endpoint);return endpoint}
+const PREF='catalogApi';
+const DEFAULT_API='https://tilawat-catalog.ngm-309.workers.dev';
+let endpoint;
+export async function apiBase(){if(endpoint===undefined)endpoint=(await getPref(PREF).catch(()=>''))||DEFAULT_API;return endpoint}
+export async function setApiBase(url){endpoint=String(url||'').trim().replace(/\/+$/,'')||DEFAULT_API;await setPref(PREF,endpoint);return endpoint}
 async function ask(path,params){const base=await apiBase();if(!base)return{ok:false,reason:'no-api'};try{const r=await fetch(`${base}${path}?${new URLSearchParams(params)}`,{mode:'cors',credentials:'omit'});return await r.json()}catch{return{ok:false,reason:'تعذّر الوصول إلى خادم الكتالوج'}}}
 export async function resolveUrl(raw){const url=String(raw||'').trim();if(!url)return{ok:false,reason:'رابط فارغ'};if(/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)(?:\?|#|$)/i.test(url))return{ok:true,kind:'audio',audio:[{url,from:'direct'}],title:'',claims:{},years:[]};const a=url.match(/archive\.org\/(?:details|download)\/([\w.\-]+)/i);if(a){const d=await ask('/api/archive',{id:a[1]});if(d.ok)return{ok:true,kind:'archive',title:d.title,author:d.creator,audio:(d.files||[]).map(f=>({url:f.url,from:'archive',bitrate:f.bitrate,duration:f.duration,fileSize:f.fileSize,label:f.format||f.name})),claims:{},years:[]}}return ask('/api/resolve',{url})}
 export const findSnapshot=url=>ask('/api/wayback',{url});

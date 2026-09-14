@@ -1,114 +1,149 @@
 # MMW
 
-Two local-first web apps, deployed together from this repository.
+Two local-first web apps are deployed together from this repository.
 
 - **Local** (`/`) — a web-project launcher and visual version timeline.
-- **تلاوات** (`/tilawat/`) — a personal library of Qur'an recitations.
+- **تلاوات** (`/tilawat/`) — a personal Qur'an and recitation listening catalogue.
 
 ## Local
 
 Local is a local-first web-project launcher and visual version timeline.
 
-## What it does
+### What it does
 
-- Import a static web project as ZIP, folder, or a single HTML file.
-- Once installed, Local registers with the desktop OS as a handler for `.html` and `.zip`, so it appears in "Open with" beside the browsers and editors. Android has no such API, so there it registers as a share target and appears in the share sheet instead. Either way, a file whose title matches an existing project is offered as a new version of that project rather than a duplicate.
+- Import a static web project as ZIP, folder, or single HTML file.
 - Keep project files in browser IndexedDB on the current device.
-- Give every project its own corner of storage. The runtime injected into a project prefixes the name of every store it opens with the project's id, so two projects can both use a key called `settings` without touching each other, a project cannot reach Local's own database by name, and deleting a project takes its data with it. This is attribution, not a security sandbox: a script on the same origin can still work around any wrapper. Real isolation needs a separate origin, which needs a domain.
 - Deduplicate identical files by SHA-256 across versions.
-- Add updates without destroying old versions.
-- Adding an update adopts it immediately; the timeline is where you go back to an older version and adopt that instead.
-- Delete a whole project, a single version, or every version but one. Files shared with a surviving version are kept; only what nothing points to is freed, and the confirmation states the real cost before anything is removed.
-- Run a version full screen, with no Local chrome over it. On a touch device nothing whatsoever is drawn over the project, installed as an app or not — the system back gesture is the way out. On a pointer device a handle sits on the screen edge, opposite the project's own scrollbar. No keyboard shortcut is taken, so the project keeps Escape and every other key for itself.
-- Explore the full project history on a pannable/zoomable timeline.
-- Inspect file counts, size, lines, characters, file types, runtime console messages, and errors.
-- Export the whole library to a single ZIP and restore it on another device. The archive carries the projects, their versions, their deduplicated files, `localStorage`, **and the IndexedDB databases the tools themselves wrote** — the last of these being the only data with no copy anywhere else. Restore merges: nothing already present is overwritten.
-- Install as a PWA and continue using the app offline after the shell is cached.
+- Add updates without destroying older versions.
+- Run a selected version full screen.
+- Explore version history on a visual timeline.
+- Inspect file counts, sizes, types, console messages, and errors.
+- Export and restore the whole local library.
+- Install as a PWA and keep the application shell available offline.
 
 ## تلاوات
 
-A private shelf of recitations, installable from Chrome as an app. No account, no
-server of its own, and nothing uploaded anywhere: the library lives in this
-browser's IndexedDB.
+تلاوات is no longer modeled as a flat list of unrelated links. It is a local-first listening catalogue for Qur'an recitations, organised around the **recitation itself**.
 
-A recitation gets in one of three ways:
+### One recitation, several sources
 
-- **A YouTube link.** It plays through YouTube's own IFrame player, parked
-  off-screen so only the sound reaches you, with a toggle to bring the video
-  back. There is deliberately **no MP3 conversion**: YouTube serves no CORS
-  headers and signs its stream URLs, so no page can turn a video into a file
-  without a server in the middle. Apps that appear to do it in the browser are
-  calling someone else's converter, which is why they keep breaking. These
-  tracks need a connection.
-- **A direct link to an audio file.** Streamed by `<audio>`, which is exempt from
-  CORS. One button saves a copy into the browser for offline listening — that
-  copy *does* need the host to allow CORS, and the app says so plainly when it
-  cannot.
-- **A file from the device.** Kept whole in IndexedDB and played with no network
-  at all.
+A catalogue entry can carry all of these at the same time:
 
-Either way the entry carries a title, reciter, surah, tags, and an optional
-start/end trim for pulling one recitation out of a long video. The player adds
-repeat (including repeat-one for memorising), shuffle, playback speed, a sleep
-timer, and lock-screen and media-key control through the Media Session API.
+- `youtubeId` / `youtubeUrl` — the original reference, metadata source and artwork source.
+- `audioUrl` — a direct audio stream used for normal playback and background playback.
+- `localAudioKey` — a device/downloaded copy stored in IndexedDB and preferred over the network.
 
-### Covers
+Playback priority is:
 
-Artwork is the interface here, so nothing is ever allowed to render blank. A
-recitation takes the first of these that exists: an image chosen from the
-device, an image pulled from the link (YouTube's sharpest stored thumbnail —
-`maxresdefault` where the upload was big enough, stepping down until one
-decodes), or one of the images shipped inside the app. The bundled set is
-matched against the reciter, falling back to a general cover, and it is
-precached by the service worker — which is why a card still has a face on a
-plane. A thumbnail that fails to load at runtime swaps to the same bundled art
-instead of leaving a grey tile.
+`local copy → direct audio URL → YouTube fallback`
 
-### Playing with the screen off
+This means adding a clean MP3 later upgrades the existing entry instead of creating a second duplicate track. A rare YouTube recording can keep its original thumbnail and source reference while playing from a direct audio file in the background.
 
-Downloads are not a convenience here, they are the answer to background
-playback. A saved copy or a device file plays through one long-lived `<audio>`
-element — never replaced, so the permission the first tap granted survives
-every handover — and the queue advances on the element's own `ended` event. A
-trimmed track needs its own cut-off, and that runs on `timeupdate` rather than
-a timer: a backgrounded tab throttles `setInterval` to roughly once a minute,
-which would strand a trimmed recitation for up to a minute past its end. Media
-Session supplies the lock screen with title, reciter, artwork and transport.
+Legacy v1 entries are migrated automatically on startup:
 
-YouTube tracks stop when the screen locks. That is YouTube's embedded player,
-not something a page can work around, and the app says so in Settings rather
-than pretending otherwise.
+- old `kind: youtube` → `youtubeId`
+- old `kind: url` → `audioUrl`
+- old `kind: file` / `blobKey` → `localAudioKey`
 
-### Layout
+The IndexedDB database itself is unchanged, so existing libraries stay on the device.
 
-Spotify's distribution — home shortcuts, shelves, a mini player that expands
-into a full-height sheet, a bottom tab bar — carrying Linear's surface
-language instead of Spotify's: near-black ground, elevation by hairline border
-and a whisper of inner light rather than by shadow, generous radii, one
-restrained jade, and two wide low-opacity lights behind the top of the page.
+### Catalogue structure
 
-Five tabs: home, search, add, library, settings. The library is only a list —
-four segments (all, favourites, downloads, recent), a sort, and a pencil that
-reveals drag handles. Storage, backup, install and the honest notes live in
-settings.
+Entries can now be indexed by:
 
-Transport controls and the scrubber stay left-to-right inside the RTL page,
-the way Spotify's own Arabic build has them: a "previous" arrow pointing left,
-or a bar that fills from the right, reads as broken.
+- reciter
+- surah
+- Hijri year
+- mushaf / collection
+- tags
+- playlists
+- rare-recitation flag
 
-### Reordering
+The home screen builds Spotify-like shelves dynamically from the local catalogue:
 
-The pencil in the library turns on manual order and reveals a handle on every
-row. Dragging is built on pointer events, so one path covers touch and mouse,
-and moves nothing but `transform`: the dragged row follows the finger with no
-transition while the rows it displaces slide on a short eased one, and the list
-auto-scrolls when the drag reaches an edge. A move made under a segment only
-trades slots between the rows on screen, so filtering never disturbs what it
-hides.
+- Continue listening
+- Recently added
+- Rare recitations
+- Favourites
+- Reciters
+- Years
+- Mushafs / collections
+- Surahs
 
-Export writes the whole library to one JSON file. Device audio has no copy
-outside this browser, so those entries are left out of the export rather than
-restored as tracks that would never play.
+Reciters, years, surahs, collections and playlists open their own browse page with play-all and shuffle controls.
+
+### Search
+
+Search is token based instead of one literal substring. Arabic text is normalised before matching, so a query such as:
+
+`ياسر 1425 الكهف`
+
+can match the reciter, year and surah independently. Harakat and common Alef/Hamza variants are ignored for matching.
+
+### Library
+
+The bottom navigation is intentionally reduced to three primary destinations:
+
+- Home
+- Search
+- Library
+
+Add and Settings stay in the top bar. The Library contains:
+
+- all recitations
+- favourites
+- downloads
+- recently played
+- playlists
+
+Manual drag ordering is still available for track lists.
+
+### Adding and editing
+
+The Add/Edit sheet exposes all sources for the same entry at once:
+
+- YouTube URL
+- direct audio URL
+- local audio file
+- artwork
+- title
+- reciter
+- surah
+- Hijri year
+- mushaf / collection
+- playlists
+- tags
+- rare flag
+- optional start/end trim
+
+Pasting a YouTube URL fetches the public oEmbed title/channel metadata and chooses the sharpest available YouTube thumbnail. Editing an existing entry can attach or replace its audio source later.
+
+### Background playback and lock screen
+
+Local files and direct audio streams use one long-lived `<audio>` element. Media Session provides lock-screen metadata and controls using the **actual resolved cover artwork** rather than only the app icon.
+
+The player persists recent position and can resume a partially heard recitation. Queue handover, sleep timer, repeat, shuffle, speed, seeking and lock-screen transport remain supported.
+
+YouTube remains the final fallback when no local/direct audio source exists. The embedded YouTube player does not provide the same reliable screen-off behaviour as `<audio>`.
+
+### Downloads
+
+A direct audio URL can be copied into IndexedDB for offline listening when the remote host permits CORS. Once downloaded, the local copy automatically takes priority. Removing the download falls back to `audioUrl`, then YouTube if necessary.
+
+The service worker intentionally does not cache audio streams; Range requests stay on the network so seeking and long-form playback behave correctly.
+
+### Visual language
+
+The new interface keeps Spotify's useful information architecture without copying its branding:
+
+- near-black / off-white surfaces
+- restrained copper accent
+- square artwork
+- horizontal listening shelves
+- compact entity rows for reciters, years and collections
+- persistent mini player
+- full-screen Now Playing sheet
+- minimal borders instead of heavy shadows or 3D effects
 
 ## Cloudflare Pages
 
@@ -119,4 +154,4 @@ This repository is static and requires no build step.
 - Build output directory: `/`
 - Production deployment is triggered automatically from GitHub Actions on pushes to `main`.
 
-Imported projects and the recitation library both stay local to the browser. Neither is uploaded to this repository or to Cloudflare.
+Both applications remain local-first. The deployed Cloudflare Pages site serves the application shell; the user's project library and recitation catalogue stay in the browser unless the user explicitly points a recitation at an external media URL.

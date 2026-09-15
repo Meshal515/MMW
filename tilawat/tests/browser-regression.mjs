@@ -63,6 +63,22 @@ async function rowVisualState(){return page.locator('#libraryGrid .library-row')
   transition:getComputedStyle(row).transitionProperty
 })))}
 
+async function waitForStableEditGeometry(){
+  await page.waitForFunction(()=>{
+    const view=document.querySelector('#libraryView');
+    const rows=[...document.querySelectorAll('#libraryGrid .library-row')];
+    const handles=rows.map(row=>row.querySelector('.library-drag-handle'));
+    if(!view?.classList.contains('library-editing')||rows.length!==4||handles.some(handle=>!handle))return false;
+    return rows.every((row,index)=>{
+      const rr=row.getBoundingClientRect(),hr=handles[index].getBoundingClientRect(),style=getComputedStyle(handles[index]);
+      return rr.width>0&&rr.height>0&&hr.width>=40&&hr.height>=40&&style.display!=='none'&&style.visibility!=='hidden';
+    });
+  },{timeout:5000});
+  // Motion/decorator work can finish in the same frame that geometry becomes non-zero.
+  // Two frames make the regression measure the settled interaction, not a transient frame.
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+}
+
 try{
   await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
   await page.waitForSelector('#librarySegs',{state:'attached'});
@@ -71,8 +87,9 @@ try{
   await page.waitForSelector('.tabbar [data-tab="library"]');
   await page.click('.tabbar [data-tab="library"]');
   await page.waitForFunction(()=>document.querySelectorAll('#libraryGrid .library-row').length===4);
+  await page.waitForTimeout(520);
   await page.click('#libraryEditToggle');
-  await page.waitForFunction(()=>getComputedStyle(document.querySelector('#libraryGrid .library-drag-handle')).display!=='none');
+  await waitForStableEditGeometry();
 
   const geometry=await page.locator('#libraryGrid .library-row').evaluateAll(rows=>rows.map(row=>{
     const rr=row.getBoundingClientRect();
@@ -85,7 +102,7 @@ try{
   assert.ok(geometry.every(g=>Math.abs((g.handle.y+g.handle.height/2)-(g.row.y+g.row.height/2))<2),'drag handle must stay vertically centered');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'library must not overflow horizontally');
 
-  await page.screenshot({path:`${OUT}/library-dark-before.png`,fullPage:true});
+  await page.screenshot({path:`${OUT}/library-dark-before.png`,fullPage:false});
 
   await page.evaluate(()=>{
     const grid=document.querySelector('#libraryGrid');
@@ -94,6 +111,7 @@ try{
     window.__qaObserver.observe(grid,{childList:true});
   });
 
+  await waitForStableEditGeometry();
   const rows=page.locator('#libraryGrid .library-row');
   const row2=await rows.nth(1).boundingBox();
   const row3=await rows.nth(2).boundingBox();
@@ -111,30 +129,30 @@ try{
   const moving=during.filter(row=>row.transform!=='none');
   assert.equal(moving.length,2,`only dragged and displaced rows should transform; got ${moving.map(row=>row.id).join(',')}`);
   assert.deepEqual(moving.map(row=>row.id).sort(),['qa-2','qa-3']);
-  await page.screenshot({path:`${OUT}/library-dark-during-drag.png`,fullPage:true});
+  await page.screenshot({path:`${OUT}/library-dark-during-drag.png`,fullPage:false});
 
   await page.mouse.up();
-  await page.waitForTimeout(260);
+  await page.waitForTimeout(300);
   assert.deepEqual(await order(),['qa-1','qa-3','qa-2','qa-4'],'drop should move the third row cleanly into the second slot');
 
   const after=await rowVisualState();
   assert.ok(after.every(row=>!row.inlineTransform&&!row.inlineTransition),'drag must clean inline transform/transition state');
   const mutations=await page.evaluate(()=>{window.__qaObserver?.disconnect();return window.__qaMutations||[]});
   assert.ok(mutations.every(record=>record.added<=1&&record.removed<=1),'drop must move one DOM row, not rebuild the library');
-  await page.screenshot({path:`${OUT}/library-dark-after.png`,fullPage:true});
+  await page.screenshot({path:`${OUT}/library-dark-after.png`,fullPage:false});
 
   await page.click('#themeBtn');
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(420);
   assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'light');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'light theme must not overflow horizontally');
-  await page.screenshot({path:`${OUT}/library-light-after.png`,fullPage:true});
+  await page.screenshot({path:`${OUT}/library-light-after.png`,fullPage:false});
 
   assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
   const report={ok:true,order:await order(),mutations,geometry};
   await writeFile(`${OUT}/browser-report.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));
 }catch(error){
-  await page.screenshot({path:`${OUT}/failure.png`,fullPage:true}).catch(()=>{});
+  await page.screenshot({path:`${OUT}/failure.png`,fullPage:false}).catch(()=>{});
   await writeFile(`${OUT}/failure.txt`,`${error?.stack||error}\n\n${errors.join('\n')}`).catch(()=>{});
   throw error;
 }finally{

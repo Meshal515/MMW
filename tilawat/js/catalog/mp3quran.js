@@ -1,4 +1,5 @@
 import { dossariImage } from '../ui-dossari-only.js';
+import '../classic-ui.js';
 import { SURAHS, normalizeVariant } from './core.js';
 
 /*

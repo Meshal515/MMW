@@ -7,7 +7,6 @@ let editId='';
 let original=null;
 let previewUrl='';
 let existingCoverUrl='';
-let coverModeTouched=false;
 
 function toast(text,ms=2800){const el=$('#toast');if(!el)return;el.textContent=text;el.classList.add('on');clearTimeout(el._editTimer);el._editTimer=setTimeout(()=>el.classList.remove('on'),ms)}
 function splitTags(value=''){return String(value).split(/[،,]/).map(x=>x.trim()).filter(Boolean)}
@@ -23,7 +22,7 @@ function setDialogMode(editing){
   if(title)title.textContent=editing?'تعديل التلاوة':'أضف تسجيلًا';
   if(submit)submit.textContent=editing?'حفظ التعديل':'حفظ التسجيل';
 }
-function resetEditState(){editId='';original=null;coverModeTouched=false;clearPreviewUrls();setDialogMode(false);$('#addForm')?.removeAttribute('data-editing-track')}
+function resetEditState(){editId='';original=null;clearPreviewUrls();setDialogMode(false);$('#addForm')?.removeAttribute('data-editing-track')}
 function ensureExistingUploadPreview(){
   if(!editId||!original||chosenMode()!=='upload'||$('#addCoverFile')?.files?.[0])return;
   const upload=$('#coverModeUpload'),preview=$('#addCoverPreview');
@@ -34,12 +33,15 @@ async function resolveSource(value){if(!value)return null;try{const u=new URL(va
 
 async function openEdit(id){
   const rec=await getTrack(id).catch(()=>null);if(!rec){toast('تعذر العثور على التلاوة.');return}
-  clearPreviewUrls();editId=id;original=rec;coverModeTouched=false;
+  clearPreviewUrls();editId=id;original=rec;
   const form=$('#addForm');form.reset();form.dataset.editingTrack=id;setDialogMode(true);
   $('#addSource').value=sourceOf(rec);$('#addTitle').value=rec.title||'';$('#addReciter').value=rec.reciter||'';$('#addSurah').value=rec.surah||'';$('#addYear').value=rec.year||'';$('#addCollection').value=rec.collection||'';$('#addMosque').value=rec.mosque||'';$('#addOccasion').value=rec.occasion||'';$('#addTags').value=(rec.tags||[]).join('، ');$('#addRare').checked=!!rec.rare;
   const preferred=(rec.variants||[]).find(v=>v.id===rec.preferredVariantId)||(rec.variants||[])[0];$('#addOriginal').checked=!!preferred?.original;$('#addRestored').checked=!!(preferred?.restored||preferred?.remastered);
   $('#addFile').value='';$('#addFileStatus').textContent=preferred?.localAudioKey?'المصدر الحالي محفوظ على الجهاز':'لم يُختر ملف جديد';$('#addCoverFile').value='';$('#addCoverFileStatus').textContent=rec.coverKey?'الصورة الحالية محفوظة من جهازك':'اختياري';
-  const thumb=rec.sourceThumbnail||preferred?.thumbnail||'';const yt=$('#coverModeYoutube'),local=$('#coverModeLocal'),upload=$('#coverModeUpload');yt.disabled=!thumb;upload.disabled=!rec.coverKey;if(rec.coverMode==='upload'&&rec.coverKey)upload.checked=true;else if(rec.coverMode==='youtube'&&thumb)yt.checked=true;else local.checked=true;
+  const thumb=rec.sourceThumbnail||preferred?.thumbnail||'';const yt=$('#coverModeYoutube'),local=$('#coverModeLocal'),upload=$('#coverModeUpload');yt.disabled=!thumb;upload.disabled=!rec.coverKey;let selected=local;if(rec.coverMode==='upload'&&rec.coverKey){upload.checked=true;selected=upload}else if(rec.coverMode==='youtube'&&thumb){yt.checked=true;selected=yt}else local.checked=true;
+  /* Also tell v2's cover picker this was an explicit user choice. Otherwise a
+     later YouTube metadata response can silently switch an uploaded phone cover. */
+  selected.dispatchEvent(new Event('change',{bubbles:true}));
   const preview=$('#addCoverPreview');preview.dataset.fallback=preview.dataset.fallback||'./assets/covers/fallback-1.jpg';preview.src=await coverFor(rec);ensureExistingUploadPreview();
   $('#sourceHint').textContent='عدّل المصدر فقط إذا أردت إضافة مصدر جديد للتلاوة؛ المصادر القديمة لن تُحذف.';
   $('#addDialog').classList.remove('hidden');dispatchEvent(new CustomEvent('tilawat:edit-form-opened',{detail:{track:rec}}));requestAnimationFrame(()=>$('#addTitle')?.focus());
@@ -74,7 +76,7 @@ async function saveEdit(event){
     }
     delete rec._coverResolved;await putTrack(rec);
     const newPartKeys=new Set((rec.parts||[]).map(p=>p.localAudioKey).filter(Boolean));for(const key of oldPartKeys)if(!newPartKeys.has(key))await deleteBlob(key).catch(()=>{});
-    const wasCurrent=$(`#libraryGrid .library-row.is-current[data-play="${CSS.escape(rec.id)}"]`);
+    const escaped=globalThis.CSS?.escape?CSS.escape(rec.id):rec.id.replace(/["\\]/g,'\\$&'),wasCurrent=$(`#libraryGrid .library-row.is-current[data-play="${escaped}"]`);
     if(wasCurrent)dispatchEvent(new CustomEvent('tilawat:stop-playback',{detail:{reason:'edited-current'}}));
     $('#addDialog').classList.add('hidden');resetEditState();dispatchEvent(new CustomEvent('tilawat-library-imported'));toast('حُفظت كل تعديلات التلاوة.');
   }catch(err){console.warn(err);toast('تعذر حفظ التعديل. تأكد من المصدر أو الملف.',4200)}
@@ -86,8 +88,8 @@ function boot(){
   addEventListener('tilawat:edit-track',event=>{const id=event.detail?.id;if(id)openEdit(id)});
   $('#addBtn')?.addEventListener('click',()=>{if(editId)resetEditState()},true);
   document.addEventListener('click',event=>{const close=event.target.closest?.('[data-close="addDialog"]');if(close&&editId)resetEditState()},true);
-  document.querySelectorAll('input[name="addCoverMode"]').forEach(input=>input.addEventListener('change',()=>{if(!editId)return;coverModeTouched=true;requestAnimationFrame(ensureExistingUploadPreview)}));
-  ['#addTitle','#addReciter','#addSurah','#addSource'].forEach(selector=>$(selector)?.addEventListener('input',()=>{if(editId)requestAnimationFrame(ensureExistingUploadPreview)}));
-  $('#addCoverFile')?.addEventListener('change',()=>{if(!editId)return;coverModeTouched=true;const file=$('#addCoverFile').files?.[0];if(file){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(file);$('#addCoverPreview').src=previewUrl}});
+  document.querySelectorAll('input[name="addCoverMode"]').forEach(input=>input.addEventListener('change',()=>{if(editId)ensureExistingUploadPreview()}));
+  ['#addTitle','#addReciter','#addSurah','#addSource'].forEach(selector=>$(selector)?.addEventListener('input',()=>{if(editId)ensureExistingUploadPreview()}));
+  $('#addCoverFile')?.addEventListener('change',()=>{if(!editId)return;const file=$('#addCoverFile').files?.[0];if(file){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(file);$('#addCoverPreview').src=previewUrl}});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

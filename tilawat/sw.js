@@ -1,15 +1,15 @@
 /* Tilawat Yasser-only app shell. Audio stays native/IndexedDB; Range requests are never intercepted. */
-const VERSION='tilawat-v6';
+const VERSION='tilawat-v7';
 const SHELL=`${VERSION}-shell`;
 const SCOPE=new URL('./',self.location).pathname;
 const PRECACHE=[
-  './','./index.html','./v2.css','./restoration.css','./manifest.webmanifest',
+  './','./index.html','./v2.css','./classic.css','./manifest.webmanifest',
   './js/v2.js','./js/store.js','./js/catalog/core.js','./js/catalog/mp3quran.js',
-  './js/ui-dossari-only.js','./js/ui-dossari-copy.js',
+  './js/ui-dossari-only.js','./js/classic-ui.js',
   './assets/logo.svg','./assets/covers/default.jpg',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg','./assets/covers/dossari-4.jpg','./assets/covers/dossari-5.jpg',
   './assets/icon-192.png','./assets/icon-512.png',
-  '../assets/fonts/plex-ar-arabic-400.woff2','../assets/fonts/plex-ar-arabic-600.woff2','../assets/fonts/plex-ar-arabic-700.woff2'
+  '../assets/fonts/plex-ar-aric-400.woff2','../assets/fonts/plex-ar-arabic-600.woff2','../assets/fonts/plex-ar-arabic-700.woff2'
 ];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const c=await caches.open(SHELL);
@@ -34,7 +34,7 @@ self.addEventListener('fetch',event=>{
     })());return;
   }
 
-  // Never download YouTube artwork. If an old/manual entry references it, show the local Quran cover instead.
+  // No remote artwork: old YouTube thumbnails resolve to the bundled Quran fallback.
   if(url.hostname==='i.ytimg.com'){
     event.respondWith((async()=>{
       const c=await caches.open(SHELL);

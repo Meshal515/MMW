@@ -1,5 +1,5 @@
 /* Tilawat Yasser-only app shell. Audio stays native/IndexedDB; Range requests are never intercepted. */
-const VERSION='tilawat-v7';
+const VERSION='tilawat-v8';
 const SHELL=`${VERSION}-shell`;
 const SCOPE=new URL('./',self.location).pathname;
 const PRECACHE=[

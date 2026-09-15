@@ -63,12 +63,23 @@ export async function youtubeMeta(id) {
 
 export function detectSource(url='') {
   const s=String(url).trim(); const yt=youtubeId(s);
-  if(yt) return {type:'video',provider:'youtube',sourceUrl:youtubeWatch(yt),videoUrl:youtubeWatch(yt),embedUrl:`https://www.youtube-nocookie.com/embed/${yt}`,thumbnail:youtubeThumb(yt),downloadable:false};
+  if(yt){
+    const watch=youtubeWatch(yt);
+    // Keep YouTube metadata/reference, but route PLAY through our own <audio> attempt
+    // instead of navigating the user away from Tilawat. Browsers will reject the
+    // HTML watch page as audio; attaching a direct/local audio source upgrades it.
+    return {type:'video',provider:'youtube',sourceUrl:watch,audioUrl:watch,videoUrl:watch,embedUrl:`https://www.youtube-nocookie.com/embed/${yt}`,thumbnail:youtubeThumb(yt),downloadable:false,playbackCandidate:true};
+  }
   let u; try{u=new URL(/^https?:\/\//i.test(s)?s:'https://'+s);}catch{return null;}
+  if(!/^https?:$/.test(u.protocol)) return null;
   const host=u.hostname.replace(/^www\./,'');
-  const audio=/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(\?|#|$)/i.test(u.href);
+  const explicitAudio=/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(\?|#|$)/i.test(u.href);
   const provider=host.includes('archive.org')?'archive':host.includes('soundcloud.com')?'soundcloud':host.includes('islamway.net')?'islamway':host.includes('quranicaudio.com')?'quranicaudio':host.includes('tvquran.com')?'tvquran':host.includes('assabile.com')?'assabile':host.includes('mazameer.com')?'mazameer':'generic';
-  return {type:audio?'audio':'link',provider,sourceUrl:u.href,audioUrl:audio?u.href:'',downloadable:audio};
+  // Important: many real audio/CDN links have no .mp3 suffix. Treat every normal
+  // http(s) URL as a playback candidate and let the native audio element follow
+  // redirects/content-type. If it is a webpage, playback fails in-app; we never
+  // send the user to that site just because they pressed Play.
+  return {type:explicitAudio?'audio':'link',provider,sourceUrl:u.href,audioUrl:u.href,downloadable:explicitAudio,playbackCandidate:true};
 }
 
 export function variantScore(v={}) {
@@ -117,7 +128,7 @@ export function migrateTrack(raw={}) {
     if(raw.localAudioKey||raw.blobKey) rec.variants.push(normalizeVariant({provider:'local',localAudioKey:raw.localAudioKey||raw.blobKey,qualityLabel:raw.localOrigin==='download'?'نسخة منزلة':'ملف الجهاز',original:true,downloadable:true}));
     if(raw.audioUrl||(raw.kind==='url'&&raw.src)) rec.variants.push(normalizeVariant({provider:'generic',audioUrl:raw.audioUrl||raw.src,sourceUrl:raw.audioUrl||raw.src,qualityLabel:'صوت مباشر',downloadable:true}));
     const yid=raw.youtubeId||(raw.kind==='youtube'?raw.src:'');
-    if(yid) rec.variants.push(normalizeVariant({provider:'youtube',sourceUrl:raw.youtubeUrl||youtubeWatch(yid),videoUrl:raw.youtubeUrl||youtubeWatch(yid),embedUrl:`https://www.youtube-nocookie.com/embed/${yid}`,thumbnail:raw.thumb||youtubeThumb(yid),qualityLabel:'فيديو أرشيفي',downloadable:false}));
+    if(yid) rec.variants.push(normalizeVariant({provider:'youtube',sourceUrl:raw.youtubeUrl||youtubeWatch(yid),audioUrl:raw.youtubeUrl||youtubeWatch(yid),videoUrl:raw.youtubeUrl||youtubeWatch(yid),embedUrl:`https://www.youtube-nocookie.com/embed/${yid}`,thumbnail:raw.thumb||youtubeThumb(yid),qualityLabel:'فيديو أرشيفي',downloadable:false}));
   }
   return rec;
 }

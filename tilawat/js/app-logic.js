@@ -31,6 +31,12 @@ function sourceKeys(rec = {}) {
       if (s) out.add(s);
     }
   }
+  for (const part of rec.parts || []) {
+    for (const value of [part.sourceUrl, part.audioUrl, part.videoUrl]) {
+      const s=String(value||'').trim();
+      if(s)out.add(s);
+    }
+  }
   return out;
 }
 
@@ -75,14 +81,20 @@ export function recordMatchesQuery(rec = {}, query = '') {
   if (!ts.length) return true;
   const hay = normalizeArabic([
     rec.title, rec.reciter, rec.surah, rec.year, rec.collection, rec.mosque, rec.occasion,
-    ...(rec.tags || []), ...(rec.variants || []).flatMap(v => [v.provider, v.title, v.qualityLabel, v.sourceUrl])
+    ...(rec.tags || []), ...(rec.variants || []).flatMap(v => [v.provider, v.title, v.qualityLabel, v.sourceUrl]),
+    ...(rec.parts || []).flatMap(p => [p.label,p.provider,p.title,p.sourceUrl])
   ].filter(Boolean).join(' '));
   return ts.every(t => hay.includes(t));
 }
 
+function portablePart(part={}){
+  const hadLocal=!!part.localAudioKey;
+  return {...part,localAudioKey:'',fileSize:hadLocal?0:Number(part.fileSize||0),localMediaExcluded:hadLocal,downloadable:!!part.audioUrl};
+}
+
 export function portableTrack(track = {}) {
   const copy = structuredClone(track);
-  const hadLocalAudio = (copy.variants || []).some(v => v.localAudioKey || v.localKey) || !!copy.localAudioKey;
+  const hadLocalAudio = (copy.variants || []).some(v => v.localAudioKey || v.localKey) || !!copy.localAudioKey || (copy.parts||[]).some(p=>p.localAudioKey);
   copy.coverKey = '';
   copy.localAudioKey = '';
   copy.blobKey = '';
@@ -94,6 +106,7 @@ export function portableTrack(track = {}) {
     fileSize: v.localAudioKey || v.localKey ? 0 : Number(v.fileSize || 0),
     downloadable: !!v.audioUrl && v.downloadable !== false
   }));
+  copy.parts=(copy.parts||[]).map(portablePart);
   return copy;
 }
 
@@ -103,5 +116,6 @@ export function sanitizeImportedTrack(track = {}) {
   copy.localAudioKey = '';
   copy.blobKey = '';
   copy.variants = (copy.variants || []).map(v => ({ ...v, localAudioKey: '', localKey: '' }));
+  copy.parts=(copy.parts||[]).map(part=>({...part,localAudioKey:''}));
   return copy;
 }

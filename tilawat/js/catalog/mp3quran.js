@@ -1,5 +1,4 @@
 import { dossariImage } from '../ui-dossari-only.js';
-import '../classic-ui.js';
 import { SURAHS, normalizeVariant } from './core.js';
 
 /*
@@ -135,6 +134,7 @@ export function catalogRecitation(reciter,moshaf,surahId){
     playlists:[], rare:is1425, favorite:false, preferredVariantId:'',
     cover, sourceThumbnail:cover, gallery:[], addedAt:0, lastPlayedAt:0, lastPosition:0, playCount:0,
     catalogOnly:true,
+    catalogRef:{reciterId:Number(reciter.id),moshafId:Number(moshaf.id),surahId:idNum},
     variants:[normalizeVariant({
       id:`${id}-audio`,
       provider:is1425?'archive':'mp3quran',

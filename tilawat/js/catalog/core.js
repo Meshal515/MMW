@@ -65,14 +65,14 @@ export function detectSource(url='') {
   const s=String(url).trim(); const yt=youtubeId(s);
   if(yt){
     const watch=youtubeWatch(yt);
-    return {type:'video',provider:'youtube',sourceUrl:watch,audioUrl:watch,videoUrl:watch,embedUrl:`https://www.youtube-nocookie.com/embed/${yt}`,thumbnail:youtubeThumb(yt),downloadable:false,playbackCandidate:true};
+    return {type:'video',provider:'youtube',sourceUrl:watch,audioUrl:'',videoUrl:watch,embedUrl:`https://www.youtube-nocookie.com/embed/${yt}`,thumbnail:youtubeThumb(yt),downloadable:false,playbackCandidate:true};
   }
   let u; try{u=new URL(/^https?:\/\//i.test(s)?s:'https://'+s);}catch{return null;}
   if(!/^https?:$/.test(u.protocol)) return null;
   const host=u.hostname.replace(/^www\./,'');
   const explicitAudio=/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(\?|#|$)/i.test(u.href);
   const provider=host.includes('archive.org')?'archive':host.includes('soundcloud.com')?'soundcloud':host.includes('islamway.net')?'islamway':host.includes('quranicaudio.com')?'quranicaudio':host.includes('tvquran.com')?'tvquran':host.includes('assabile.com')?'assabile':host.includes('mazameer.com')?'mazameer':'generic';
-  return {type:explicitAudio?'audio':'link',provider,sourceUrl:u.href,audioUrl:u.href,downloadable:explicitAudio,playbackCandidate:true};
+  return {type:explicitAudio?'audio':'link',provider,sourceUrl:u.href,audioUrl:explicitAudio?u.href:'',downloadable:explicitAudio,playbackCandidate:explicitAudio};
 }
 
 export function variantScore(v={}) {

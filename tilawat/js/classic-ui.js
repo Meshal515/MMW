@@ -53,7 +53,7 @@ function openSettings(){const pane=$('#classicSettings');pane.hidden=false;reque
 function closeSettings(){const pane=$('#classicSettings');pane.classList.remove('open');document.body.style.overflow='';setTimeout(()=>pane.hidden=true,200)}
 function boot(){
   mountCss();
-  import('./tilawat-v14.js').then(()=>import('./tilawat-v15-fixes.js')).catch(err=>console.warn('Tilawat v15 failed to load',err));
+  import('./tilawat-v14.js').then(()=>import('./tilawat-v15-fixes.js')).then(()=>import('./tilawat-v16.js')).catch(err=>console.warn('Tilawat v16 failed to load',err));
   const theme=$('#themeBtn');
   if(theme&&!$('#classicSettingsBtn')){const btn=document.createElement('button');btn.id='classicSettingsBtn';btn.className='round classic-settings-btn';btn.type='button';btn.setAttribute('aria-label','الإعدادات');btn.innerHTML=gearSvg();theme.insertAdjacentElement('afterend',btn);btn.addEventListener('click',openSettings)}
   document.body.insertAdjacentHTML('beforeend',settingsHtml());

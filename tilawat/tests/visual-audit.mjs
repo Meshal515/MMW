@@ -134,7 +134,7 @@ try{
   await page.click('#tilawatV28EditClose');
   await page.waitForTimeout(280);
   await page.click('#playerClose');
-  await page.waitForSelector('#playerPage.hidden');
+  await page.waitForSelector('#playerPage',{state:'hidden'});
 
   await page.click('#classicSettingsBtn');
   await page.waitForSelector('#classicSettings.open');

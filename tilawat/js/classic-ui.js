@@ -5,9 +5,6 @@ import './favorites.js';
 import './motion-system.js';
 
 const $=s=>document.querySelector(s);
-/* Temporary startup bridge until v2's selector owner is corrected at source. */
-const startupTabbar=document.querySelector('.tabbar');
-if(startupTabbar&&!document.getElementById('.tabbar'))startupTabbar.id='.tabbar';
 let installPrompt=null;
 let settingsCloseTimer=0;
 let settingsReturnFocus=null;

@@ -4,6 +4,7 @@ const ALLOWED_AUDIO_HOSTS = new Set([
   'yaldosry.com','www.yaldosry.com'
 ]);
 const AUDIO_EXT = /\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(?:[?#]|$)/i;
+const FETCH_TIMEOUT_MS = 12_000;
 
 function json(data,status=200){
   return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
@@ -47,6 +48,19 @@ function safeAbsolute(candidate,base){
     return u.href;
   }catch{return ''}
 }
+function allowedFinalUrl(response,fallback,hosts){
+  try{
+    const finalUrl=new URL(response.url||fallback);
+    return finalUrl.protocol==='https:'&&hosts.has(finalUrl.hostname);
+  }catch{return false}
+}
+async function timedFetch(input,options={},timeoutMs=FETCH_TIMEOUT_MS){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{return await fetch(input,{...options,signal:controller.signal})}
+  finally{clearTimeout(timer)}
+}
+function isAbort(error){return error?.name==='AbortError'}
 
 export async function onRequestGet({request}){
   let page;
@@ -58,8 +72,9 @@ export async function onRequestGet({request}){
 
   let upstream;
   try{
-    upstream=await fetch(page.href,{redirect:'follow',headers:{'accept':'text/html,application/xhtml+xml','user-agent':'Tilawat/1.0 source resolver'}});
-  }catch{return json({ok:false,error:'source-fetch-failed'},502)}
+    upstream=await timedFetch(page.href,{redirect:'follow',headers:{'accept':'text/html,application/xhtml+xml','user-agent':'Tilawat/1.0 source resolver'}});
+  }catch(error){return json({ok:false,error:isAbort(error)?'source-timeout':'source-fetch-failed'},isAbort(error)?504:502)}
+  if(!allowedFinalUrl(upstream,page.href,ALLOWED_PAGE_HOSTS)) return json({ok:false,error:'unsupported-redirect-host'},502);
   if(!upstream.ok) return json({ok:false,error:'source-http-'+upstream.status},502);
   const type=upstream.headers.get('content-type')||'';
   if(!type.includes('text/html')) return json({ok:false,error:'not-html'},422);

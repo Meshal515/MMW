@@ -1,0 +1,47 @@
+name: Tilawat Browser Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tilawat-browser-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@latest
+          npx playwright install --with-deps chromium
+      - name: Test production startup
+        run: |
+          cat > /tmp/smoke.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage();
+          const errors=[];
+          page.on('console', msg => { if(msg.type()==='error') errors.push('console: '+msg.text()); });
+          page.on('pageerror', err => errors.push('pageerror: '+err.stack));
+          const res=await page.goto('https://tilawat-di5.pages.dev/?smoke='+Date.now(),{waitUntil:'domcontentloaded',timeout:30000});
+          console.log('HTTP',res?.status());
+          await page.waitForTimeout(12000);
+          const state=await page.evaluate(()=>({
+            hero:document.querySelector('#heroStats')?.textContent?.trim(),
+            shelves:document.querySelector('#homeShelves')?.children?.length,
+            gear:!!document.querySelector('#classicSettingsBtn'),
+            body:document.body.innerText.slice(0,800)
+          }));
+          console.log('STATE',JSON.stringify(state,null,2));
+          if(errors.length) console.log('ERRORS\n'+errors.join('\n---\n'));
+          await browser.close();
+          if(!state.hero || /جار.*تجهيز/.test(state.hero) || !state.shelves || errors.length) process.exit(1);
+          EOF
+          node /tmp/smoke.mjs

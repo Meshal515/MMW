@@ -50,6 +50,8 @@ async function ensureGsap(){
 
 const plusSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 const gripSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h14"/></svg>';
+const back10Svg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5V3M5.5 7A8 8 0 1 1 4 14"/><text x="12" y="14.7" text-anchor="middle">−10</text></svg>';
+const forward10Svg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7h4V3m-.5 4A8 8 0 1 0 20 14"/><text x="12" y="14.7" text-anchor="middle">+10</text></svg>';
 
 function enhanceIcons(root=document){
   const add=q('#addBtn b',root)||q('#addBtn b');
@@ -59,6 +61,10 @@ function enhanceIcons(root=document){
     btn.innerHTML=gripSvg;
     btn.dataset.svgUpgraded='1';
   });
+  const back=q('#back10',root)||q('#back10');
+  if(back&&!back.dataset.timeIconFixed){back.innerHTML=back10Svg;back.dataset.timeIconFixed='1'}
+  const forward=q('#forward10',root)||q('#forward10');
+  if(forward&&!forward.dataset.timeIconFixed){forward.innerHTML=forward10Svg;forward.dataset.timeIconFixed='1'}
 }
 
 function markSurface(el){

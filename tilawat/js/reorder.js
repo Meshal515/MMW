@@ -96,13 +96,18 @@ export function makeSortable(list, { handle: handleSelector, item: itemSelector,
     cancelAnimationFrame(done.raf);
     try { done.handle.releasePointerCapture(done.pointerId); } catch {}
 
-    // Settle into the slot before handing the new order over, so the row lands
-    // rather than teleporting when the list re-renders.
+    // Settle into the target slot first. Then move the actual DOM node into that
+    // slot before persisting, so the saved order matches what the user just saw.
     done.item.style.transition = EASE;
     done.item.style.transform = `translateY(${(done.to - done.from) * done.step}px)`;
     done.item.classList.remove('is-dragging');
 
     setTimeout(() => {
+      if (commit && done.to !== done.from) {
+        const target = done.items[done.to];
+        if (done.to > done.from) target.after(done.item);
+        else target.before(done.item);
+      }
       for (const el of done.items) { el.style.transition = ''; el.style.transform = ''; }
       list.classList.remove('is-sorting');
       document.body.classList.remove('is-dragging');

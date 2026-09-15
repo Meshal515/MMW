@@ -1,3 +1,5 @@
+import { applyStagedMultipart } from './multipart-state.js';
+
 const DB_NAME='tilawat';
 const DB_VERSION=2;
 let dbPromise=null;
@@ -52,7 +54,7 @@ async function tx(store,mode,fn,timeoutMs=30000){
 }
 
 export const allTracks=()=>tx('tracks','readonly',s=>s.getAll(),6000);
-export const putTrack=track=>tx('tracks','readwrite',s=>s.put(track),12000);
+export const putTrack=track=>tx('tracks','readwrite',s=>s.put(applyStagedMultipart(track)),12000);
 export const getTrack=id=>tx('tracks','readonly',s=>s.get(id),6000);
 export const deleteTrack=id=>tx('tracks','readwrite',s=>s.delete(id),12000);
 export const putBlob=(k,b)=>tx('blobs','readwrite',s=>s.put(b,k),120000);

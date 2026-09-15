@@ -1,13 +1,11 @@
 import { allTracks, putTrack } from './store.js';
 import { portableTrack, sanitizeImportedTrack } from './app-logic.js';
 import './interaction-v28.js';
-import './codex-ui-recovery.js';
+import './favorites.js';
+import './motion-system.js';
+import './multipart-ui.js';
 
 const $=s=>document.querySelector(s);
-/* v2 currently asks getElementById('.tabbar'); expose the already-rendered nav
-   under that exact id during module evaluation so startup cannot abort before start(). */
-const startupTabbar=document.querySelector('.tabbar');
-if(startupTabbar&&!document.getElementById('.tabbar'))startupTabbar.id='.tabbar';
 let installPrompt=null;
 let settingsCloseTimer=0;
 let settingsReturnFocus=null;

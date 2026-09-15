@@ -73,14 +73,17 @@ function addPointerDepth(){
   },{passive:true});
 }
 
+/* Views keep full opacity. Navigation motion is positional only so the page never
+   flashes washed-out during startup, tab changes, or async catalogue renders. */
 function animateView(view){
   if(!view||REDUCED())return;
   const g=gsap();if(!g){view.classList.remove('motion-view-enter');void view.offsetWidth;view.classList.add('motion-view-enter');return}
   const head=q('h1,.page-title,.hero__heading',view),content=qa('.shelf,.search-results,.library-head,.favorite-hub,.seg,.library-grid',view).filter(el=>getComputedStyle(el).display!=='none').slice(0,5);
   g.killTweensOf([view,head,...content]);
-  g.fromTo(view,{opacity:.72},{opacity:1,duration:.24,ease:'power2.out',clearProps:'opacity'});
-  if(head)g.fromTo(head,{y:9,opacity:.72},{y:0,opacity:1,duration:.42,ease:'power3.out',clearProps:'transform,opacity'});
-  if(content.length)g.fromTo(content,{y:10,opacity:.65},{y:0,opacity:1,duration:.46,ease:'power3.out',stagger:.035,clearProps:'transform,opacity'},.03);
+  g.set(view,{opacity:1});
+  g.fromTo(view,{y:4},{y:0,duration:.28,ease:'power3.out',clearProps:'transform,opacity'});
+  if(head)g.fromTo(head,{y:8},{y:0,duration:.4,ease:'power3.out',clearProps:'transform'});
+  if(content.length)g.fromTo(content,{y:8},{y:0,duration:.42,ease:'power3.out',stagger:.028,clearProps:'transform'},.025);
 }
 
 function seekFeedback(button,seconds){
@@ -134,14 +137,14 @@ function closeBrowseAnimated(event){
   const g=gsap();if(g)g.to(page,{x:-14,opacity:0,duration:.22,ease:'power2.in',onComplete:finish});else finish();
 }
 
-function openDialogMotion(trigger){
+function openDialogMotion(){
   if(REDUCED())return;
   requestAnimationFrame(()=>{
     const dialog=qa('.dialog:not(.hidden)').at(-1);if(!dialog)return;
     const sheet=q('.sheet',dialog);if(!sheet)return;
     const g=gsap();
-    if(g)g.fromTo(sheet,{y:28,scale:.985,opacity:.55},{y:0,scale:1,opacity:1,duration:.46,ease:'power4.out',clearProps:'transform,opacity'});
-    else sheet.animate?.([{transform:'translateY(24px) scale(.985)',opacity:.55},{transform:'none',opacity:1}],{duration:440,easing:'cubic-bezier(.16,1,.3,1)'});
+    if(g)g.fromTo(sheet,{y:24,scale:.988,opacity:.96},{y:0,scale:1,opacity:1,duration:.4,ease:'power4.out',clearProps:'transform,opacity'});
+    else sheet.animate?.([{transform:'translateY(22px) scale(.988)',opacity:.96},{transform:'none',opacity:1}],{duration:400,easing:'cubic-bezier(.16,1,.3,1)'});
   });
 }
 
@@ -169,8 +172,9 @@ function boot(){
   document.addEventListener('click',closePlayerAnimated,true);
   document.addEventListener('click',closeBrowseAnimated,true);
 
-  q('#addBtn')?.addEventListener('click',()=>openDialogMotion('add'));
-  q('#addVariantBtn')?.addEventListener('click',()=>openDialogMotion('variant'));
+  q('#addBtn')?.addEventListener('click',openDialogMotion);
+  q('#addVariantBtn')?.addEventListener('click',openDialogMotion);
+  addEventListener('tilawat:edit-form-opened',openDialogMotion);
 
   requestAnimationFrame(()=>animateView(q('#homeView')));
 }

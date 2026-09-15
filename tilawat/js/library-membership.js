@@ -10,16 +10,17 @@ let syncing=false;
 function ensureStyle(){if(document.querySelector('link[data-tilawat-membership]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=STYLE_URL;link.dataset.tilawatMembership='';document.head.append(link)}
 function toast(text){const el=$('#toast');if(!el)return;el.textContent=text;el.classList.add('on');clearTimeout(el._membershipTimer);el._membershipTimer=setTimeout(()=>el.classList.remove('on'),2500)}
 function currentPersistedId(){return $('#libraryGrid .library-row.is-current[data-play]')?.dataset.play||''}
+function setAttr(el,name,value){const next=String(value);if(el.getAttribute(name)!==next)el.setAttribute(name,next)}
 function paint(button,{saved=false,manual=false}={}){
   if(!button)return;
-  button.hidden=!!manual;
+  if(button.hidden!==!!manual)button.hidden=!!manual;
   if(manual)return;
   button.classList.toggle('is-library-saved',saved);
   button.classList.toggle('on',saved);
-  button.setAttribute('aria-pressed',String(saved));
-  button.setAttribute('aria-label',saved?'إزالة من مكتبتي':'أضف إلى مكتبتي');
-  button.title=saved?'إزالة من مكتبتي':'أضف إلى مكتبتي';
-  button.innerHTML=saved?REMOVE_ICON:ADD_ICON;
+  setAttr(button,'aria-pressed',saved);
+  setAttr(button,'aria-label',saved?'إزالة من مكتبتي':'أضف إلى مكتبتي');
+  const title=saved?'إزالة من مكتبتي':'أضف إلى مكتبتي';if(button.title!==title)button.title=title;
+  const key=saved?'remove':'add';if(button.dataset.membershipIcon!==key){button.innerHTML=saved?REMOVE_ICON:ADD_ICON;button.dataset.membershipIcon=key}
 }
 async function sync(){
   if(syncing)return;syncing=true;

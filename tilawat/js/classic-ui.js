@@ -3,6 +3,7 @@ import { portableTrack, sanitizeImportedTrack } from './app-logic.js';
 import './interaction-v28.js';
 import './favorites.js';
 import './motion-system.js';
+import './multipart-ui.js';
 
 const $=s=>document.querySelector(s);
 let installPrompt=null;

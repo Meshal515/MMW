@@ -36,12 +36,14 @@ function isDossari(name=''){
 function isGenerated(src=''){
   return !src || src.startsWith('data:image/svg') || src.includes('generated') || src.includes('monogram');
 }
+function isRemote(src=''){ return /^https?:\/\//i.test(String(src||'')); }
 
 export function dossariImage(seed='yasser'){
   return DOSSARI_IMAGES[hash(String(seed)) % DOSSARI_IMAGES.length];
 }
 export function imageFor({reciter='',surah='',seed='',manual=''}={}){
-  if(manual && !isGenerated(manual) && !manual.includes('default.jpg')) return manual;
+  // Respect only covers the owner supplied locally (blob/data/local path). Never preserve a remote thumbnail.
+  if(manual && !isRemote(manual) && !isGenerated(manual) && !manual.includes('default.jpg')) return manual;
   if(isDossari(reciter) || (!reciter && surah)) return dossariImage(`${reciter}|${surah}|${seed}`);
   return QURAN_FALLBACK;
 }

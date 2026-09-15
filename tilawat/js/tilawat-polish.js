@@ -87,7 +87,6 @@ function markCurrentFromClick(target){
 function animateOpen(el, cls='tilawat-enter'){
   if(!el || el.classList.contains('hidden')) return;
   el.classList.remove(cls);
-  // Force a restart so repeated opens still feel responsive.
   void el.offsetWidth;
   el.classList.add(cls);
   setTimeout(()=>el.classList.remove(cls),560);
@@ -100,7 +99,10 @@ function waitAndOpenPlayer(){
     const mini=$('#miniPlayer');
     const page=$('#playerPage');
     if(mini && !mini.classList.contains('hidden')){
-      if(page?.classList.contains('hidden')) $('#miniOpen')?.click();
+      if(page?.classList.contains('hidden')){
+        $('#miniOpen')?.click();
+        requestAnimationFrame(()=>animateOpen(page));
+      }
       return;
     }
     if(performance.now()-started<2600) openTimer=setTimeout(tick,45);
@@ -199,19 +201,9 @@ function syncFavorite(){
 }
 
 function observeUi(){
-  const browse=$('#browsePage');
-  if(browse){
-    new MutationObserver(()=>{
-      decorateDossariGrid();
-      if(!browse.classList.contains('hidden')) animateOpen(browse);
-    }).observe(browse,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
-  }
-
-  const playerPage=$('#playerPage');
-  if(playerPage){
-    new MutationObserver(()=>{
-      if(!playerPage.classList.contains('hidden')) animateOpen(playerPage);
-    }).observe(playerPage,{attributes:true,attributeFilter:['class']});
+  const browseBody=$('#browseBody');
+  if(browseBody){
+    new MutationObserver(()=>decorateDossariGrid()).observe(browseBody,{subtree:true,childList:true});
   }
 
   const playIcon=$('#miniPlayIcon');
@@ -231,6 +223,17 @@ function bindInteractions(){
       markCurrentFromClick(playTarget);
       waitAndOpenPlayer();
     }
+
+    const reciter=e.target.closest('[data-reciter]');
+    if(reciter){
+      requestAnimationFrame(()=>setTimeout(()=>{
+        decorateDossariGrid();
+        animateOpen($('#browsePage'));
+      },0));
+    }
+
+    const moshaf=e.target.closest('[data-moshaf-index]');
+    if(moshaf) requestAnimationFrame(()=>setTimeout(decorateDossariGrid,0));
 
     const tab=e.target.closest('.tab');
     if(tab){

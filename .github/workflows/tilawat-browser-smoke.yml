@@ -41,12 +41,24 @@ jobs:
             brand:!!document.querySelector('#brand'),
             searchInput:!!document.querySelector('#searchInput'),
             librarySegs:!!document.querySelector('#librarySegs'),
+            codexUi:document.documentElement.dataset.codexUi||'',
+            gsap:!!window.gsap,
+            recoveryCss:[...document.styleSheets].some(s=>(s.href||'').includes('codex-ui-recovery.css')),
+            motionSurface:document.querySelector('#homeView')?.dataset?.motionSurface||'',
+            addSvg:!!document.querySelector('#addBtn b svg'),
             script:[...document.scripts].map(s=>s.src||'inline'),
             body:document.body.innerText.slice(0,800)
           }));
           console.log('STATE',JSON.stringify(state,null,2));
+          if(state.gear){
+            await page.click('#classicSettingsBtn');
+            await page.waitForTimeout(350);
+            const settingsOpen=await page.evaluate(()=>document.querySelector('#classicSettings')?.classList.contains('open'));
+            console.log('SETTINGS_OPEN',settingsOpen);
+            if(!settingsOpen)errors.push('settings panel did not open');
+          }
           if(errors.length) console.log('ERRORS\n'+errors.join('\n---\n'));
           await browser.close();
-          if(!state.hero || /جار.*تجهيز/.test(state.hero) || !state.shelves || errors.length) process.exit(1);
+          if(!state.hero || /جار.*تجهيز/.test(state.hero) || !state.shelves || !state.recoveryCss || !state.motionSurface || !state.addSvg || !state.codexUi || errors.length) process.exit(1);
           EOF
           node smoke.mjs

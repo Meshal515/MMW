@@ -1,8 +1,8 @@
-const VERSION='tilawat-v26';
+const VERSION='tilawat-v28';
 const SHELL=`${VERSION}-shell`;
 const PRECACHE=[
-  './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./codex-ui-recovery.css','./manifest.webmanifest',
-  './js/v2.js','./js/player.js','./js/store.js','./js/app-logic.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/player-ux-v22.js','./js/card-open-original.js','./js/codex-ui-recovery.js','./js/reorder.js',
+  './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./codex-ui-recovery.css','./interaction-v28.css','./manifest.webmanifest',
+  './js/v2.js','./js/player.js','./js/store.js','./js/app-logic.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/interaction-v28.js','./js/codex-ui-recovery.js','./js/reorder.js',
   './js/catalog/core.js','./js/catalog/mp3quran.js',
   './vendor/gsap/gsap.min.js','./vendor/gsap/ScrollTrigger.min.js','./vendor/gsap/Flip.min.js',
   './assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png',

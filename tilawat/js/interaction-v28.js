@@ -10,7 +10,7 @@ const GSAP_URL='./vendor/gsap/gsap.min.js';
 
 const ui={
   activeTrackId:'',menuTrackId:'',menuSource:'',editTrackId:'',editRemoveCover:false,editPreviewUrl:'',editLoadedUrl:'',
-  glassOpen:false,glassTimer:0,suppressClickUntil:0,noAutoplayNext:false,noAutoplayTimer:0
+  glassOpen:false,glassTimer:0,suppressClickUntil:0,noAutoplayKey:'',noAutoplayTimer:0
 };
 const gesture={active:false,pointerId:null,startX:0,startY:0,dx:0,dy:0,moved:false,raf:0};
 let gsapPromise=null;
@@ -53,21 +53,28 @@ const icons={
   heart:icon('<path d="m12 20.5-7-6.6a4.3 4.3 0 0 1 6-6.1l1 .9 1-.9a4.3 4.3 0 0 1 6 6.1Z"/>')
 };
 
-/* Keep v2 as the single owner of card selection/playback. We only alter autoplay for a normal card tap. */
+function trackActionKey(track={}){
+  if(track.catalogRef)return`catalog:${track.catalogRef.reciterId}|${track.catalogRef.moshafId}|${track.catalogRef.surahId}`;
+  return track.id?`local:${track.id}`:'';
+}
+/* Keep v2 as the single owner of card selection/playback. We only alter autoplay for the exact card that was tapped. */
 const originalLoad=Player.prototype.load;
 if(!Player.prototype.__tilawatV28LoadPatched){
   Player.prototype.__tilawatV28LoadPatched=true;
   Player.prototype.load=function(track,options={}){
-    if(ui.noAutoplayNext){
-      ui.noAutoplayNext=false;clearTimeout(ui.noAutoplayTimer);ui.noAutoplayTimer=0;
+    const key=trackActionKey(track);
+    if(ui.noAutoplayKey&&key===ui.noAutoplayKey){
+      ui.noAutoplayKey='';clearTimeout(ui.noAutoplayTimer);ui.noAutoplayTimer=0;
       return originalLoad.call(this,track,{...options,autoplay:false});
     }
     return originalLoad.call(this,track,options);
   };
 }
-function pauseNextCardLoad(){
-  ui.noAutoplayNext=true;clearTimeout(ui.noAutoplayTimer);ui.noAutoplayTimer=setTimeout(()=>{ui.noAutoplayNext=false;ui.noAutoplayTimer=0},2500);
+function pauseCardLoad(action){
+  ui.noAutoplayKey=action.dataset.play?`local:${action.dataset.play}`:action.dataset.catalogPlay?`catalog:${action.dataset.catalogPlay}`:'';
+  clearTimeout(ui.noAutoplayTimer);ui.noAutoplayTimer=setTimeout(()=>{ui.noAutoplayKey='';ui.noAutoplayTimer=0},8000);
 }
+function clearPausedCardLoad(){ui.noAutoplayKey='';clearTimeout(ui.noAutoplayTimer);ui.noAutoplayTimer=0}
 function armPlayOnly(){
   const page=$('#playerPage');
   if(!page||!page.classList.contains('hidden'))return;
@@ -183,7 +190,7 @@ async function openEdit(id){
 }
 function closeEdit(){
   const back=$('#tilawatV28EditBackdrop');if(back){back.classList.remove('is-open');back.setAttribute('aria-hidden','true')}
-  ui.editTrackId='';ui.editRemoveCover=false;$('#tilawatV28CoverFile')?.value='';if(ui.editPreviewUrl){URL.revokeObjectURL(ui.editPreviewUrl);ui.editPreviewUrl=''}if(ui.editLoadedUrl){URL.revokeObjectURL(ui.editLoadedUrl);ui.editLoadedUrl=''}
+  ui.editTrackId='';ui.editRemoveCover=false;const coverInput=$('#tilawatV28CoverFile');if(coverInput)coverInput.value='';if(ui.editPreviewUrl){URL.revokeObjectURL(ui.editPreviewUrl);ui.editPreviewUrl=''}if(ui.editLoadedUrl){URL.revokeObjectURL(ui.editLoadedUrl);ui.editLoadedUrl=''}
 }
 async function saveEdit(e){
   e.preventDefault();const id=ui.editTrackId;if(!id)return;const rec=await getTrack(id).catch(()=>null);if(!rec){notify('تعذر حفظ التعديل.');return}
@@ -205,10 +212,10 @@ function bindCardSemantics(){
     const target=event.target instanceof Element?event.target:null;if(!target)return;
     if(target.closest('#playerMore')){event.preventDefault();event.stopImmediatePropagation();openActionSheet(currentPersistedId());return}
     const action=target.closest('[data-play],[data-catalog-play]');if(!action)return;
-    if(action.dataset.play)ui.activeTrackId=action.dataset.play;
+    ui.activeTrackId=action.dataset.play||'';
     const explicit=target.closest(explicitPlaySelector);
-    if(explicit){ui.noAutoplayNext=false;clearTimeout(ui.noAutoplayTimer);ui.noAutoplayTimer=0;armPlayOnly();return}
-    pauseNextCardLoad();
+    if(explicit){clearPausedCardLoad();armPlayOnly();return}
+    pauseCardLoad(action);
   },true);
 }
 function bindMini(){
@@ -232,6 +239,6 @@ function bindMini(){
 
 function boot(){
   ensureStyle();ensureManagementUi();ensureGlass();ensureGsap();bindCardSemantics();bindMini();
-  addEventListener('tilawat:stop-playback',()=>{ui.activeTrackId='';ui.noAutoplayNext=false;clearTimeout(ui.noAutoplayTimer);collapseGlass(true)});
+  addEventListener('tilawat:stop-playback',()=>{ui.activeTrackId='';clearPausedCardLoad();collapseGlass(true)});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

@@ -46,21 +46,14 @@ jobs:
           mkdir -p dist-tilawat
           cp -R tilawat/. dist-tilawat/
 
-          # Pages Functions must live next to the Wrangler command, not inside the
-          # static output directory. Keep the source under tilawat/, stage it here,
-          # and remove it from the public asset bundle.
           if [ -d tilawat/functions ]; then
             cp -R tilawat/functions ./functions
             rm -rf dist-tilawat/functions
           fi
 
-          # Tilawat used shared fonts through ../assets while it lived under /tilawat/.
-          # On its own origin they live at /assets/fonts instead.
           mkdir -p dist-tilawat/assets/fonts
           cp -R assets/fonts/. dist-tilawat/assets/fonts/
 
-          # On a dedicated origin this app owns the whole origin, so give it a clean
-          # PWA identity instead of the old /tilawat/ identity from the shared host.
           jq '.id = "/" | .start_url = "./" | .scope = "./"' \
             dist-tilawat/manifest.webmanifest > dist-tilawat/manifest.tmp
           mv dist-tilawat/manifest.tmp dist-tilawat/manifest.webmanifest
@@ -139,31 +132,39 @@ jobs:
           HOST="$(jq -r '.result.subdomain // empty' "$PROJECT_JSON")"
           if [ -z "$HOST" ]; then HOST="${TILAWAT_PROJECT}.pages.dev"; fi
           URL="https://${HOST}"
+          RESOLVER_URL="$URL/api/resolve-source?url=https%3A%2F%2Fyaldosry.com%2Ftaraweeh%2F2841"
 
           for i in 1 2 3 4 5 6 7 8 9 10; do
             PAGE="$(mktemp)"
+            SOURCE_JSON="$(mktemp)"
+            PAGE_OK=0
+            RESOLVER_OK=0
             if curl -fsS --max-time 20 -o "$PAGE" "$URL/" && grep -q '<title>تلاوات</title>' "$PAGE"; then
-              SOURCE_JSON="$(mktemp)"
-              RESOLVER_URL="$URL/api/resolve-source?url=https%3A%2F%2Fyaldosry.com%2Ftaraweeh%2F2841"
-              curl -fsS --max-time 25 "$RESOLVER_URL" > "$SOURCE_JSON"
-              jq -e '.ok == true and (.audioUrl | type == "string") and (.audioUrl | length > 5)' "$SOURCE_JSON" >/dev/null
+              PAGE_OK=1
+            fi
+            if [ "$PAGE_OK" = "1" ] \
+               && curl -fsS --max-time 25 "$RESOLVER_URL" > "$SOURCE_JSON" \
+               && jq -e '.ok == true and (.audioUrl | type == "string") and (.audioUrl | length > 5)' "$SOURCE_JSON" >/dev/null 2>&1; then
+              RESOLVER_OK=1
+            fi
+            if [ "$RESOLVER_OK" = "1" ]; then
               AUDIO_PATH="$(jq -r '.audioUrl' "$SOURCE_JSON")"
               AUDIO_SAMPLE="$(mktemp)"
-              AUDIO_CODE="$(curl --retry 2 --retry-all-errors -sS --max-time 25 -r 0-1023 -o "$AUDIO_SAMPLE" -w "%{http_code}" "$URL$AUDIO_PATH")"
-              if [ "$AUDIO_CODE" != "200" ] && [ "$AUDIO_CODE" != "206" ]; then
-                echo "Yaldosry audio proxy returned HTTP $AUDIO_CODE"
-                exit 1
+              AUDIO_CODE="$(curl --retry 2 --retry-all-errors -sS --max-time 25 -r 0-1023 -o "$AUDIO_SAMPLE" -w "%{http_code}" "$URL$AUDIO_PATH" || true)"
+              if { [ "$AUDIO_CODE" = "200" ] || [ "$AUDIO_CODE" = "206" ]; } && [ -s "$AUDIO_SAMPLE" ]; then
+                echo "TILAWAT_HOST=${HOST}" >> "$GITHUB_ENV"
+                echo "TILAWAT_URL=${URL}" >> "$GITHUB_ENV"
+                echo "Tilawat published and verified: ${URL}"
+                echo "Yaldosry resolver and range audio proxy verified."
+                exit 0
               fi
-              test -s "$AUDIO_SAMPLE"
-              echo "TILAWAT_HOST=${HOST}" >> "$GITHUB_ENV"
-              echo "TILAWAT_URL=${URL}" >> "$GITHUB_ENV"
-              echo "Tilawat published and verified: ${URL}"
-              echo "Yaldosry resolver and range audio proxy verified."
-              exit 0
+              echo "Yaldosry audio proxy not ready yet (HTTP ${AUDIO_CODE:-none}); retrying propagation."
+            else
+              echo "Tilawat page/functions not ready on canonical host yet; retrying propagation."
             fi
             sleep 6
           done
-          echo "Tilawat production URL did not return the expected app: ${URL}"
+          echo "Tilawat production URL or resolver did not become ready: ${URL}"
           exit 1
 
       - name: Build Local app only
@@ -175,9 +176,6 @@ jobs:
           cp index.html runner.html app.js styles.css sw.js manifest.webmanifest _headers dist/
           cp -R assets js styles dist/
 
-          # The old shared /tilawat path caused Chrome to treat Tilawat as part of
-          # Local's installed PWA because Local necessarily owns scope '/'. Redirect
-          # that legacy path to Tilawat's separate origin instead.
           cat > dist/_redirects <<EOF
           /tilawat https://${TILAWAT_HOST}/ 302
           /tilawat/* https://${TILAWAT_HOST}/:splat 302

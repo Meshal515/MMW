@@ -119,7 +119,7 @@ function closePlayerAnimated(event){
   const button=event.target.closest?.('#playerClose');if(!button)return;
   const page=q('#playerPage');if(!page||page.classList.contains('hidden'))return;
   event.preventDefault();event.stopImmediatePropagation();playerClosing=true;
-  const finish=()=>{page.classList.add('hidden');document.body.style.overflow='';page.style.removeProperty('transform');page.style.removeProperty('opacity');playerClosing=false;button.focus?.()};
+  const finish=()=>{page.classList.add('hidden');document.body.style.overflow='';page.style.removeProperty('transform');page.style.removeProperty('opacity');playerClosing=false;q('#miniOpen')?.focus()};
   const g=gsap();
   if(g){g.killTweensOf(page);g.to(page,{y:24,scale:.995,opacity:0,duration:.26,ease:'power3.inOut',onComplete:finish})}
   else{const anim=page.animate?.([{transform:'none',opacity:1},{transform:'translateY(24px) scale(.995)',opacity:0}],{duration:260,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'});anim?.finished.then(finish).catch(finish)||finish()}

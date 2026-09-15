@@ -82,6 +82,7 @@ function markCurrentFromClick(target){
     currentCatalogKey='';
     addActiveCardMotion(local);
   }
+  requestAnimationFrame(syncPlayingState);
 }
 
 function animateOpen(el, cls='tilawat-enter'){
@@ -107,7 +108,7 @@ function waitAndOpenPlayer(){
     }
     if(performance.now()-started<2600) openTimer=setTimeout(tick,45);
   };
-  tick();
+  openTimer=setTimeout(tick,90);
 }
 
 function syncPlayingState(){

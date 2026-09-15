@@ -13,138 +13,51 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="تلاوات" />
-  <script>
-    (()=>{try{let t=localStorage.getItem('tilawat-theme');if(t!=='dark'&&t!=='light')t='dark';document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==='dark'?'#08090A':'#F6F2E9'}catch{}})();
-  </script>
+  <script>(()=>{try{let t=localStorage.getItem('tilawat-theme');if(t!=='dark'&&t!=='light')t='dark';document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==='dark'?'#08090A':'#F6F2E9'}catch{}})();</script>
   <link rel="preload" href="../assets/fonts/plex-ar-arabic-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./assets/covers/dossari-3.jpg" as="image" />
   <link rel="stylesheet" href="./v2.css" />
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/Flip.min.js" defer></script>
+  <link rel="stylesheet" href="./identity.css" />
+  <link rel="stylesheet" href="./v14.css" />
+  <link rel="stylesheet" href="./v15.css" />
+  <link rel="stylesheet" href="./classic.css" />
 </head>
 <body>
 <div class="app" id="app">
-  <header class="top">
-    <div class="top__inner">
-      <button class="brand" id="brand" type="button" aria-label="الرئيسية"><img src="./assets/logo.svg" alt=""><strong>تلاوات</strong></button>
-      <span class="spacer"></span>
-      <button class="round" id="themeBtn" type="button" aria-label="تغيير المظهر"><svg viewBox="0 0 24 24"><path d="M20.2 15.1A8.8 8.8 0 0 1 8.9 3.8a9 9 0 1 0 11.3 11.3Z"/></svg></button>
-      <button class="topadd" id="addBtn" type="button" aria-label="أضف تلاوة"><b>+</b><span> أضف</span></button>
-    </div>
-  </header>
+  <header class="top"><div class="top__inner"><button class="brand" id="brand" type="button" aria-label="الرئيسية"><img src="./assets/logo.svg" alt=""><strong>تلاوات</strong></button><span class="spacer"></span><button class="round" id="themeBtn" type="button" aria-label="تغيير المظهر"><svg viewBox="0 0 24 24"><path d="M20.2 15.1A8.8 8.8 0 0 1 8.9 3.8a9 9 0 1 0 11.3 11.3Z"/></svg></button><button class="topadd" id="addBtn" type="button" aria-label="أضف تلاوة"><b>+</b><span> أضف</span></button></div></header>
 
   <main class="main">
-    <section class="view" id="homeView">
-      <div class="hero">
-        <div class="hero__heading">
-          <h1 id="homeGreeting">صباح الخير</h1>
-          <p>تلاوات ياسر الدوسري، مرتبة وقريبة منك.</p>
-        </div>
-        <div class="quick-grid" id="quickGrid" aria-label="اختصارات الاستماع"></div>
-        <div class="hero__stats" id="heroStats" aria-live="polite"><span>جارٍ تجهيز المكتبة…</span></div>
-      </div>
-      <div id="homeShelves"></div>
-    </section>
+    <section class="view" id="homeView"><div class="hero"><div class="hero__heading"><h1 id="homeGreeting">صباح الخير</h1><p>تلاوات ياسر الدوسري، مرتبة وقريبة منك.</p></div><div id="lastListenedSlot"></div><div class="hero__stats" id="heroStats" aria-live="polite"><span>جارٍ تجهيز المكتبة…</span></div></div><div id="homeShelves"></div></section>
 
-    <section class="view hidden" id="searchView">
-      <div class="search-head">
-        <p class="eyebrow">ابحث في الكتالوج وأرشيفك</p>
-        <h1 class="page-title">البحث</h1>
-        <label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg><input id="searchInput" type="search" autocomplete="off" placeholder="ياسر 1425 الكهف، ماهر تراويح…"></label>
-      </div>
-      <div class="search-results" id="searchResults"></div>
-    </section>
+    <section class="view hidden" id="searchView"><div class="search-head"><p class="eyebrow">ابحث في الكتالوج ومكتبتك</p><h1 class="page-title">البحث</h1><label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg><input id="searchInput" type="search" autocomplete="off" placeholder="ياسر 1425 الكهف…"></label></div><div class="search-results" id="searchResults"></div></section>
 
-    <section class="view hidden" id="libraryView">
-      <div class="library-head"><div><p class="eyebrow">المحفوظ عندك</p><h1>مكتبتي</h1></div><span id="libraryCount"></span></div>
-      <div class="seg" id="librarySegs"><button class="on" data-seg="all">الكل</button><button data-seg="favorite">المفضلة</button><button data-seg="offline">التنزيلات</button><button data-seg="rare">النوادر</button><button data-seg="recent">الأخيرة</button></div>
-      <div class="library-grid" id="libraryGrid"></div>
-      <div class="empty hidden" id="libraryEmpty"><h2>مكتبتك جاهزة</h2><p>شغّل أي قارئ من الكتالوج، أو احفظ التسجيل عندك، أو أضف تسجيلًا نادرًا من رابط أو ملف.</p></div>
-    </section>
+    <section class="view hidden" id="libraryView"><div class="library-head"><div><p class="eyebrow">المحفوظ عندك</p><h1>مكتبتي</h1></div><div class="library-head__actions"><span id="libraryCount"></span><button class="library-edit-toggle" id="libraryEditToggle" type="button" aria-label="ترتيب السور" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button></div></div><div class="seg" id="librarySegs"><button class="on" data-seg="all">الكل</button><button data-seg="favorite">المفضلة</button><button data-seg="offline">التنزيلات</button><button data-seg="rare">النوادر</button><button data-seg="recent">الأخيرة</button></div><div class="library-grid" id="libraryGrid"></div><div class="empty hidden" id="libraryEmpty"><h2>مكتبتك جاهزة</h2><p>شغّل أي سورة من الكتالوج، أو احفظ التسجيل عندك، أو أضف تسجيلًا من رابط أو ملف.</p></div></section>
   </main>
 
-  <nav class="tabbar" aria-label="التنقل">
-    <button class="tab" data-tab="home" aria-current="page" type="button"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span>الرئيسية</span></button>
-    <button class="tab" data-tab="search" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg><span>البحث</span></button>
-    <button class="tab" data-tab="library" type="button"><svg viewBox="0 0 24 24"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/></svg><span>مكتبتي</span></button>
-  </nav>
+  <nav class="tabbar" aria-label="التنقل"><button class="tab" data-tab="home" aria-current="page" type="button"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span>الرئيسية</span></button><button class="tab" data-tab="search" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg><span>البحث</span></button><button class="tab" data-tab="library" type="button"><svg viewBox="0 0 24 24"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/></svg><span>مكتبتي</span></button></nav>
 </div>
 
-<section class="mini2 hidden" id="miniPlayer" aria-label="المشغل المصغر">
-  <img id="miniCover" alt="">
-  <button class="mini2__text" id="miniOpen" type="button"><b id="miniTitle"></b><span id="miniSub"></span></button>
-  <button class="icon" id="miniFav" type="button" aria-label="مفضلة"><svg viewBox="0 0 24 24"><path d="m12 20.5-7-6.6a4.3 4.3 0 0 1 6-6.1l1 .9 1-.9a4.3 4.3 0 0 1 6 6.1Z"/></svg></button>
-  <button class="icon play" id="miniPlay" type="button" aria-label="تشغيل"><svg id="miniPlayIcon" viewBox="0 0 24 24"></svg></button>
-</section>
+<section class="mini2 hidden" id="miniPlayer" aria-label="المشغل المصغر"><img id="miniCover" alt=""><button class="mini2__text" id="miniOpen" type="button" aria-label="فتح المشغل"><b id="miniTitle"></b><span id="miniSub"></span></button><button class="icon" id="miniFav" type="button" aria-label="المفضلة" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m12 20.5-7-6.6a4.3 4.3 0 0 1 6-6.1l1 .9 1-.9a4.3 4.3 0 0 1 6 6.1Z"/></svg></button><button class="icon play" id="miniPlay" type="button" aria-label="تشغيل أو إيقاف"><svg id="miniPlayIcon" viewBox="0 0 24 24"></svg></button><input class="mini2__seek" id="miniSeek" type="range" min="0" max="1000" value="0" aria-label="موضع التلاوة"></section>
 
-<section class="player-page hidden" id="playerPage" aria-label="صفحة الاستماع">
-  <div class="player-top"><button class="round" id="playerClose" type="button" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><span class="spacer"></span><button class="round" id="playerMore" type="button" aria-label="إدارة النسخ"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/></svg></button></div>
-  <div class="player-scroll" id="playerScroll">
-    <section class="player-hero" id="playerHero">
-      <div class="player-art" id="playerArtWrap">
-        <img id="playerCover" alt="">
-        <div class="yt-park" id="ytPark" aria-hidden="true"><div id="ytMount"></div></div>
-      </div>
-      <div class="player-meta">
-        <p class="eyebrow" id="playerKicker">قيد التشغيل</p>
-        <h1 id="playerTitle"></h1>
-        <p class="sub" id="playerSub"></p>
-        <div class="seek"><input id="seek" type="range" min="0" max="1000" value="0"><div class="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div></div>
-        <div class="transport"><button class="icon" id="prev" type="button"><svg viewBox="0 0 24 24"><path d="M5 5h2v14H5zM18 5.5 8.5 12 18 18.5z" fill="currentColor" stroke="none"/></svg></button><button class="mainplay" id="mainPlay" type="button"><svg id="mainPlayIcon" viewBox="0 0 24 24"></svg></button><button class="icon" id="next" type="button"><svg viewBox="0 0 24 24"><path d="M6 5.5 15.5 12 6 18.5zM17 5h2v14h-2z" fill="currentColor" stroke="none"/></svg></button></div>
-        <div class="player-actions"><button class="chip" id="back10" type="button">−10 ث</button><button class="chip" id="forward10" type="button">+10 ث</button><button class="chip" id="speed" type="button">1×</button><button class="chip" id="repeat" type="button">تكرار</button><button class="chip" id="sleep" type="button">مؤقت النوم</button><button class="chip" id="saveRec" type="button">حفظ بالمكتبة</button><button class="chip" id="downloadCurrent" type="button">تنزيل</button></div>
-        <div class="progressbar hidden" id="downloadProgress"><span></span></div>
-      </div>
-    </section>
-
-    <section class="player-section" id="variantsSection"><div class="player-section__head"><div><h2>نسخ أخرى من نفس التلاوة</h2><p>كل مصدر يبقى محفوظًا؛ الاختيار الذكي يحدد الافتراضي فقط.</p></div><button class="more" id="addVariantBtn" type="button">+ أضف نسخة</button></div><div class="variant-grid" id="variantGrid"></div></section>
+<section class="player-page hidden" id="playerPage" aria-label="صفحة الاستماع"><div class="player-top"><button class="round" id="playerClose" type="button" aria-label="إغلاق المشغل"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><span class="spacer"></span><button class="round" id="playerMore" type="button" aria-label="إدارة النسخ"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/></svg></button></div><div class="player-scroll" id="playerScroll"><section class="player-hero" id="playerHero"><div class="player-art" id="playerArtWrap"><img id="playerCover" alt=""><div class="yt-park" id="ytPark" aria-hidden="true"><div id="ytMount"></div></div></div><div class="player-meta"><p class="eyebrow" id="playerKicker">قيد التشغيل</p><h1 id="playerTitle"></h1><p class="sub" id="playerSub"></p><div class="seek"><input id="seek" type="range" min="0" max="1000" value="0" aria-label="موضع التلاوة"><div class="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div></div><div class="transport"><button class="icon" id="prev" type="button" aria-label="السابق"><svg viewBox="0 0 24 24"><path d="M5 5h2v14H5zM18 5.5 8.5 12 18 18.5z" fill="currentColor" stroke="none"/></svg></button><button class="mainplay" id="mainPlay" type="button" aria-label="تشغيل أو إيقاف"><svg id="mainPlayIcon" viewBox="0 0 24 24"></svg></button><button class="icon" id="next" type="button" aria-label="التالي"><svg viewBox="0 0 24 24"><path d="M6 5.5 15.5 12 6 18.5zM17 5h2v14h-2z" fill="currentColor" stroke="none"/></svg></button></div><div class="player-actions"><button class="chip" id="back10" type="button">−10 ث</button><button class="chip" id="forward10" type="button">+10 ث</button><button class="chip" id="speed" type="button">1×</button><button class="chip" id="repeat" type="button">تكرار</button><button class="chip" id="sleep" type="button">مؤقت النوم</button><button class="chip" id="saveRec" type="button">حفظ بالمكتبة</button><button class="chip" id="downloadCurrent" type="button">تنزيل</button></div><div class="progressbar hidden" id="downloadProgress"><span></span></div></div></section>
+    <section class="player-section" id="variantsSection"><div class="player-section__head"><div><h2>نسخ أخرى من نفس التلاوة</h2><p>كل مصدر يبقى محفوظًا؛ اختيارك يحدد النسخة الافتراضية.</p></div><button class="more" id="addVariantBtn" type="button">+ أضف نسخة</button></div><div class="variant-grid" id="variantGrid"></div></section>
     <section class="player-section hidden" id="visualSection"><div class="player-section__head"><div><h2>من الأرشيف المرئي</h2><p>فيديوهات ولقطات مرتبطة بنفس التسجيل.</p></div></div><div class="visual-grid" id="visualGrid"></div></section>
     <section class="player-section" id="relatedSection"><div class="player-section__head"><div><h2>قد يعجبك أيضًا</h2><p>من نفس القارئ، السنة، السورة أو المجموعة.</p></div></div><div id="relatedShelves"></div></section>
-  </div>
-</section>
+  </div></section>
 
-<section class="browse hidden" id="browsePage">
-  <div class="browse__top"><button class="round" id="browseClose" type="button"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button></div>
-  <div class="browse__inner"><div class="browse-hero"><div class="browse-monogram" id="browseMono"></div><div><p class="eyebrow" id="browseKicker"></p><h1 id="browseTitle"></h1><p id="browseMeta"></p></div></div><div id="browseBody"></div></div>
-</section>
+<section class="browse hidden" id="browsePage"><div class="browse__top"><button class="round" id="browseClose" type="button" aria-label="رجوع"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button></div><div class="browse__inner"><div class="browse-hero"><div class="browse-monogram" id="browseMono"></div><div><p class="eyebrow" id="browseKicker"></p><h1 id="browseTitle"></h1><p id="browseMeta"></p></div></div><div id="browseBody"></div></div></section>
 
-<div class="dialog hidden" id="addDialog" role="dialog" aria-modal="true">
-  <form class="sheet" id="addForm"><div class="sheet__head"><div><p class="eyebrow">Canonical Recitation</p><h2>أضف تسجيلًا</h2></div><span class="spacer"></span><button class="round" data-close="addDialog" type="button"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-    <div class="form-grid">
-      <div class="field full"><label>رابط المصدر أو الصوت</label><input id="addSource" type="url" dir="ltr" placeholder="YouTube أو MP3 أو Archive…"><span class="hint" id="sourceHint">سنحدد نوع المصدر ونأخذ ما يسمح به.</span></div>
-      <div class="field full"><label>ملف صوت من جهازك</label><input id="addFile" type="file" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac"></div>
-      <div class="field full"><label>صورة غلاف اختيارية</label><input id="addCoverFile" type="file" accept="image/*"></div>
-      <div class="field full"><label>العنوان</label><input id="addTitle" required placeholder="سورة الكهف — تراويح 1425"></div>
-      <div class="field"><label>القارئ</label><input id="addReciter" required placeholder="ياسر الدوسري"></div>
-      <div class="field"><label>السورة</label><input id="addSurah" list="surahDatalist" placeholder="الكهف"><datalist id="surahDatalist"></datalist></div>
-      <div class="field"><label>السنة الهجرية</label><input id="addYear" inputmode="numeric" placeholder="1425"></div>
-      <div class="field"><label>المصحف / المجموعة</label><input id="addCollection" placeholder="رمضان 1425"></div>
-      <div class="field"><label>المسجد</label><input id="addMosque" placeholder="المسجد…"></div>
-      <div class="field"><label>المناسبة</label><input id="addOccasion" placeholder="تراويح / قيام / فرض"></div>
-      <div class="field full"><label>وسوم</label><input id="addTags" placeholder="نادرة، منقحة، من الشريط"></div>
-      <div class="field full"><div class="checks"><label class="check"><input id="addRare" type="checkbox"> تسجيل نادر</label><label class="check"><input id="addOriginal" type="checkbox"> نسخة أصلية</label><label class="check"><input id="addRestored" type="checkbox"> منقحة / مستعادة</label></div></div>
-    </div>
-    <div class="sheet__foot"><button class="btn" data-close="addDialog" type="button">إلغاء</button><button class="btn primary wide" type="submit">حفظ التسجيل</button></div>
-  </form>
-</div>
+<div class="dialog hidden" id="addDialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"><form class="sheet" id="addForm"><div class="sheet__head"><div><p class="eyebrow">تسجيل جديد</p><h2 id="addDialogTitle">أضف تسجيلًا</h2></div><span class="spacer"></span><button class="round" data-close="addDialog" type="button" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="form-grid">
+  <div class="field full"><label>رابط المصدر أو الصوت</label><input id="addSource" type="url" dir="ltr" placeholder="YouTube أو MP3 أو صفحة ياسر الدوسري…"><span class="hint" id="sourceHint">سنحدد نوع المصدر ونأخذ ما يسمح به.</span></div>
+  <div class="field full"><label>ملف صوت من جهازك</label><input id="addFile" type="file" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac"></div>
+  <div class="field full"><label>صورة غلاف من جهازك — اختيارية</label><input id="addCoverFile" type="file" accept="image/*"></div>
+  <div class="field full cover-picker"><div class="cover-picker__preview"><img id="addCoverPreview" src="./assets/covers/fallback-1.jpg" data-fallback="./assets/covers/fallback-1.jpg" alt="معاينة الغلاف"></div><div class="cover-picker__options"><b>الغلاف</b><label><input id="coverModeYoutube" name="addCoverMode" type="radio" value="youtube" disabled> ثامنيل YouTube</label><label><input id="coverModeLocal" name="addCoverMode" type="radio" value="local" checked> صورة تلاوات المحلية</label><label><input id="coverModeUpload" name="addCoverMode" type="radio" value="upload" disabled> الصورة التي اخترتها من الجهاز</label><small>لو اخترت ثامنيل YouTube وتعذر تحميله بدون إنترنت، يرجع التطبيق تلقائيًا للصورة المحلية.</small></div></div>
+  <div class="field full"><label>العنوان</label><input id="addTitle" required placeholder="سورة الكهف — تراويح 1425"></div><div class="field"><label>القارئ</label><input id="addReciter" required placeholder="ياسر الدوسري"></div><div class="field"><label>السورة</label><input id="addSurah" list="surahDatalist" placeholder="الكهف"><datalist id="surahDatalist"></datalist></div><div class="field"><label>السنة الهجرية</label><input id="addYear" inputmode="numeric" placeholder="1425"></div><div class="field"><label>المصحف / المجموعة</label><input id="addCollection" placeholder="رمضان 1425"></div><div class="field"><label>المسجد</label><input id="addMosque" placeholder="المسجد…"></div><div class="field"><label>المناسبة</label><input id="addOccasion" placeholder="تراويح / قيام / فرض"></div><div class="field full"><label>وسوم</label><input id="addTags" placeholder="نادرة، منقحة، من الشريط"></div><div class="field full"><div class="checks"><label class="check"><input id="addRare" type="checkbox"> تسجيل نادر</label><label class="check"><input id="addOriginal" type="checkbox"> نسخة أصلية</label><label class="check"><input id="addRestored" type="checkbox"> منقحة / مستعادة</label></div></div>
+</div><div class="sheet__foot"><button class="btn" data-close="addDialog" type="button">إلغاء</button><button class="btn primary wide" type="submit">حفظ التسجيل</button></div></form></div>
 
-<div class="dialog hidden" id="variantDialog" role="dialog" aria-modal="true">
-  <form class="sheet" id="variantForm"><div class="sheet__head"><div><p class="eyebrow">Variant / Source</p><h2>أضف نسخة أخرى</h2></div><span class="spacer"></span><button class="round" data-close="variantDialog" type="button"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-    <div class="form-grid">
-      <div class="field full"><label>رابط المصدر أو ملف الصوت المباشر</label><input id="variantSource" type="url" dir="ltr" placeholder="https://…"></div>
-      <div class="field full"><label>ملف محلي اختياري</label><input id="variantFile" type="file" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac"></div>
-      <div class="field"><label>المصدر</label><input id="variantProvider" placeholder="Archive / Mazameer / SoundCloud"></div>
-      <div class="field"><label>وصف الجودة</label><input id="variantQuality" placeholder="HQ / منقحة / من الشريط الأصلي"></div>
-      <div class="field"><label>Bitrate</label><input id="variantBitrate" type="number" inputmode="numeric" placeholder="320"></div>
-      <div class="field"><label>Codec</label><input id="variantCodec" placeholder="MP3 / FLAC"></div>
-      <div class="field full"><div class="checks"><label class="check"><input id="variantOriginal" type="checkbox"> أصلية</label><label class="check"><input id="variantRestored" type="checkbox"> منقحة</label><label class="check"><input id="variantCorrected" type="checkbox"> مصححة</label><label class="check"><input id="variantRare" type="checkbox"> نادرة</label></div></div>
-    </div>
-    <div class="sheet__foot"><button class="btn" data-close="variantDialog" type="button">إلغاء</button><button class="btn primary wide" type="submit">إضافة النسخة</button></div>
-  </form>
-</div>
+<div class="dialog hidden" id="variantDialog" role="dialog" aria-modal="true" aria-labelledby="variantDialogTitle"><form class="sheet" id="variantForm"><div class="sheet__head"><div><p class="eyebrow">نسخة / مصدر</p><h2 id="variantDialogTitle">أضف نسخة أخرى</h2></div><span class="spacer"></span><button class="round" data-close="variantDialog" type="button" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="form-grid"><div class="field full"><label>رابط المصدر أو ملف الصوت المباشر</label><input id="variantSource" type="url" dir="ltr" placeholder="https://…"><span class="hint" id="variantSourceHint">يمكنك إضافة YouTube أو MP3 أو صفحة تلاوة من موقع ياسر الدوسري.</span></div><div class="field full"><label>ملف محلي اختياري</label><input id="variantFile" type="file" accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac"></div><div class="field"><label>المصدر</label><input id="variantProvider" placeholder="Archive / Mazameer / SoundCloud"></div><div class="field"><label>وصف الجودة</label><input id="variantQuality" placeholder="HQ / منقحة / من الشريط الأصلي"></div><div class="field"><label>Bitrate</label><input id="variantBitrate" type="number" inputmode="numeric" placeholder="320"></div><div class="field"><label>Codec</label><input id="variantCodec" placeholder="MP3 / FLAC"></div><div class="field full"><div class="checks"><label class="check"><input id="variantOriginal" type="checkbox"> أصلية</label><label class="check"><input id="variantRestored" type="checkbox"> منقحة</label><label class="check"><input id="variantCorrected" type="checkbox"> مصححة</label><label class="check"><input id="variantRare" type="checkbox"> نادرة</label></div></div></div><div class="sheet__foot"><button class="btn" data-close="variantDialog" type="button">إلغاء</button><button class="btn primary wide" type="submit">إضافة النسخة</button></div></form></div>
 
-<div class="toast2" id="toast"></div>
-<audio id="audioEngine" preload="metadata" playsinline></audio>
+<div class="toast2" id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/v2.js"></script>
 </body>
 </html>

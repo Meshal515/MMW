@@ -37,9 +37,9 @@ function loadScript(src,key){
 async function ensureGsap(){
   if(REDUCED())return false;
   try{
-    if(!window.gsap)await loadScript('https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js','gsap');
-    if(!window.ScrollTrigger)await loadScript('https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js','scroll-trigger');
-    if(!window.Flip)await loadScript('https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/Flip.min.js','flip');
+    if(!window.gsap)await loadScript('./vendor/gsap/gsap.min.js','gsap');
+    if(!window.ScrollTrigger)await loadScript('./vendor/gsap/ScrollTrigger.min.js','scroll-trigger');
+    if(!window.Flip)await loadScript('./vendor/gsap/Flip.min.js','flip');
     if(window.gsap&&window.ScrollTrigger)window.gsap.registerPlugin(window.ScrollTrigger);
     if(window.gsap&&window.Flip)window.gsap.registerPlugin(window.Flip);
     gsapReady=!!window.gsap;

@@ -1,4 +1,8 @@
 const ALLOWED_PAGE_HOSTS = new Set(['yaldosry.com','www.yaldosry.com']);
+const ALLOWED_AUDIO_HOSTS = new Set([
+  'tilawatalharamain1.com','www.tilawatalharamain1.com',
+  'yaldosry.com','www.yaldosry.com'
+]);
 const AUDIO_EXT = /\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(?:[?#]|$)/i;
 
 function json(data,status=200){
@@ -17,10 +21,29 @@ function firstMatch(html, patterns){
   }
   return '';
 }
+function collectMatches(html,patterns,limit=24){
+  const out=[];
+  const seen=new Set();
+  for(const pattern of patterns){
+    const flags=pattern.flags.includes('g')?pattern.flags:`${pattern.flags}g`;
+    const re=new RegExp(pattern.source,flags);
+    let match;
+    while((match=re.exec(html))){
+      const value=decodeEntities((match[1]||'').trim());
+      if(value&&!seen.has(value)){
+        seen.add(value);
+        out.push(value);
+        if(out.length>=limit)return out;
+      }
+      if(match[0]==='')re.lastIndex++;
+    }
+  }
+  return out;
+}
 function safeAbsolute(candidate,base){
   try{
     const u=new URL(candidate,base);
-    if(!/^https?:$/.test(u.protocol)||!AUDIO_EXT.test(u.href)) return '';
+    if(!/^https?:$/.test(u.protocol)||!AUDIO_EXT.test(u.href)||!ALLOWED_AUDIO_HOSTS.has(u.hostname)) return '';
     return u.href;
   }catch{return ''}
 }
@@ -40,16 +63,18 @@ export async function onRequestGet({request}){
   if(!upstream.ok) return json({ok:false,error:'source-http-'+upstream.status},502);
   const type=upstream.headers.get('content-type')||'';
   if(!type.includes('text/html')) return json({ok:false,error:'not-html'},422);
+  const size=Number(upstream.headers.get('content-length')||0);
+  if(size>2_000_000) return json({ok:false,error:'page-too-large'},413);
   const html=await upstream.text();
   if(html.length>2_000_000) return json({ok:false,error:'page-too-large'},413);
 
-  const candidate=firstMatch(html,[
+  const candidates=collectMatches(html,[
     /<audio\b[^>]*\bsrc=["']([^"']+)["']/i,
     /<source\b[^>]*\bsrc=["']([^"']+\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)[^"']*)["']/i,
     /href=["']([^"']+\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)[^"']*)["'][^>]*>[^<]*(?:MP3|تحميل)/i,
     /(https?:\/\/[^\s"'<>]+\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(?:\?[^\s"'<>]*)?)/i
   ]);
-  const directAudioUrl=safeAbsolute(candidate,page.href);
+  const directAudioUrl=candidates.map(candidate=>safeAbsolute(candidate,page.href)).find(Boolean)||'';
   if(!directAudioUrl) return json({ok:false,error:'audio-not-found'},404);
 
   const h1=firstMatch(html,[/<h1\b[^>]*>([\s\S]*?)<\/h1>/i]);

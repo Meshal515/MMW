@@ -1,5 +1,5 @@
 /* Tilawat Yasser-only app shell. Audio stays native/IndexedDB; Range requests are never intercepted. */
-const VERSION='tilawat-v8';
+const VERSION='tilawat-v9';
 const SHELL=`${VERSION}-shell`;
 const SCOPE=new URL('./',self.location).pathname;
 const PRECACHE=[
@@ -34,7 +34,6 @@ self.addEventListener('fetch',event=>{
     })());return;
   }
 
-  // No remote artwork: old YouTube thumbnails resolve to the bundled Quran fallback.
   if(url.hostname==='i.ytimg.com'){
     event.respondWith((async()=>{
       const c=await caches.open(SHELL);

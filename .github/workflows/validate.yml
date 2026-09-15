@@ -30,6 +30,7 @@ jobs:
           node --check tilawat/js/reorder.js
           node --check tilawat/js/v2.js
           node --check tilawat/js/classic-ui.js
+          node --check tilawat/js/codex-v16-qa.js
           node --check tilawat/js/codex-ui-recovery.js
           node --check tilawat/js/app-logic.js
           node --check tilawat/js/catalog/core.js
@@ -54,7 +55,7 @@ jobs:
                     'tilawat/styles.css','tilawat/sw.js','tilawat/assets/logo.svg',
                     'tilawat/assets/icon-192.png','tilawat/assets/icon-512.png',
                     'tilawat/js/covers.js','tilawat/js/reorder.js','tilawat/js/app-logic.js',
-                    'tilawat/js/codex-ui-recovery.js','tilawat/codex-ui-recovery.css',
+                    'tilawat/js/codex-v16-qa.js','tilawat/js/codex-ui-recovery.js','tilawat/codex-ui-recovery.css',
                     'tilawat/functions/api/resolve-source.js','tilawat/functions/api/yaldosry-audio.js',
                     'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg',
                     'tilawat/tests/logic.test.mjs','tilawat/package.json']

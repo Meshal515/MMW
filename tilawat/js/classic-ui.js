@@ -1,6 +1,6 @@
 import { allTracks, putTrack } from './store.js';
 import { portableTrack, sanitizeImportedTrack } from './app-logic.js';
-import './player-ux-v22.js';
+import './interaction-v28.js';
 import './codex-ui-recovery.js';
 
 const $=s=>document.querySelector(s);

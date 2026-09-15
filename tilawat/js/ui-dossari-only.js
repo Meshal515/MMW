@@ -8,8 +8,7 @@ export const DOSSARI_IMAGES = [
   './assets/covers/dossari-1.jpg',
   './assets/covers/dossari-2.jpg',
   './assets/covers/dossari-3.jpg',
-  './assets/covers/dossari-4.jpg',
-  './assets/covers/dossari-5.jpg'
+  './assets/covers/dossari-4.jpg'
 ];
 
 export const FALLBACK_IMAGES = [

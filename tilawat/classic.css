@@ -1,6 +1,7 @@
 .classic-settings-btn svg{width:21px;height:21px}
-.classic-settings{position:fixed;inset:0;z-index:220;background:var(--bg);color:var(--ink);opacity:0;transform:translateY(12px);transition:opacity .2s ease,transform .2s ease;display:flex;flex-direction:column}
-.classic-settings.open{opacity:1;transform:none}
+.classic-settings{position:fixed;inset:0;z-index:220;background-color:var(--bg)!important;color:var(--ink);opacity:0;visibility:hidden;pointer-events:none;isolation:isolate;transform:translateY(18px) scale(.995);transition:opacity .18s ease,transform .3s cubic-bezier(.16,1,.3,1),visibility 0s linear .3s;display:flex;flex-direction:column;will-change:transform,opacity}
+.classic-settings::before{content:'';position:absolute;z-index:-1;inset:0;background:var(--bg);pointer-events:none}
+.classic-settings.open{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition-delay:0s}
 .classic-settings[hidden]{display:none!important}
 .classic-settings__top{height:calc(68px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0;display:flex;align-items:center;gap:13px;border-bottom:1px solid var(--line)}
 .classic-settings__top h1{margin:0;font-size:25px;letter-spacing:-.025em}
@@ -12,4 +13,3 @@
 .classic-row{width:100%;min-height:70px;display:flex;align-items:center;gap:14px;padding:13px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;color:inherit;text-align:right}
 .classic-row:last-child{border-bottom:0}.classic-row>span{min-width:0;flex:1}.classic-row b{display:block;font-size:14px}.classic-row small{display:block;color:var(--muted);font-size:11px;line-height:1.55;margin-top:2px}.classic-row em{font-style:normal;color:var(--accent);font-size:12px}
 .classic-toast{position:fixed;z-index:3000;bottom:calc(104px + env(safe-area-inset-bottom));left:50%;transform:translate(-50%,12px);background:#f5f5f5;color:#121212;padding:10px 15px;border-radius:9px;font-size:12px;opacity:0;transition:.18s;pointer-events:none;max-width:88vw;text-align:center}.classic-toast.on{opacity:1;transform:translate(-50%,0)}
-

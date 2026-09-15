@@ -1,4 +1,4 @@
-const VERSION='tilawat-v25';
+const VERSION='tilawat-v26';
 const SHELL=`${VERSION}-shell`;
 const PRECACHE=[
   './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./codex-ui-recovery.css','./manifest.webmanifest',
@@ -7,7 +7,7 @@ const PRECACHE=[
   './vendor/gsap/gsap.min.js','./vendor/gsap/ScrollTrigger.min.js','./vendor/gsap/Flip.min.js',
   './assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg',
-  './assets/covers/dossari-4.jpg','./assets/covers/dossari-5.jpg',
+  './assets/covers/dossari-4.jpg',
   './assets/covers/fallback-1.jpg','./assets/covers/fallback-2.jpg','./assets/covers/fallback-3.jpg'
 ];
 

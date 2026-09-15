@@ -1,8 +1,8 @@
-const VERSION='tilawat-v21';
+const VERSION='tilawat-v22';
 const SHELL=`${VERSION}-shell`;
 const PRECACHE=[
   './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./codex-ui-recovery.css','./manifest.webmanifest',
-  './js/v2.js','./js/player.js','./js/store.js','./js/app-logic.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/mini-player-gestures.js','./js/codex-ui-recovery.js','./js/reorder.js',
+  './js/v2.js','./js/player.js','./js/store.js','./js/app-logic.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/player-ux-v22.js','./js/codex-ui-recovery.js','./js/reorder.js',
   './js/catalog/core.js','./js/catalog/mp3quran.js',
   './assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg',

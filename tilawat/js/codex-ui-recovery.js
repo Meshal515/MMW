@@ -73,8 +73,8 @@ function revealSurface(el){
   const horizontal=el.matches('.browse');
   window.gsap.killTweensOf(target);
   window.gsap.fromTo(target,
-    {autoAlpha:0,y:horizontal?0:18,x:horizontal?-14:0,scale:el.matches('.dialog')?.985:1},
-    {autoAlpha:1,y:0,x:0,scale:1,duration:el.matches('.player-page')?.42:.30,ease:'power3.out',clearProps:'opacity,visibility,transform'}
+    {autoAlpha:0,y:horizontal?0:18,x:horizontal?-14:0,scale:el.matches('.dialog') ? .985 : 1},
+    {autoAlpha:1,y:0,x:0,scale:1,duration:el.matches('.player-page') ? .42 : .30,ease:'power3.out',clearProps:'opacity,visibility,transform'}
   );
   if(el.matches('.player-page'))animatePlayerHero();
 }

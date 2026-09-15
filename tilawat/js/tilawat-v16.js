@@ -2,6 +2,8 @@ const $=(s,r=document)=>r.querySelector(s);
 
 const AUDIO_EXT=/\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(?:[?#]|$)/i;
 const YOUTUBE_HOST=/(?:^|\.)(?:youtube\.com|youtube-nocookie\.com|youtu\.be)$/i;
+const LAST_KEY='tilawat-last-listened-v15';
+const RESOLVERS=['/api/resolve','https://tilawat-catalog.ngm-309.workers.dev/api/resolve'];
 let seek=null;
 let valueDescriptor=null;
 let seekDragging=false;
@@ -128,41 +130,76 @@ function isPageLike(url=''){
   return true;
 }
 async function resolveAudioPage(url){
-  const response=await fetch(`/api/resolve?url=${encodeURIComponent(url)}`,{headers:{accept:'application/json'},cache:'no-store'});
-  const data=await response.json().catch(()=>null);
-  if(!response.ok||!data?.ok)throw new Error(data?.reason||`resolve-${response.status}`);
-  const audio=Array.isArray(data.audio)?data.audio.find(item=>item&&AUDIO_EXT.test(item.url||'')):null;
-  return audio?.url||'';
+  let lastError=null;
+  for(const base of RESOLVERS){
+    try{
+      const endpoint=`${base}?url=${encodeURIComponent(url)}`;
+      const response=await fetch(endpoint,{headers:{accept:'application/json'},cache:'no-store'});
+      const data=await response.json().catch(()=>null);
+      if(!response.ok||!data?.ok)throw new Error(data?.reason||`resolve-${response.status}`);
+      const audio=Array.isArray(data.audio)?data.audio.find(item=>item&&AUDIO_EXT.test(item.url||'')):null;
+      if(audio?.url)return audio.url;
+      lastError=new Error('no-audio');
+    }catch(error){lastError=error}
+  }
+  if(lastError)throw lastError;
+  return'';
 }
-function notifyResolve(message){const hint=$('#sourceHint');if(hint)hint.textContent=message}
+function resolverMessage(config,message){
+  if(config.hint){const hint=$(config.hint);if(hint)hint.textContent=message;return}
+  let hint=$(`${config.source}+ .tilawat-resolver-hint`);
+  if(!hint){const source=$(config.source);if(!source)return;hint=document.createElement('span');hint.className='hint tilawat-resolver-hint';source.insertAdjacentElement('afterend',hint)}
+  hint.textContent=message;
+}
+function sourceHost(url=''){try{return new URL(url).hostname.replace(/^www\./,'')}catch{return''}}
 function installPageResolver(){
-  const form=$('#addForm'),source=$('#addSource');if(!form||!source||form.dataset.tilawatResolver==='1')return;
-  form.dataset.tilawatResolver='1';
-  source.addEventListener('change',()=>{
-    const value=source.value.trim();
-    if(isPageLike(value))notifyResolve('رابط صفحة — سنستخرج ملف الصوت المباشر منها عند الإضافة.');
-  });
+  const configs=[
+    {form:'#addForm',source:'#addSource',hint:'#sourceHint'},
+    {form:'#variantForm',source:'#variantSource',provider:'#variantProvider'}
+  ];
+  for(const config of configs){
+    const form=$(config.form),source=$(config.source);if(!form||!source)continue;
+    source.addEventListener('change',()=>{if(isPageLike(source.value.trim()))resolverMessage(config,'رابط صفحة — سنستخرج ملف الصوت المباشر منها عند الإضافة.')});
+  }
   document.addEventListener('submit',async event=>{
-    if(event.target!==form||event.__tilawatResolved)return;
-    const original=source.value.trim();
-    if(!isPageLike(original))return;
+    if(event.__tilawatResolved)return;
+    const config=configs.find(item=>event.target===$(item.form));if(!config)return;
+    const form=$(config.form),source=$(config.source);if(!form||!source)return;
+    const original=source.value.trim();if(!isPageLike(original))return;
     event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();
-    notifyResolve('جارٍ استخراج ملف الصوت من صفحة المصدر…');
+    resolverMessage(config,'جارٍ استخراج ملف الصوت من صفحة المصدر…');
     try{
       const audio=await resolveAudioPage(original);
-      if(!audio){notifyResolve('لم نجد ملفًا صوتيًا مباشرًا داخل الصفحة.');return}
-      source.value=audio;
-      source.dataset.resolvedFrom=original;
-      notifyResolve('تم العثور على ملف الصوت المباشر — سيعمل داخل تلاوات.');
+      if(!audio){resolverMessage(config,'لم نجد ملفًا صوتيًا مباشرًا داخل الصفحة.');return}
+      source.value=audio;source.dataset.resolvedFrom=original;
+      if(config.provider&&/^(?:www\.)?yaldosry\.com$/i.test(sourceHost(original))&&!$(config.provider).value.trim())$(config.provider).value='yaldosry';
+      resolverMessage(config,'تم العثور على ملف الصوت المباشر — سيعمل داخل تلاوات.');
       const retry=new SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:event.submitter||undefined});
-      retry.__tilawatResolved=true;
-      form.dispatchEvent(retry);
+      retry.__tilawatResolved=true;form.dispatchEvent(retry);
     }catch(err){
       console.warn('Tilawat page resolver failed',err);
-      notifyResolve('تعذر استخراج الصوت من هذه الصفحة. جرّب رابط MP3 المباشر أو ملفًا من جهازك.');
+      resolverMessage(config,'تعذر استخراج الصوت من هذه الصفحة. جرّب رابط MP3 المباشر أو ملفًا من جهازك.');
     }
   },true);
 }
 
-function boot(){installStableSeek();installPageResolver()}
+function readStoredLast(){try{return JSON.parse(localStorage.getItem(LAST_KEY)||'null')}catch{return null}}
+function esc(value=''){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function enforceStoredLast(){
+  const data=readStoredLast(),card=$('#lastListenedCard');if(!data||!card)return;
+  const expected=data.type==='catalog'?data.key:data.key;
+  const current=data.type==='catalog'?card.dataset.catalogPlay:card.dataset.play;
+  const title=$('.last-listened-card__text b',card)?.textContent||'';
+  if(current===expected&&title===(data.title||'آخر تلاوة'))return;
+  card.removeAttribute('data-play');card.removeAttribute('data-catalog-play');
+  if(data.type==='catalog')card.dataset.catalogPlay=data.key;else card.dataset.play=data.key;
+  card.innerHTML=`<span class="last-listened-card__art"><img src="${esc(data.cover||'')}" alt=""></span><span class="last-listened-card__text"><span class="last-listened-card__label">آخر سورة سمعتها</span><b>${esc(data.title||'آخر تلاوة')}</b><small>${esc(data.sub||'تابع من حيث توقفت')}</small></span><span class="last-listened-card__play" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5 19 12 7 19.5z"/></svg></span>`;
+}
+function installLastListenedGuard(){
+  const shelves=$('#homeShelves');
+  if(shelves)new MutationObserver(()=>requestAnimationFrame(enforceStoredLast)).observe(shelves,{subtree:true,childList:true});
+  requestAnimationFrame(enforceStoredLast);
+}
+
+function boot(){installStableSeek();installPageResolver();installLastListenedGuard()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

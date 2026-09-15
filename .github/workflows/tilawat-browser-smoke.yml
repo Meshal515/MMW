@@ -23,7 +23,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test production startup
         run: |
-          cat > /tmp/smoke.mjs <<'EOF'
+          cat > smoke.mjs <<'EOF'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless:true});
           const page = await browser.newPage();
@@ -44,4 +44,4 @@ jobs:
           await browser.close();
           if(!state.hero || /جار.*تجهيز/.test(state.hero) || !state.shelves || errors.length) process.exit(1);
           EOF
-          node /tmp/smoke.mjs
+          node smoke.mjs

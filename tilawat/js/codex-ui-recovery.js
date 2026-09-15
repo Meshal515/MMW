@@ -1,5 +1,3 @@
-import './card-open-original.js';
-
 const STYLE_URL='./codex-ui-recovery.css';
 const REDUCED=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const q=(s,r=document)=>r.querySelector(s);

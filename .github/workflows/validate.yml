@@ -48,12 +48,15 @@ jobs:
           node --check tilawat/js/interaction-v28.js
           node --check tilawat/js/favorites.js
           node --check tilawat/js/motion-system.js
+          node --check tilawat/js/multipart-state.js
+          node --check tilawat/js/multipart-ui.js
           node --check tilawat/js/app-logic.js
           node --check tilawat/js/catalog/core.js
           node --check tilawat/js/catalog/mp3quran.js
           node --check tilawat/functions/api/resolve-source.js
           node --check tilawat/functions/api/yaldosry-audio.js
           node --check tilawat/tests/browser-regression.mjs
+          node --check tilawat/tests/multipart-regression.mjs
           node --check tilawat/tests/visual-audit.mjs
       - name: Run Tilawat behavior tests
         working-directory: tilawat
@@ -73,6 +76,7 @@ jobs:
             sleep 1
           done
           node tilawat/tests/browser-regression.mjs
+          node tilawat/tests/multipart-regression.mjs
           node tilawat/tests/visual-audit.mjs
       - name: Upload Tilawat visual QA artifacts
         if: always()
@@ -99,10 +103,12 @@ jobs:
                     'tilawat/js/interaction-v28.js','tilawat/interaction-v28.css',
                     'tilawat/js/favorites.js','tilawat/favorites.css',
                     'tilawat/js/motion-system.js','tilawat/motion-system.css',
+                    'tilawat/js/multipart-state.js','tilawat/js/multipart-ui.js','tilawat/multipart.css',
                     'tilawat/functions/api/resolve-source.js','tilawat/functions/api/yaldosry-audio.js',
                     'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg',
                     'tilawat/tests/logic.test.mjs','tilawat/tests/backend-source.test.mjs',
-                    'tilawat/tests/browser-regression.mjs','tilawat/tests/visual-audit.mjs','tilawat/package.json']
+                    'tilawat/tests/browser-regression.mjs','tilawat/tests/multipart-regression.mjs',
+                    'tilawat/tests/visual-audit.mjs','tilawat/package.json']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

@@ -1,5 +1,6 @@
 import { allTracks, putTrack } from './store.js';
 import { portableTrack, sanitizeImportedTrack } from './app-logic.js';
+import './codex-ui-recovery.js';
 
 const $=s=>document.querySelector(s);
 /* v2 currently asks getElementById('.tabbar'); expose the already-rendered nav

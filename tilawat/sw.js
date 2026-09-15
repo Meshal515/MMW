@@ -1,4 +1,4 @@
-const VERSION='tilawat-v17';
+const VERSION='tilawat-v18';
 const SHELL=`${VERSION}-shell`;
 const PRECACHE=[
   './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./manifest.webmanifest',

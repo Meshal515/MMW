@@ -75,10 +75,9 @@ export function detectSource(url='') {
   const host=u.hostname.replace(/^www\./,'');
   const explicitAudio=/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(\?|#|$)/i.test(u.href);
   const provider=host.includes('archive.org')?'archive':host.includes('soundcloud.com')?'soundcloud':host.includes('islamway.net')?'islamway':host.includes('quranicaudio.com')?'quranicaudio':host.includes('tvquran.com')?'tvquran':host.includes('assabile.com')?'assabile':host.includes('mazameer.com')?'mazameer':'generic';
-  // Important: many real audio/CDN links have no .mp3 suffix. Treat every normal
-  // http(s) URL as a playback candidate and let the native audio element follow
-  // redirects/content-type. If it is a webpage, playback fails in-app; we never
-  // send the user to that site just because they pressed Play.
+  // Many real audio/CDN links have no .mp3 suffix. Treat every normal http(s)
+  // URL as a playback candidate and let the native audio element follow redirects
+  // and inspect the returned media. A webpage simply fails inside the player.
   return {type:explicitAudio?'audio':'link',provider,sourceUrl:u.href,audioUrl:u.href,downloadable:explicitAudio,playbackCandidate:true};
 }
 
@@ -124,6 +123,18 @@ export function migrateTrack(raw={}) {
     cover:raw.cover||'', coverKey:raw.coverKey||'', sourceThumbnail:raw.sourceThumbnail||raw.thumb||'', gallery:Array.isArray(raw.gallery)?raw.gallery:[],
     addedAt:Number(raw.addedAt||Date.now()), lastPlayedAt:Number(raw.lastPlayedAt||0), lastPosition:Number(raw.lastPosition||0), playCount:Number(raw.playCount||0)
   };
+
+  // Older saved entries may have only sourceUrl. Upgrade them on load so pressing
+  // Play stays inside Tilawat and the native audio engine gets a chance to handle
+  // extensionless/redirecting media URLs. Explicit source buttons can still open
+  // the original page, but ordinary playback never needs that navigation path.
+  rec.variants=rec.variants.map(v=>{
+    if(v.localAudioKey||v.audioUrl||!v.sourceUrl) return v;
+    const detected=detectSource(v.sourceUrl);
+    if(!detected?.audioUrl) return v;
+    return normalizeVariant({...v,audioUrl:detected.audioUrl,downloadable:v.downloadable});
+  });
+
   if(!rec.variants.length){
     if(raw.localAudioKey||raw.blobKey) rec.variants.push(normalizeVariant({provider:'local',localAudioKey:raw.localAudioKey||raw.blobKey,qualityLabel:raw.localOrigin==='download'?'نسخة منزلة':'ملف الجهاز',original:true,downloadable:true}));
     if(raw.audioUrl||(raw.kind==='url'&&raw.src)) rec.variants.push(normalizeVariant({provider:'generic',audioUrl:raw.audioUrl||raw.src,sourceUrl:raw.audioUrl||raw.src,qualityLabel:'صوت مباشر',downloadable:true}));
@@ -151,6 +162,6 @@ export function makeCover({surah='',surahNumber=0,reciter='',year='',seed='' }={
   const sub=surah ? [reciter,year?year+'هـ':''].filter(Boolean).join(' · ') : (year?year+'هـ':'مكتبة قرآنية');
   const n=surahNumber||Math.max(1,SURAHS.indexOf(surah)+1)||1;
   const safe=x=>String(x).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800"><defs><radialGradient id="g" cx="75%" cy="0%"><stop offset="0" stop-color="#3b2d20"/><stop offset=".45" stop-color="#171513"/><stop offset="1" stop-color="#090a0b"/></radialGradient><pattern id="p" width="80" height="80" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 40h80M40 0v80" stroke="#d7a45f" stroke-opacity=".08" stroke-width="1"/></pattern></defs><rect width="800" height="800" rx="44" fill="url(#g)"/><rect width="800" height="800" rx="44" fill="url(#p)"/><rect x="52" y="52" width="696" height="696" rx="30" fill="none" stroke="#d7a45f" stroke-opacity=".22"/><circle cx="400" cy="290" r="112" fill="none" stroke="#d7a45f" stroke-opacity=".18"/><text x="400" y="310" text-anchor="middle" font-size="86" font-family="serif" fill="#f5f2ec">${safe(title)}</text><text x="400" y="432" text-anchor="middle" font-size="26" font-family="sans-serif" fill="#d7a45f">${safe(sub)}</text><text x="400" y="650" text-anchor="middle" font-size="22" font-family="sans-serif" fill="#8f8b84">${String(n).padStart(3,'0')}</text></svg>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800"><defs><radialGradient id="g" cx="75%" cy="0%"><stop offset="0" stop-color="#3b2d20"/><stop offset=".45" stop-color="#171513"/><stop offset="1" stop-color="#090a0b"/></radialGradient><pattern id="p" width="80" height="80" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 40h80M40 0v80" stroke="#d7a45f" stroke-opacity=".08" stroke-width="1"/></pattern></defs><rect width="800" height="800" rx="44" fill="url(#g"/><rect width="800" height="800" rx="44" fill="url(#p)"/><rect x="52" y="52" width="696" height="696" rx="30" fill="none" stroke="#d7a45f" stroke-opacity=".22"/><circle cx="400" cy="290" r="112" fill="none" stroke="#d7a45f" stroke-opacity=".18"/><text x="400" y="310" text-anchor="middle" font-size="86" font-family="serif" fill="#f5f2ec">${safe(title)}</text><text x="400" y="432" text-anchor="middle" font-size="26" font-family="sans-serif" fill="#d7a45f">${safe(sub)}</text><text x="400" y="650" text-anchor="middle" font-size="22" font-family="sans-serif" fill="#8f8b84">${String(n).padStart(3,'0')}</text></svg>`;
   return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }

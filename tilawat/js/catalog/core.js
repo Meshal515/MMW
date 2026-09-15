@@ -94,9 +94,12 @@ export function variantScore(v={}) {
 export function resolveVariant(rec) {
   const vs=(rec.variants||[]).filter(Boolean);
   if(!vs.length) return null;
+  if(rec.preferredVariantId){
+    const preferred=vs.find(v=>v.id===rec.preferredVariantId);
+    if(preferred) return preferred;
+  }
   const local=vs.find(v=>v.localAudioKey); if(local) return local;
-  if(rec.preferredVariantId){ const p=vs.find(v=>v.id===rec.preferredVariantId); if(p) return p; }
-  return vs.filter(v=>v.audioUrl||v.localAudioKey).sort((a,b)=>variantScore(b)-variantScore(a))[0] || vs[0];
+  return vs.filter(v=>v.audioUrl||v.localAudioKey||v.provider==='youtube'||youtubeId(v.sourceUrl||v.videoUrl||'')).sort((a,b)=>variantScore(b)-variantScore(a))[0] || vs[0];
 }
 
 const vid = () => 'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -115,7 +118,7 @@ export function migrateTrack(raw={}) {
     title:raw.title||'', reciter:raw.reciter||'', surah:raw.surah||'', year:String(raw.year||''), collection:raw.collection||'', mosque:raw.mosque||'', occasion:raw.occasion||'', recordingDate:raw.recordingDate||'',
     tags:Array.isArray(raw.tags)?raw.tags:[], playlists:Array.isArray(raw.playlists)?raw.playlists:[], rare:!!raw.rare, favorite:!!raw.favorite,
     preferredVariantId:raw.preferredVariantId||'', variants:Array.isArray(raw.variants)?raw.variants.map(normalizeVariant):[],
-    cover:raw.cover||'', coverKey:raw.coverKey||'', sourceThumbnail:raw.sourceThumbnail||raw.thumb||'', gallery:Array.isArray(raw.gallery)?raw.gallery:[],
+    cover:raw.cover||'', coverKey:raw.coverKey||'', coverMode:raw.coverMode||'', sourceThumbnail:raw.sourceThumbnail||raw.thumb||'', gallery:Array.isArray(raw.gallery)?raw.gallery:[],
     addedAt:Number(raw.addedAt||Date.now()), lastPlayedAt:Number(raw.lastPlayedAt||0), lastPosition:Number(raw.lastPosition||0), playCount:Number(raw.playCount||0)
   };
 
@@ -130,7 +133,7 @@ export function migrateTrack(raw={}) {
     if(raw.localAudioKey||raw.blobKey) rec.variants.push(normalizeVariant({provider:'local',localAudioKey:raw.localAudioKey||raw.blobKey,qualityLabel:raw.localOrigin==='download'?'نسخة منزلة':'ملف الجهاز',original:true,downloadable:true}));
     if(raw.audioUrl||(raw.kind==='url'&&raw.src)) rec.variants.push(normalizeVariant({provider:'generic',audioUrl:raw.audioUrl||raw.src,sourceUrl:raw.audioUrl||raw.src,qualityLabel:'صوت مباشر',downloadable:true}));
     const yid=raw.youtubeId||(raw.kind==='youtube'?raw.src:'');
-    if(yid) rec.variants.push(normalizeVariant({provider:'youtube',sourceUrl:raw.youtubeUrl||youtubeWatch(yid),audioUrl:raw.youtubeUrl||youtubeWatch(yid),videoUrl:raw.youtubeUrl||youtubeWatch(yid),embedUrl:`https://www.youtube-nocookie.com/embed/${yid}`,thumbnail:raw.thumb||youtubeThumb(yid),qualityLabel:'فيديو أرشيفي',downloadable:false}));
+    if(yid) rec.variants.push(normalizeVariant({provider:'youtube',sourceUrl:raw.youtubeUrl||youtubeWatch(yid),audioUrl:'',videoUrl:raw.youtubeUrl||youtubeWatch(yid),embedUrl:`https://www.youtube-nocookie.com/embed/${yid}`,thumbnail:raw.thumb||youtubeThumb(yid),qualityLabel:'فيديو أرشيفي',downloadable:false}));
   }
   return rec;
 }
@@ -148,6 +151,4 @@ export function canCanonicalMatch(a,b) {
   return true;
 }
 
-export function makeCover() {
-  return './assets/covers/default.jpg';
-}
+export function makeCover() { return './assets/covers/default.jpg'; }

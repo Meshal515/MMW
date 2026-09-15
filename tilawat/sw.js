@@ -1,8 +1,8 @@
-const VERSION='tilawat-v15';
+const VERSION='tilawat-v16';
 const SHELL=`${VERSION}-shell`;
 const PRECACHE=[
   './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./manifest.webmanifest',
-  './js/v2.js','./js/player.js','./js/store.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/tilawat-v14.js','./js/tilawat-v15-fixes.js','./js/reorder.js',
+  './js/v2.js','./js/player.js','./js/store.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/tilawat-v14.js','./js/tilawat-v15-fixes.js','./js/tilawat-v16.js','./js/reorder.js',
   './js/catalog/core.js','./js/catalog/mp3quran.js',
   './assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg',
@@ -42,7 +42,7 @@ self.addEventListener('fetch',event=>{
   }
 
   if(url.origin!==self.location.origin)return;
-  if(!url.pathname.includes('/tilawat/')&&!url.pathname.includes('/assets/fonts/'))return;
+  if(url.pathname.startsWith('/api/'))return;
 
   event.respondWith((async()=>{
     const cache=await caches.open(SHELL);

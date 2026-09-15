@@ -2,6 +2,7 @@ const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const LAST_KEY='tilawat-last-listened-v15';
 let pendingAction=null;
+let pendingBefore='';
 let saveTimer=0;
 let lastUserSeekValue='';
 
@@ -16,6 +17,13 @@ function actionOf(el){
   if(el.dataset.catalogPlay)return{type:'catalog',key:el.dataset.catalogPlay};
   if(el.dataset.play)return{type:'local',key:el.dataset.play};
   return null;
+}
+function miniSnapshot(){
+  const mini=$('#miniPlayer');
+  if(!mini||mini.classList.contains('hidden'))return null;
+  const title=text($('#miniTitle')),sub=text($('#miniSub')),cover=$('#miniCover')?.currentSrc||$('#miniCover')?.src||'';
+  if(!title)return null;
+  return {title,sub,cover,sig:`${title}\u0000${sub}\u0000${cover}`};
 }
 
 function renderStoredLast(){
@@ -32,10 +40,12 @@ function renderStoredLast(){
 function saveFromMini(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
-    const mini=$('#miniPlayer');if(!pendingAction||!mini||mini.classList.contains('hidden'))return;
-    const title=text($('#miniTitle')),sub=text($('#miniSub')),cover=$('#miniCover')?.currentSrc||$('#miniCover')?.src||'';
-    if(!title)return;
-    write({...pendingAction,title,sub,cover,at:Date.now()});
+    if(!pendingAction)return;
+    const snap=miniSnapshot();
+    if(!snap||snap.sig===pendingBefore)return;
+    write({...pendingAction,title:snap.title,sub:snap.sub,cover:snap.cover,at:Date.now()});
+    pendingBefore=snap.sig;
+    pendingAction=null;
     renderStoredLast();
   },80);
 }
@@ -43,10 +53,15 @@ function saveFromMini(){
 function persistCurrentActionFromClick(e){
   const target=e.target.closest('[data-catalog-play],[data-play]');
   if(!target||target.closest('#playerPage'))return;
-  pendingAction=actionOf(target);
+  const action=actionOf(target);if(!action)return;
+  const previous=read();
+  if(previous?.type===action.type&&previous?.key===action.key){pendingAction=null;return}
+  pendingAction=action;
+  pendingBefore=miniSnapshot()?.sig||'';
+  // renderPlayer mutates title/sub/cover; observers below save only after those
+  // values actually change, so a slow/failed new source cannot pair its key with
+  // stale metadata from the previous mini player.
   saveFromMini();
-  setTimeout(saveFromMini,260);
-  setTimeout(saveFromMini,700);
 }
 
 function keepLastCardFresh(){
@@ -93,6 +108,5 @@ function boot(){
   trimTouchPlayerWork();
   prewarmYoutube();
   document.addEventListener('click',persistCurrentActionFromClick,true);
-  addEventListener('pagehide',saveFromMini);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

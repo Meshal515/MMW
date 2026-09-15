@@ -56,6 +56,7 @@ jobs:
           node --check tilawat/functions/api/resolve-source.js
           node --check tilawat/functions/api/yaldosry-audio.js
           node --check tilawat/tests/browser-regression.mjs
+          node --check tilawat/tests/mini-swipe-regression.mjs
           node --check tilawat/tests/multipart-regression.mjs
           node --check tilawat/tests/visual-audit.mjs
       - name: Run Tilawat behavior tests
@@ -76,6 +77,7 @@ jobs:
             sleep 1
           done
           node tilawat/tests/browser-regression.mjs
+          node tilawat/tests/mini-swipe-regression.mjs
           node tilawat/tests/multipart-regression.mjs
           node tilawat/tests/visual-audit.mjs
       - name: Upload Tilawat visual QA artifacts
@@ -107,8 +109,8 @@ jobs:
                     'tilawat/functions/api/resolve-source.js','tilawat/functions/api/yaldosry-audio.js',
                     'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg',
                     'tilawat/tests/logic.test.mjs','tilawat/tests/backend-source.test.mjs',
-                    'tilawat/tests/browser-regression.mjs','tilawat/tests/multipart-regression.mjs',
-                    'tilawat/tests/visual-audit.mjs','tilawat/package.json']
+                    'tilawat/tests/browser-regression.mjs','tilawat/tests/mini-swipe-regression.mjs',
+                    'tilawat/tests/multipart-regression.mjs','tilawat/tests/visual-audit.mjs','tilawat/package.json']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

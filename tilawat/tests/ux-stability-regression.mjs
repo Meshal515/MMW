@@ -63,7 +63,7 @@ try{
   const editPreview=await page.locator('#addCoverPreview').evaluate(img=>img.currentSrc||img.src);assert.ok(editPreview.startsWith('blob:'),'edit preview must keep the uploaded cover');
   await page.fill('#addTitle','اختبار الغلاف والتعديل — معدل');
   await page.click('#addForm button[type="submit"]');
-  await page.waitForSelector('#addDialog.hidden');
+  await page.waitForSelector('#addDialog',{state:'hidden'});
   await page.waitForTimeout(260);
   const edited=(await getTracks()).find(track=>track.title==='اختبار الغلاف والتعديل — معدل');
   assert.ok(edited,'edited track must keep the same persisted entity');

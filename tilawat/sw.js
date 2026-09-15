@@ -9,7 +9,7 @@ const PRECACHE=[
   './assets/logo.svg','./assets/covers/default.jpg',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg','./assets/covers/dossari-4.jpg','./assets/covers/dossari-5.jpg',
   './assets/icon-192.png','./assets/icon-512.png',
-  '../assets/fonts/plex-ar-aric-400.woff2','../assets/fonts/plex-ar-arabic-600.woff2','../assets/fonts/plex-ar-arabic-700.woff2'
+  '../assets/fonts/plex-ar-arabic-400.woff2','../assets/fonts/plex-ar-arabic-600.woff2','../assets/fonts/plex-ar-arabic-700.woff2'
 ];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const c=await caches.open(SHELL);

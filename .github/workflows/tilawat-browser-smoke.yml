@@ -37,6 +37,11 @@ jobs:
             hero:document.querySelector('#heroStats')?.textContent?.trim(),
             shelves:document.querySelector('#homeShelves')?.children?.length,
             gear:!!document.querySelector('#classicSettingsBtn'),
+            tabbar:!!document.querySelector('.tabbar'),
+            brand:!!document.querySelector('#brand'),
+            searchInput:!!document.querySelector('#searchInput'),
+            librarySegs:!!document.querySelector('#librarySegs'),
+            script:[...document.scripts].map(s=>s.src||'inline'),
             body:document.body.innerText.slice(0,800)
           }));
           console.log('STATE',JSON.stringify(state,null,2));

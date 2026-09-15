@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 
 const BASE='http://127.0.0.1:4173/tilawat/';
 const OUT='tilawat/test-artifacts';
@@ -65,7 +65,7 @@ async function rowVisualState(){return page.locator('#libraryGrid .library-row')
 
 try{
   await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
-  await page.waitForSelector('#librarySegs');
+  await page.waitForSelector('#librarySegs',{state:'attached'});
   await seedLibrary();
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForSelector('.tabbar [data-tab="library"]');
@@ -114,7 +114,7 @@ try{
   await page.screenshot({path:`${OUT}/library-dark-during-drag.png`,fullPage:true});
 
   await page.mouse.up();
-  await page.waitForTimeout(SETTLE_WAIT());
+  await page.waitForTimeout(260);
   assert.deepEqual(await order(),['qa-1','qa-3','qa-2','qa-4'],'drop should move the third row cleanly into the second slot');
 
   const after=await rowVisualState();
@@ -130,9 +130,13 @@ try{
   await page.screenshot({path:`${OUT}/library-light-after.png`,fullPage:true});
 
   assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
-  console.log(JSON.stringify({ok:true,order:await order(),mutations,geometry},null,2));
+  const report={ok:true,order:await order(),mutations,geometry};
+  await writeFile(`${OUT}/browser-report.json`,JSON.stringify(report,null,2));
+  console.log(JSON.stringify(report,null,2));
+}catch(error){
+  await page.screenshot({path:`${OUT}/failure.png`,fullPage:true}).catch(()=>{});
+  await writeFile(`${OUT}/failure.txt`,`${error?.stack||error}\n\n${errors.join('\n')}`).catch(()=>{});
+  throw error;
 }finally{
   await browser.close();
 }
-
-function SETTLE_WAIT(){return 260}

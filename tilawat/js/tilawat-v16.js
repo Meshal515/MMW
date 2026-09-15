@@ -10,6 +10,7 @@ let seekTargetSeconds=null;
 let deferredSeekValue=null;
 let seekUnlockTimer=0;
 let keyboardCommitTimer=0;
+let suppressNextChange=false;
 
 function parseClock(value=''){
   const parts=String(value).trim().split(':').map(Number);
@@ -76,7 +77,7 @@ function installStableSeek(){
 
   document.addEventListener('pointerdown',event=>{
     if(event.target!==seek)return;
-    seekDragging=true;seekUiLocked=true;deferredSeekValue=null;seekTargetSeconds=null;
+    seekDragging=true;seekUiLocked=true;deferredSeekValue=null;seekTargetSeconds=null;suppressNextChange=false;
     document.documentElement.classList.add('is-seeking');
   },true);
 
@@ -94,19 +95,20 @@ function installStableSeek(){
   document.addEventListener('change',event=>{
     if(event.target!==seek)return;
     event.stopImmediatePropagation();event.stopPropagation();
+    if(suppressNextChange){suppressNextChange=false;return}
     commitSeek();
   },true);
 
   document.addEventListener('pointerup',event=>{
     if(!seekDragging||event.target!==seek)return;
     // Prevent v14's older pointerup handler from issuing another seek with a stale value.
-    event.stopPropagation();
+    event.stopPropagation();suppressNextChange=true;
     commitSeek();
   },true);
 
   document.addEventListener('pointercancel',event=>{
     if(!seekDragging||event.target!==seek)return;
-    event.stopPropagation();
+    event.stopPropagation();suppressNextChange=false;
     unlockSeekUi();
   },true);
 

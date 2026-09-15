@@ -1,0 +1,214 @@
+/* Tilawat identity layer — black/white first, muted brass only for tiny state cues. */
+:root{
+  --bg:#050505;
+  --bg-elev:#0b0b0b;
+  --surface:#111;
+  --surface2:#181818;
+  --surface3:#242424;
+  --ink:#f7f7f5;
+  --muted:#a6a6a1;
+  --faint:#666662;
+  --line:rgba(255,255,255,.10);
+  --accent:#b29a69;
+  --accent-strong:#c8b17d;
+  --accent-ink:#090909;
+  --copper:#ff4d5a;
+  --favorite:#ff4d5a;
+  --identity-radius:14px;
+  --identity-ease:cubic-bezier(.2,.8,.2,1);
+  color-scheme:dark;
+}
+[data-theme='light']{
+  --bg:#f7f7f4;
+  --bg-elev:#fff;
+  --surface:#efefeb;
+  --surface2:#e6e6e1;
+  --surface3:#d8d8d2;
+  --ink:#0b0b0b;
+  --muted:#666661;
+  --faint:#91918a;
+  --line:rgba(0,0,0,.10);
+  --accent:#8d7446;
+  --accent-strong:#755d35;
+  --accent-ink:#fff;
+  --copper:#d92f42;
+  --favorite:#d92f42;
+  color-scheme:light;
+}
+
+html,body{background:var(--bg)}
+body::before{
+  height:300px;
+  background:
+    radial-gradient(75% 95% at 88% 0%,rgba(178,154,105,.075),transparent 65%),
+    linear-gradient(180deg,rgba(255,255,255,.025),transparent 85%);
+}
+[data-theme='light'] body::before{
+  background:
+    radial-gradient(75% 95% at 88% 0%,rgba(141,116,70,.07),transparent 65%),
+    linear-gradient(180deg,rgba(0,0,0,.018),transparent 85%);
+}
+
+/* Keep photos truthful to the supplied assets, but unify the visual language. */
+.quick img,.art img,.reciter-art img,.result-row img,.browse-monogram img,.player-art img,.mini2 img,.surah-card__art img{filter:grayscale(1) contrast(1.02)}
+
+/* Header / navigation: quiet, editorial, less Spotify-like. */
+.top{background:linear-gradient(180deg,var(--bg) 70%,color-mix(in srgb,var(--bg) 86%,transparent) 88%,transparent)}
+.brand img{border-radius:12px;box-shadow:inset 0 0 0 1px rgba(178,154,105,.18)}
+.round,.topadd{background:#0b0b0b;border:1px solid rgba(255,255,255,.055)}
+[data-theme='light'] .round,[data-theme='light'] .topadd{background:#fff;border-color:rgba(0,0,0,.07)}
+.topadd{background:var(--ink);color:var(--bg);border-color:transparent}
+.tabbar{background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 75%,transparent),var(--bg) 30%)}
+.tab[aria-current='page']{color:var(--ink)}
+.tab[aria-current='page']::after{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:1px;animation:tab-dot .28s var(--identity-ease)}
+@keyframes tab-dot{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Home cards: white play affordances; brass is only a state cue. */
+.quick{background:#171717;border:1px solid rgba(255,255,255,.035);box-shadow:none;border-radius:10px}
+[data-theme='light'] .quick{background:#ecece8;border-color:rgba(0,0,0,.04)}
+.quick i,.art__play{background:var(--ink);color:var(--bg);box-shadow:0 9px 28px rgba(0,0,0,.35)}
+.hero__stats span{background:var(--surface2);border:1px solid var(--line)}
+.art{border-radius:12px;background:var(--surface2);box-shadow:none}
+.art::after{display:none}
+.media-card{position:relative;transition:transform .22s var(--identity-ease),opacity .22s var(--identity-ease)}
+.media-card:active{transform:scale(.975)}
+.media-card.is-current h3{color:var(--accent-strong)}
+.media-card.is-current .art{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent)}
+.tag.gold,.badge.gold,.source-pill.treasure{color:var(--accent-strong)}
+.entity-btn .n,.variant__icon,.surah-row .num,.row-play{color:var(--accent)}
+.seg button.on,.moshaf-tabs button.on{background:var(--ink);color:var(--bg)}
+
+/* Yasser Al-Dossari page: two vertical cards, square art, play outside the art. */
+#moshafBody .surah-list.reciter-surah-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:22px 13px;
+  padding:2px 0 14px;
+}
+#moshafBody .reciter-surah-card{
+  position:relative;
+  min-width:0;
+  min-height:0;
+  display:block;
+  padding:0 0 4px;
+  border:0;
+  background:transparent;
+  text-align:right;
+  border-radius:14px;
+  overflow:visible;
+  transform-origin:center;
+  animation:surah-card-in .42s var(--identity-ease) both;
+}
+#moshafBody .reciter-surah-card:hover{background:transparent}
+#moshafBody .reciter-surah-card:active{transform:scale(.975)}
+.surah-card__art{
+  display:block;
+  width:100%;
+  aspect-ratio:1/1;
+  overflow:hidden;
+  border-radius:12px;
+  background:var(--surface2);
+  border:1px solid rgba(255,255,255,.045);
+  transition:transform .24s var(--identity-ease),box-shadow .24s var(--identity-ease),border-color .24s var(--identity-ease);
+}
+[data-theme='light'] .surah-card__art{border-color:rgba(0,0,0,.055)}
+.surah-card__art img{width:100%;height:100%;object-fit:cover;object-position:center 18%;transition:transform .38s var(--identity-ease)}
+.reciter-surah-card:hover .surah-card__art img{transform:scale(1.025)}
+.surah-card__meta{display:block;min-width:0;padding:10px 48px 0 2px}
+.surah-card__meta b{display:block;font-size:14px;line-height:1.35;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.surah-card__meta small{display:block;color:var(--muted);font-size:10px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.surah-card__number{position:absolute;top:9px;right:9px;z-index:2;min-width:34px;height:26px;padding:0 7px;border-radius:999px;display:grid;place-items:center;background:rgba(5,5,5,.72);backdrop-filter:blur(9px);color:#fff;font:600 9px/1 ui-monospace,SFMono-Regular,monospace;border:1px solid rgba(255,255,255,.10)}
+.surah-card__play{
+  position:absolute;
+  left:2px;
+  bottom:0;
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:var(--ink);
+  color:var(--bg);
+  box-shadow:0 9px 24px rgba(0,0,0,.28);
+  transition:transform .18s var(--identity-ease),background .18s,color .18s;
+}
+.surah-card__play svg{width:16px;height:16px;fill:currentColor;stroke:none}
+.surah-card__eq{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px;opacity:0}
+.surah-card__eq i{display:block;width:2px;height:10px;border-radius:2px;background:currentColor;animation:eq 620ms ease-in-out infinite alternate}
+.surah-card__eq i:nth-child(2){animation-delay:-220ms;height:14px}.surah-card__eq i:nth-child(3){animation-delay:-410ms;height:7px}
+.reciter-surah-card.is-current .surah-card__art{border-color:color-mix(in srgb,var(--accent) 65%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 18%,transparent)}
+.reciter-surah-card.is-current .surah-card__play{background:var(--accent);color:var(--accent-ink)}
+html.is-audio-playing .reciter-surah-card.is-current .surah-card__play>svg{opacity:0}
+html.is-audio-playing .reciter-surah-card.is-current .surah-card__eq{opacity:1}
+html:not(.is-audio-playing) .surah-card__eq i{animation-play-state:paused}
+@keyframes eq{from{transform:scaleY(.38)}to{transform:scaleY(1)}}
+@keyframes surah-card-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+
+/* Mini player: real progress instead of the old fixed full-width green line. */
+.mini2{
+  background:color-mix(in srgb,var(--surface2) 94%,transparent);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 16px 34px rgba(0,0,0,.34);
+  backdrop-filter:blur(18px);
+  overflow:hidden;
+}
+.mini2::after{display:none!important}
+.mini2 img{border-radius:8px}
+.mini2__progress{
+  position:absolute;
+  z-index:4;
+  left:0;right:0;bottom:0;
+  height:5px;
+  padding:0;
+  border:0;
+  background:rgba(255,255,255,.10);
+  cursor:pointer;
+  overflow:hidden;
+}
+[data-theme='light'] .mini2__progress{background:rgba(0,0,0,.10)}
+.mini2__progress>i{display:block;width:0;height:100%;background:var(--accent);border-radius:0 999px 999px 0;transition:width .10s linear}
+.mini2__progress::after{content:'';position:absolute;top:50%;left:var(--mini-progress,0%);width:8px;height:8px;border-radius:50%;background:var(--ink);transform:translate(-50%,-50%) scale(0);transition:transform .15s var(--identity-ease)}
+.mini2:hover .mini2__progress::after,.mini2__progress:focus-visible::after{transform:translate(-50%,-50%) scale(1)}
+#miniFav{transition:color .18s var(--identity-ease),transform .22s var(--identity-ease)}
+#miniFav.is-favorite{color:var(--favorite)!important}
+#miniFav.is-favorite svg path{fill:currentColor;stroke:currentColor}
+#miniFav.fav-pop{animation:fav-pop .34s var(--identity-ease)}
+@keyframes fav-pop{0%{transform:scale(.82)}55%{transform:scale(1.2)}100%{transform:scale(1)}}
+
+/* Player identity: monochrome depth, no Spotify green wash. */
+.player-page{background:linear-gradient(180deg,#181818 0,#0d0d0d 30%,var(--bg) 58%)}
+[data-theme='light'] .player-page{background:linear-gradient(180deg,#deded8 0,#f0f0ec 33%,var(--bg) 62%)}
+.player-top{background:linear-gradient(180deg,rgba(0,0,0,.34),transparent)}
+.player-art img{border-radius:14px;box-shadow:0 28px 66px -22px rgba(0,0,0,.78)}
+.seek input{accent-color:var(--accent)}
+.seek input:hover{accent-color:var(--accent-strong)}
+.transport .mainplay{background:var(--ink);color:var(--bg);box-shadow:0 10px 30px rgba(0,0,0,.26)}
+.chip.on{color:var(--accent-strong);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.variant.current{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 60%,transparent)}
+.progressbar span{background:var(--accent)}
+.browse{background:linear-gradient(180deg,#151515,var(--bg) 34%)}
+[data-theme='light'] .browse{background:linear-gradient(180deg,#e4e4df,var(--bg) 34%)}
+.browse-monogram{border-radius:14px;box-shadow:0 22px 44px -25px rgba(0,0,0,.7)}
+
+/* Interaction language: every control gives immediate visual feedback. */
+button{transition:transform .15s var(--identity-ease),opacity .15s var(--identity-ease),background-color .15s var(--identity-ease),color .15s var(--identity-ease)}
+button:active{transform:scale(.965)}
+.player-page.tilawat-enter{animation:player-enter .36s var(--identity-ease) both}
+.player-page.tilawat-enter .player-art{animation:player-art-enter .48s var(--identity-ease) both}
+.browse.tilawat-enter{animation:browse-enter .30s var(--identity-ease) both}
+@keyframes player-enter{from{opacity:.25;transform:translateY(28px)}to{opacity:1;transform:none}}
+@keyframes player-art-enter{from{opacity:.3;transform:translateY(24px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes browse-enter{from{opacity:.3;transform:translateX(-14px)}to{opacity:1;transform:none}}
+
+@media(max-width:390px){
+  #moshafBody .surah-list.reciter-surah-grid{gap:18px 10px}
+  .surah-card__meta{padding-right:44px}.surah-card__meta b{font-size:13px}
+  .surah-card__play{width:35px;height:35px}
+}
+@media(min-width:760px){
+  #moshafBody .surah-list.reciter-surah-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:28px 18px}
+}
+@media(prefers-reduced-motion:reduce){
+  .reciter-surah-card,.surah-card__eq i,.player-page.tilawat-enter,.player-page.tilawat-enter .player-art,.browse.tilawat-enter,#miniFav.fav-pop{animation:none!important}
+}

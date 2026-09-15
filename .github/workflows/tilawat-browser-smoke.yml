@@ -41,10 +41,11 @@ jobs:
             brand:!!document.querySelector('#brand'),
             searchInput:!!document.querySelector('#searchInput'),
             librarySegs:!!document.querySelector('#librarySegs'),
-            codexUi:document.documentElement.dataset.codexUi||'',
+            favoriteHub:!!document.querySelector('#favoriteHub'),
+            motionUi:document.documentElement.dataset.motionUi||'',
             gsap:!!window.gsap,
             recoveryCss:[...document.styleSheets].some(s=>(s.href||'').includes('codex-ui-recovery.css')),
-            motionSurface:document.querySelector('#homeView')?.dataset?.motionSurface||'',
+            multipartModule:[...document.styleSheets].some(s=>(s.href||'').includes('multipart.css')),
             addSvg:!!document.querySelector('#addBtn b svg'),
             script:[...document.scripts].map(s=>s.src||'inline'),
             body:document.body.innerText.slice(0,800)
@@ -56,9 +57,20 @@ jobs:
             const settingsOpen=await page.evaluate(()=>document.querySelector('#classicSettings')?.classList.contains('open'));
             console.log('SETTINGS_OPEN',settingsOpen);
             if(!settingsOpen)errors.push('settings panel did not open');
+            await page.click('#classicSettingsClose');
           }
+          await page.click('#addBtn');
+          await page.waitForTimeout(250);
+          const multipartReady=await page.evaluate(()=>{
+            const part2=document.querySelector('#multipartBuilder [data-part="2"]');
+            const part3=document.querySelector('#multipartBuilder [data-part="3"]');
+            return !!part2 && !part2.hidden && !!part3 && part3.hidden;
+          });
+          console.log('MULTIPART_READY',multipartReady);
+          if(!multipartReady)errors.push('multipart add flow did not initialize');
           if(errors.length) console.log('ERRORS\n'+errors.join('\n---\n'));
           await browser.close();
-          if(!state.hero || /جار.*تجهيز/.test(state.hero) || !state.shelves || !state.recoveryCss || !state.motionSurface || !state.addSvg || !state.codexUi || errors.length) process.exit(1);
+          const motionOk=state.motionUi==='gsap'||state.motionUi==='css';
+          if(res?.status()!==200 || !state.hero || /جار.*تجهيز/.test(state.hero) || !state.shelves || !state.favoriteHub || !state.multipartModule || state.recoveryCss || !motionOk || !state.addSvg || errors.length) process.exit(1);
           EOF
           node smoke.mjs

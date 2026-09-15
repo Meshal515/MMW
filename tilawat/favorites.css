@@ -16,9 +16,8 @@
 .favorite-hub.is-active{border-color:color-mix(in srgb,var(--favorite) 34%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,var(--favorite) 12%,var(--surface)),var(--surface) 66%)}
 .favorite-hub:focus-visible{outline:2px solid color-mix(in srgb,var(--favorite) 65%,var(--ink));outline-offset:2px}
 
-#librarySegs [data-seg='favorite']{display:inline-flex;align-items:center;gap:6px}
-.favorite-seg__heart{display:grid;place-items:center}.favorite-seg__heart svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9}
-#librarySegs [data-seg='favorite'].on .favorite-seg__heart svg{fill:currentColor}
+/* The hub is the discoverable favorite entry. Keep the legacy segment in DOM as the filter owner, but do not duplicate it visually. */
+#librarySegs [data-seg='favorite']{display:none!important}
 
 #libraryGrid .library-row .art{position:relative;overflow:hidden}
 .library-favorite{

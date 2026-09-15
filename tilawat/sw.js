@@ -42,7 +42,8 @@ self.addEventListener('fetch',event=>{
   }
 
   if(url.origin!==self.location.origin)return;
-  if(!url.pathname.includes('/tilawat/')&&!url.pathname.includes('/assets/fonts/'))return;
+  // Pages Functions/API responses are dynamic and must never be shell-cached.
+  if(url.pathname.startsWith('/api/'))return;
 
   event.respondWith((async()=>{
     const cache=await caches.open(SHELL);

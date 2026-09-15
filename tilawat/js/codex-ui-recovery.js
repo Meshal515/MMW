@@ -4,6 +4,7 @@ const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let gsapReady=false;
 let pointerDepthBound=false;
+const depthControllers=new WeakMap();
 
 function ensureStyle(){
   if(q('link[data-codex-ui-recovery]'))return;
@@ -73,7 +74,7 @@ function markSurface(el){
 }
 
 /*
-  Important: rendered content is intentionally NOT animated from a MutationObserver.
+  Rendered content is intentionally NOT animated from a MutationObserver.
   v2 replaces several lists with innerHTML as catalog/library state changes. Animating
   those mutations after they are already visible makes the UI look like it entered,
   then redrew itself a fraction of a second later. Keep mutation work limited to icon
@@ -91,18 +92,42 @@ function watchIcons(){
   observer.observe(document.body,{subtree:true,childList:true});
 }
 
+function depthController(card){
+  let controller=depthControllers.get(card);
+  if(controller)return controller;
+  window.gsap.set(card,{transformPerspective:700,transformOrigin:'center'});
+  controller={
+    rotateX:window.gsap.quickTo(card,'rotateX',{duration:.28,ease:'power2.out'}),
+    rotateY:window.gsap.quickTo(card,'rotateY',{duration:.28,ease:'power2.out'}),
+    y:window.gsap.quickTo(card,'y',{duration:.28,ease:'power2.out'})
+  };
+  depthControllers.set(card,controller);
+  return controller;
+}
+function resetDepth(card){
+  const controller=depthControllers.get(card);
+  if(!controller)return;
+  controller.rotateX(0);controller.rotateY(0);controller.y(0);
+}
+
 function addPointerDepth(){
   if(pointerDepthBound||!gsapReady||!matchMedia('(hover:hover) and (pointer:fine)').matches||REDUCED())return;
   pointerDepthBound=true;
   document.addEventListener('pointermove',event=>{
-    const card=event.target.closest('.media-card .art,.last-listened-card');
+    const card=event.target.closest?.('.media-card .art,.last-listened-card');
     if(!card)return;
-    const r=card.getBoundingClientRect(),x=(event.clientX-r.left)/r.width-.5,y=(event.clientY-r.top)/r.height-.5;
-    window.gsap.to(card,{rotateX:-y*2.4,rotateY:x*2.8,y:-2,duration:.35,ease:'power2.out',transformPerspective:700,transformOrigin:'center'});
+    const r=card.getBoundingClientRect();
+    if(!r.width||!r.height)return;
+    const x=(event.clientX-r.left)/r.width-.5,y=(event.clientY-r.top)/r.height-.5;
+    const controller=depthController(card);
+    controller.rotateX(-y*2.4);controller.rotateY(x*2.8);controller.y(-2);
   },{passive:true});
   document.addEventListener('pointerout',event=>{
     const card=event.target.closest?.('.media-card .art,.last-listened-card');
-    if(card)window.gsap.to(card,{rotateX:0,rotateY:0,y:0,duration:.42,ease:'power3.out'});
+    if(!card)return;
+    const next=event.relatedTarget;
+    if(next instanceof Node&&card.contains(next))return;
+    resetDepth(card);
   },{passive:true});
 }
 

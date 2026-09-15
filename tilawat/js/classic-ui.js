@@ -1,5 +1,6 @@
 const $ = s => document.querySelector(s);
 let installPrompt = null;
+let settingsCloseTimer = 0;
 
 function mountCss(){
   const mount=(href,key)=>{
@@ -49,8 +50,8 @@ async function readTracks(){const db=await openDb();return new Promise((resolve,
 async function exportLibrary(){try{const tracks=await readTracks();const payload={app:'tilawat',version:4,exportedAt:new Date().toISOString(),tracks:tracks.map(({localAudioKey,coverKey,...rest})=>rest)};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`tilawat-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1200);notify(`صُدّرت ${tracks.length} تلاوة.`)}catch{notify('تعذر تصدير المكتبة.')}}
 async function importLibrary(e){const file=e.target.files?.[0];e.target.value='';if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.tracks))throw new Error();const db=await openDb(),tx=db.transaction('tracks','readwrite'),store=tx.objectStore('tracks');data.tracks.forEach(t=>store.put(t));await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});notify('تمت الاستعادة. أعد فتح التطبيق لتحديث المكتبة.')}catch{notify('ملف النسخة غير صالح.')}}
 function syncTheme(){const el=$('#classicThemeState');if(el)el.textContent=document.documentElement.dataset.theme==='light'?'فاتح':'داكن'}
-function openSettings(){const pane=$('#classicSettings');pane.hidden=false;requestAnimationFrame(()=>pane.classList.add('open'));document.body.style.overflow='hidden';syncTheme();updateStorage()}
-function closeSettings(){const pane=$('#classicSettings');pane.classList.remove('open');document.body.style.overflow='';setTimeout(()=>pane.hidden=true,200)}
+function openSettings(){clearTimeout(settingsCloseTimer);settingsCloseTimer=0;const pane=$('#classicSettings');pane.hidden=false;requestAnimationFrame(()=>pane.classList.add('open'));document.body.style.overflow='hidden';syncTheme();updateStorage()}
+function closeSettings(){const pane=$('#classicSettings');pane.classList.remove('open');document.body.style.overflow='';clearTimeout(settingsCloseTimer);settingsCloseTimer=setTimeout(()=>{if(!pane.classList.contains('open'))pane.hidden=true;settingsCloseTimer=0},200)}
 function boot(){
   mountCss();
   import('./tilawat-v14.js').then(()=>import('./tilawat-v15-fixes.js')).then(()=>import('./tilawat-v16.js')).catch(err=>console.warn('Tilawat UI layer failed to load',err));

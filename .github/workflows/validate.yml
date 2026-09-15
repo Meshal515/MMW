@@ -38,6 +38,7 @@ jobs:
           node --check tilawat/functions/api/resolve-source.js
           node --check tilawat/functions/api/yaldosry-audio.js
           node --check tilawat/tests/browser-regression.mjs
+          node --check tilawat/tests/visual-audit.mjs
       - name: Run Tilawat behavior tests
         working-directory: tilawat
         run: npm test
@@ -45,7 +46,7 @@ jobs:
         run: |
           npm install --no-save playwright@latest
           npx playwright install --with-deps chromium
-      - name: Run Tilawat mobile browser regression
+      - name: Run Tilawat browser regressions and product audit
         run: |
           set -euo pipefail
           python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/tilawat-http.log 2>&1 &
@@ -56,6 +57,7 @@ jobs:
             sleep 1
           done
           node tilawat/tests/browser-regression.mjs
+          node tilawat/tests/visual-audit.mjs
       - name: Upload Tilawat visual QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -82,7 +84,8 @@ jobs:
                     'tilawat/js/codex-ui-recovery.js','tilawat/codex-ui-recovery.css',
                     'tilawat/functions/api/resolve-source.js','tilawat/functions/api/yaldosry-audio.js',
                     'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg',
-                    'tilawat/tests/logic.test.mjs','tilawat/tests/backend-source.test.mjs','tilawat/tests/browser-regression.mjs','tilawat/package.json']
+                    'tilawat/tests/logic.test.mjs','tilawat/tests/backend-source.test.mjs',
+                    'tilawat/tests/browser-regression.mjs','tilawat/tests/visual-audit.mjs','tilawat/package.json']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

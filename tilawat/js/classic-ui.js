@@ -2,10 +2,14 @@ const $ = s => document.querySelector(s);
 let installPrompt = null;
 
 function mountCss(){
-  if(document.querySelector('link[data-settings-ui]')) return;
-  const link=document.createElement('link');
-  link.rel='stylesheet';link.href='./classic.css';link.dataset.settingsUi='';
-  document.head.append(link);
+  const mount=(href,key)=>{
+    if(document.querySelector(`link[data-${key}]`)) return;
+    const link=document.createElement('link');
+    link.rel='stylesheet';link.href=href;link.setAttribute(`data-${key}`,'');
+    document.head.append(link);
+  };
+  mount('./classic.css','settings-ui');
+  mount('./identity.css','identity-ui');
 }
 function gearSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19 14.8a1.8 1.8 0 0 0 .3 2l.1.1-2.5 2.5-.1-.1a1.8 1.8 0 0 0-3 .9V21H10v-.8a1.8 1.8 0 0 0-3-.9l-.1.1-2.5-2.5.1-.1a1.8 1.8 0 0 0-.9-3H3v-3.6h.6a1.8 1.8 0 0 0 .9-3l-.1-.1 2.5-2.5.1.1a1.8 1.8 0 0 0 3-.9V3h3.6v.8a1.8 1.8 0 0 0 3 .9l.1-.1 2.5 2.5-.1.1a1.8 1.8 0 0 0 .9 3h.7v3.6z"/></svg>'}
 function settingsHtml(){return `<section class="classic-settings" id="classicSettings" hidden aria-label="الإعدادات">
@@ -47,6 +51,7 @@ function openSettings(){const pane=$('#classicSettings');pane.hidden=false;reque
 function closeSettings(){const pane=$('#classicSettings');pane.classList.remove('open');document.body.style.overflow='';setTimeout(()=>pane.hidden=true,200)}
 function boot(){
   mountCss();
+  import('./tilawat-polish.js').catch(err=>console.warn('Tilawat polish failed to load',err));
   const theme=$('#themeBtn');
   if(theme&&!$('#classicSettingsBtn')){const btn=document.createElement('button');btn.id='classicSettingsBtn';btn.className='round classic-settings-btn';btn.type='button';btn.setAttribute('aria-label','الإعدادات');btn.innerHTML=gearSvg();theme.insertAdjacentElement('afterend',btn);btn.addEventListener('click',openSettings)}
   document.body.insertAdjacentHTML('beforeend',settingsHtml());

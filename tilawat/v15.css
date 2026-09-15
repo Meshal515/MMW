@@ -23,9 +23,10 @@
 .mini2{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--surface2)!important}
 .mini2__progress>i{transition:width .16s linear}
 
-/* Keep the seek target generous without making the visible track feel heavy. */
+/* Keep the seek target generous without making the visible track feel heavy.
+   The app shell is RTL, but media time itself must increase left-to-right. */
 .seek{margin-top:10px}
-#seek{height:22px}
+#seek{height:22px;direction:ltr}
 #seek::-webkit-slider-runnable-track{height:3px!important}
 
 @media(max-width:430px){

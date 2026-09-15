@@ -71,7 +71,9 @@ async function fetch1425Map(){
 
 function murattalMoshaf(){
   return {
-    id:'dossari-murattal',
+    // v2's catalogue click path serializes IDs and parses them as numbers.
+    // Keep the two collection IDs numeric so tapping a surah always resolves.
+    id:1,
     name:'المصحف المرتل',
     server:MURATTAL_SERVER,
     surah_total:114,
@@ -82,7 +84,7 @@ function murattalMoshaf(){
 function archive1425Moshaf(map){
   const ids=Object.keys(map).map(Number).filter(n=>n>=1&&n<=114).sort((a,b)=>a-b);
   return {
-    id:'dossari-1425',
+    id:1425,
     name:'رمضان 1425هـ',
     server:'',
     surah_total:ids.length,
@@ -117,7 +119,7 @@ export function catalogRecitation(reciter,moshaf,surahId){
   const idNum=Number(surahId);
   const surah=SURAHS[idNum-1]||`سورة ${surahId}`;
   const audio=surahUrl(moshaf,idNum);
-  const is1425=moshaf?.source==='archive1425' || moshaf?.id==='dossari-1425';
+  const is1425=moshaf?.source==='archive1425' || Number(moshaf?.id)===1425;
   const id=`${is1425?'d1425':'dm'}-${idNum}`;
   const cover=dossariImage(`${id}|${surah}`);
   const sourceUrl=is1425?(moshaf.source_page||audio):audio;

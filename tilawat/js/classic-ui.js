@@ -24,12 +24,19 @@ function restoreTopbar(){
   if(!theme) return;
   const btn=document.createElement('button');
   btn.id='classicSettingsBtn';
-  btn.className='round classic-settings';
+  btn.className='round classic-settings-btn';
   btn.type='button';
   btn.setAttribute('aria-label','الإعدادات');
   btn.innerHTML=gearSvg();
   theme.insertAdjacentElement('afterend',btn);
   btn.addEventListener('click',openSettings);
+}
+
+function restoreCopy(){
+  const search=$('#searchInput');
+  if(search) search.placeholder='ياسر 1425 الكهف، أو اسم السورة…';
+  const empty=$('#libraryEmpty p');
+  if(empty) empty.textContent='احفظ ما يعجبك من ياسر الدوسري، نزّله للاستماع بلا إنترنت، أو أضف تسجيلك الخاص.';
 }
 
 function restoreHome(){
@@ -89,7 +96,7 @@ function setLocalArt(img,{reciter='',seed=''}){
   const desired=isDossari(reciter) ? dossariImage(seed||reciter) : QURAN_FALLBACK;
   const current=img.getAttribute('src')||'';
   if(current===desired) return;
-  if(current.startsWith('blob:')) return; // user's own local cover wins.
+  if(current.startsWith('blob:')) return;
   img.src=desired;
   img.onerror=()=>{img.onerror=null;img.src=QURAN_FALLBACK;};
 }
@@ -252,6 +259,7 @@ function bindCollections(){
 function boot(){
   mountCss();
   restoreTopbar();
+  restoreCopy();
   restoreHome();
   mountSettings();
   mountPlayerUtilities();

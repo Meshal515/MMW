@@ -133,7 +133,8 @@ jobs:
           URL="https://${HOST}"
 
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -fsS --max-time 20 "$URL/" | grep -q '<title>تلاوات</title>'; then
+            PAGE="$(mktemp)"
+            if curl -fsS --max-time 20 -o "$PAGE" "$URL/" && grep -q '<title>تلاوات</title>' "$PAGE"; then
               echo "TILAWAT_HOST=${HOST}" >> "$GITHUB_ENV"
               echo "TILAWAT_URL=${URL}" >> "$GITHUB_ENV"
               echo "Tilawat published and verified: ${URL}"
@@ -228,7 +229,8 @@ jobs:
           SITE_URL="https://${HOST}"
 
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -fsS --max-time 20 "$SITE_URL/" | grep -q '<title>Local</title>'; then
+            PAGE="$(mktemp)"
+            if curl -fsS --max-time 20 -o "$PAGE" "$SITE_URL/" && grep -q '<title>Local</title>' "$PAGE"; then
               echo "SITE_URL=${SITE_URL}" >> "$GITHUB_ENV"
               echo "Local published and verified: ${SITE_URL}"
               echo "Tilawat standalone: ${TILAWAT_URL}"

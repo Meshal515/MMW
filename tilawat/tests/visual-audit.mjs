@@ -50,7 +50,7 @@ async function snapshot(name,{selector='body',fullPage=true}={}){
     }).map(el=>{const r=el.getBoundingClientRect();return{tag:el.tagName,id:el.id||'',class:el.className?.baseVal||el.className||'',label:el.getAttribute('aria-label')||el.textContent?.trim().slice(0,40)||'',width:Math.round(r.width*10)/10,height:Math.round(r.height*10)/10}}).slice(0,80)
   }));
   assert.ok(metrics.scrollWidth<=metrics.width+1,`${name}: horizontal overflow ${metrics.scrollWidth}>${metrics.width}`);
-  report.screens.push({name,...metrics,smallControls:undefined});
+  report.screens.push({name,width:metrics.width,height:metrics.height,scrollWidth:metrics.scrollWidth,theme:metrics.theme});
   for(const control of metrics.smallControls)report.smallControls.push({screen:name,...control});
   const target=selector==='body'?page:page.locator(selector);
   await target.screenshot({path:`${OUT}/${name}.png`,fullPage:selector==='body'?fullPage:false});
@@ -82,6 +82,15 @@ try{
   await page.click('#miniOpen');
   await page.waitForSelector('#playerPage:not(.hidden)');
   await snapshot('390-player-dark');
+
+  await page.click('#playerMore');
+  await page.waitForSelector('#tilawatV28ActionBackdrop.is-open');
+  await snapshot('390-player-more-dark');
+  await page.click('[data-v28-action="edit"]');
+  await page.waitForSelector('#tilawatV28EditBackdrop.is-open');
+  await snapshot('390-track-edit-dark');
+  await page.click('#tilawatV28EditClose');
+  await page.waitForTimeout(180);
   await page.click('#playerClose');
 
   await page.click('#classicSettingsBtn');

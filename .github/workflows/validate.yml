@@ -39,7 +39,7 @@ jobs:
           node --check tilawat/functions/api/yaldosry-audio.js
       - name: Run Tilawat behavior tests
         working-directory: tilawat
-        run: node --test tests/logic.test.mjs
+        run: node --test tests/*.test.mjs
       - name: Check HTML and required files
         run: |
           python - <<'PY'
@@ -58,7 +58,7 @@ jobs:
                     'tilawat/js/codex-v16-qa.js','tilawat/js/codex-ui-recovery.js','tilawat/codex-ui-recovery.css',
                     'tilawat/functions/api/resolve-source.js','tilawat/functions/api/yaldosry-audio.js',
                     'tilawat/assets/covers/default.jpg','tilawat/assets/covers/dossari.jpg',
-                    'tilawat/tests/logic.test.mjs','tilawat/package.json']
+                    'tilawat/tests/logic.test.mjs','tilawat/tests/codex-v16-qa.test.mjs','tilawat/package.json']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

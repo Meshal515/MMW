@@ -10,6 +10,7 @@ function mountCss(){
   };
   mount('./classic.css','settings-ui');
   mount('./identity.css','identity-ui');
+  mount('./v14.css','v14-ui');
 }
 function gearSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19 14.8a1.8 1.8 0 0 0 .3 2l.1.1-2.5 2.5-.1-.1a1.8 1.8 0 0 0-3 .9V21H10v-.8a1.8 1.8 0 0 0-3-.9l-.1.1-2.5-2.5.1-.1a1.8 1.8 0 0 0-.9-3H3v-3.6h.6a1.8 1.8 0 0 0 .9-3l-.1-.1 2.5-2.5.1.1a1.8 1.8 0 0 0 3-.9V3h3.6v.8a1.8 1.8 0 0 0 3 .9l.1-.1 2.5 2.5-.1.1a1.8 1.8 0 0 0 .9 3h.7v3.6z"/></svg>'}
 function settingsHtml(){return `<section class="classic-settings" id="classicSettings" hidden aria-label="الإعدادات">
@@ -51,7 +52,7 @@ function openSettings(){const pane=$('#classicSettings');pane.hidden=false;reque
 function closeSettings(){const pane=$('#classicSettings');pane.classList.remove('open');document.body.style.overflow='';setTimeout(()=>pane.hidden=true,200)}
 function boot(){
   mountCss();
-  import('./tilawat-polish.js').catch(err=>console.warn('Tilawat polish failed to load',err));
+  import('./tilawat-v14.js').catch(err=>console.warn('Tilawat v14 failed to load',err));
   const theme=$('#themeBtn');
   if(theme&&!$('#classicSettingsBtn')){const btn=document.createElement('button');btn.id='classicSettingsBtn';btn.className='round classic-settings-btn';btn.type='button';btn.setAttribute('aria-label','الإعدادات');btn.innerHTML=gearSvg();theme.insertAdjacentElement('afterend',btn);btn.addEventListener('click',openSettings)}
   document.body.insertAdjacentHTML('beforeend',settingsHtml());
@@ -65,4 +66,3 @@ function boot(){
   addEventListener('appinstalled',()=>{installPrompt=null;notify('تم تثبيت تلاوات.')});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
-

@@ -96,7 +96,7 @@ try{
   /* Exercise the remove half of the library toggle with a saved catalog-backed item. */
   await page.evaluate(async()=>{
     const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('tilawat',2);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
-    await new Promise((resolve,reject)=>{const tx=db.transaction('tracks','readwrite');tx.objectStore('tracks').put({id:'qa-catalog-saved',title:'سورة اختبار محفوظة',reciter:'ياسر الدوسري',surah:'الإخلاص',year:'1425',schemaVersion:4,catalogRef:{reciterId:999,moshafId:1,surahId:112},variants:[{id:'qa-v',provider:'generic',audioUrl:'/tilawat/assets/qa-none.mp3',sourceUrl:'/tilawat/assets/qa-none.mp3'}],tags:[],favorite:false,rare:false,addedAt:Date.now()});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();dispatchEvent(new CustomEvent('tilawat-library-imported'));
+    await new Promise((resolve,reject)=>{const tx=db.transaction('tracks','readwrite');tx.objectStore('tracks').put({id:'qa-catalog-saved',title:'سورة اختبار محفوظة',reciter:'ياسر الدوسري',surah:'الإخلاص',year:'1425',schemaVersion:4,catalogRef:{reciterId:999,moshafId:1,surahId:112},variants:[],tags:[],favorite:false,rare:false,addedAt:Date.now()});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();dispatchEvent(new CustomEvent('tilawat-library-imported'));
   });
   await page.waitForTimeout(220);await page.click('#tilawatV28GlassBackdrop');await page.waitForTimeout(220);
   await page.locator('.tabbar [data-tab="library"]').click();await page.waitForFunction(()=>[...document.querySelectorAll('#libraryGrid .library-row')].some(r=>r.dataset.play==='qa-catalog-saved'));

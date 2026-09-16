@@ -17,7 +17,26 @@ const context=await browser.newContext({viewport:{width:390,height:844},locale:'
 const page=await context.newPage();
 const errors=[];
 page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
-page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
+page.on('console',message=>{
+  if(message.type()!=='error')return;
+  const loc=message.location();
+  errors.push(`console: ${message.text()} @ ${loc.url||''}:${loc.lineNumber||0}:${loc.columnNumber||0}`);
+});
+page.on('requestfailed',async request=>{
+  let snapshot={};
+  try{snapshot=await page.evaluate(()=>({
+    addPreview:document.querySelector('#addCoverPreview')?.currentSrc||document.querySelector('#addCoverPreview')?.src||'',
+    playerCover:document.querySelector('#playerCover')?.currentSrc||document.querySelector('#playerCover')?.src||'',
+    miniCover:document.querySelector('#miniCover')?.currentSrc||document.querySelector('#miniCover')?.src||'',
+    glassCover:document.querySelector('#tilawatV28GlassCover')?.currentSrc||document.querySelector('#tilawatV28GlassCover')?.src||'',
+    audios:[...document.querySelectorAll('audio')].map(a=>a.currentSrc||a.src||''),
+    addDialogHidden:document.querySelector('#addDialog')?.classList.contains('hidden')??null,
+    playerHidden:document.querySelector('#playerPage')?.classList.contains('hidden')??null,
+    miniHidden:document.querySelector('#miniPlayer')?.classList.contains('hidden')??null,
+    title:document.querySelector('#miniTitle')?.textContent||document.querySelector('#playerTitle')?.textContent||''
+  }))}catch{}
+  errors.push(`requestfailed: ${request.url()} :: ${request.failure()?.errorText||'unknown'} :: snapshot=${JSON.stringify(snapshot)}`);
+});
 
 async function getTracks(){return page.evaluate(async()=>{
   const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('tilawat',2);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});

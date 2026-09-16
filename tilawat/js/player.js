@@ -133,7 +133,10 @@ export class Player{
   _onYtState(event){if(this.engine!=='youtube')return;this.ytState=event.data;if(event.data===0)this._finish();if(event.data===1)this.emit('duration');this.emit('state')}
   _stopEverything(){
     this.engine=null;this.source=null;this.ytState=-1;this._pendingSeek=null;this._queuedSeek=null;if(this._seekTimer){clearTimeout(this._seekTimer);this._seekTimer=0}
-    try{this.audio.pause()}catch{}this.audio.removeAttribute('src');try{this.audio.load()}catch{}if(this.objectUrl){URL.revokeObjectURL(this.objectUrl);this.objectUrl=null}if(this.yt?.stopVideo){try{this.yt.stopVideo()}catch{}}
+    const oldObjectUrl=this.objectUrl;this.objectUrl=null;
+    try{this.audio.pause()}catch{}this.audio.removeAttribute('src');try{this.audio.load()}catch{}
+    if(oldObjectUrl)setTimeout(()=>{try{URL.revokeObjectURL(oldObjectUrl)}catch{}},250);
+    if(this.yt?.stopVideo){try{this.yt.stopVideo()}catch{}}
   }
   play(){this._wantPlay=true;if(this.engine==='youtube'&&this.yt){try{this.yt.playVideo()}catch{}}else if(this.engine==='audio'){const p=this.audio.play();p?.catch?.(err=>{if(err?.name!=='AbortError')this.emit('error',err)})}this.emit('state')}
   pause(){this._wantPlay=false;if(this.engine==='youtube'&&this.yt){try{this.yt.pauseVideo()}catch{}}else if(this.engine==='audio')this.audio.pause();this._saveMultipartProgress(true);this.emit('state')}

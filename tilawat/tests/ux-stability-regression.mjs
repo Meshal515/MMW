@@ -17,7 +17,12 @@ const context=await browser.newContext({viewport:{width:390,height:844},locale:'
 const page=await context.newPage();
 const errors=[];
 page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
-page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
+page.on('console',message=>{
+  if(message.type()!=='error')return;
+  const loc=message.location();
+  errors.push(`console: ${message.text()} @ ${loc.url||''}:${loc.lineNumber||0}:${loc.columnNumber||0}`);
+});
+page.on('requestfailed',request=>errors.push(`requestfailed: ${request.url()} :: ${request.failure()?.errorText||'unknown'}`));
 
 async function getTracks(){return page.evaluate(async()=>{
   const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('tilawat',2);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});

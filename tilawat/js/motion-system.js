@@ -73,15 +73,17 @@ function addPointerDepth(){
   },{passive:true});
 }
 
-/* Views keep full opacity. Navigation motion is positional only so the page never
-   flashes washed-out during startup, tab changes, or async catalogue renders. */
+/* Primary views never animate opacity. We enforce that at author-important level
+   because legacy animation layers can otherwise temporarily win the cascade and
+   wash the whole page out during navigation. Motion stays positional only. */
 function animateView(view){
-  if(!view||REDUCED())return;
+  if(!view)return;
+  view.style.setProperty('opacity','1','important');
+  if(REDUCED())return;
   const g=gsap();if(!g){view.classList.remove('motion-view-enter');void view.offsetWidth;view.classList.add('motion-view-enter');return}
   const head=q('h1,.page-title,.hero__heading',view),content=qa('.shelf,.search-results,.library-head,.favorite-hub,.seg,.library-grid',view).filter(el=>getComputedStyle(el).display!=='none').slice(0,5);
   g.killTweensOf([view,head,...content]);
-  g.set(view,{opacity:1});
-  g.fromTo(view,{y:4},{y:0,duration:.28,ease:'power3.out',clearProps:'transform,opacity'});
+  g.fromTo(view,{y:4},{y:0,duration:.28,ease:'power3.out',clearProps:'transform'});
   if(head)g.fromTo(head,{y:8},{y:0,duration:.4,ease:'power3.out',clearProps:'transform'});
   if(content.length)g.fromTo(content,{y:8},{y:0,duration:.42,ease:'power3.out',stagger:.028,clearProps:'transform'},.025);
 }

@@ -19,17 +19,18 @@ page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
 page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
 
 async function seed(){
-  const wav=silentWavBase64();
-  await page.evaluate(async wav=>{
-    const bytes=Uint8Array.from(atob(wav),c=>c.charCodeAt(0));
-    const makeBlob=()=>new Blob([bytes],{type:'audio/wav'});
+  const first=silentWavBase64(.8),second=silentWavBase64(2.4);
+  await page.evaluate(async ({first,second})=>{
+    const blobOf=value=>new Blob([Uint8Array.from(atob(value),c=>c.charCodeAt(0))],{type:'audio/wav'});
     const tracks=[
       {id:'continuity-1',title:'سورة الأولى — اختبار الاستمرار',reciter:'قارئ الاختبار',surah:'الفاتحة',schemaVersion:4,variants:[{id:'v1',provider:'local',localAudioKey:'continuity-audio-1',title:'الأولى.wav',original:true,downloadable:true}],tags:[],playlists:[],favorite:false,rare:false,addedAt:1800000000002,lastPlayedAt:0,lastPosition:0,playCount:0},
-      {id:'continuity-2',title:'سورة الثانية — اختبار الاستمرار',reciter:'قارئ الاختبار',surah:'البقرة',schemaVersion:4,variants:[{id:'v2',provider:'local',localAudioKey:'continuity-audio-2',title:'الثانية.wav',original:true,downloadable:true}],tags:[],playlists:[],favorite:false,rare:false,addedAt:1800000000001,lastPlayedAt:0,lastPosition:0,playCount:0}
+      /* Deliberately leave the next recitation saved at its final moment. Auto-advance
+         must ignore this resume point and start it fresh from 0:00. */
+      {id:'continuity-2',title:'سورة الثانية — اختبار الاستمرار',reciter:'قارئ الاختبار',surah:'البقرة',schemaVersion:4,variants:[{id:'v2',provider:'local',localAudioKey:'continuity-audio-2',title:'الثانية.wav',original:true,downloadable:true}],tags:[],playlists:[],favorite:false,rare:false,addedAt:1800000000001,lastPlayedAt:0,lastPosition:2.3,playCount:0}
     ];
     const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('tilawat',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('tracks')){const s=d.createObjectStore('tracks',{keyPath:'id'});s.createIndex('addedAt','addedAt')}if(!d.objectStoreNames.contains('blobs'))d.createObjectStore('blobs');if(!d.objectStoreNames.contains('prefs'))d.createObjectStore('prefs')};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
-    await new Promise((resolve,reject)=>{const tx=db.transaction(['tracks','blobs','prefs'],'readwrite'),t=tx.objectStore('tracks'),b=tx.objectStore('blobs'),p=tx.objectStore('prefs');t.clear();b.clear();for(const track of tracks)t.put(track);b.put(makeBlob(),'continuity-audio-1');b.put(makeBlob(),'continuity-audio-2');p.put(['continuity-1','continuity-2'],'tilawat-library-order-v2');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)});db.close();
-  },wav);
+    await new Promise((resolve,reject)=>{const tx=db.transaction(['tracks','blobs','prefs'],'readwrite'),t=tx.objectStore('tracks'),b=tx.objectStore('blobs'),p=tx.objectStore('prefs');t.clear();b.clear();for(const track of tracks)t.put(track);b.put(blobOf(first),'continuity-audio-1');b.put(blobOf(second),'continuity-audio-2');p.put(['continuity-1','continuity-2'],'tilawat-library-order-v2');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)});db.close();
+  },{first,second});
 }
 
 async function readTrack(id){return page.evaluate(async id=>{
@@ -44,8 +45,12 @@ async function expectAutoAdvance(originSelector){
   // Exercise the same persistence path used when Android moves the page to the background.
   await page.evaluate(()=>{try{Object.defineProperty(document,'hidden',{configurable:true,value:true})}catch{}document.dispatchEvent(new Event('visibilitychange'))});
   await page.waitForFunction(()=>document.querySelector('#playerTitle')?.textContent?.includes('الثانية'),{timeout:6000});
+  // The next track has a stale saved position at its end. It must visibly reset and
+  // actually keep playing from the beginning rather than landing on 2.4 / 2.4 in silence.
+  await page.waitForFunction(()=>Number(document.querySelector('#miniSeek')?.value||1000)<700&&document.documentElement.classList.contains('is-audio-playing'),{timeout:2500});
+  assert.ok(Number(await page.locator('#miniSeek').inputValue())<700,'auto-advanced track must start well before its stale saved endpoint');
   assert.equal(await page.locator('#repeat').getAttribute('aria-pressed'),'false','auto advance must not silently enable repeat');
-  await page.waitForFunction(()=>!document.documentElement.classList.contains('is-audio-playing'),{timeout:5000});
+  await page.waitForFunction(()=>!document.documentElement.classList.contains('is-audio-playing'),{timeout:7000});
   assert.match(await page.locator('#playerTitle').textContent(),/الثانية/,'end of queue must stop on the second track, not wrap to the first');
   await page.waitForTimeout(300);
   assert.match(await page.locator('#playerTitle').textContent(),/الثانية/,'repeat-off must not replay the first track');
@@ -70,7 +75,7 @@ try{
   await page.screenshot({path:`${OUT}/playback-continuity-home.png`,fullPage:false});
 
   assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
-  const report={ok:true,library:true,home:true,repeatOff:true,completedProgress:0};
+  const report={ok:true,library:true,home:true,repeatOff:true,completedProgress:0,staleNextProgressIgnored:true};
   await writeFile(`${OUT}/playback-continuity-report.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));
 }catch(error){

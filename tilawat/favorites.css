@@ -2,7 +2,7 @@
 .favorite-hub{
   width:100%;min-height:76px;margin:4px 0 14px;padding:10px 12px;
   display:grid;grid-template-columns:48px minmax(0,1fr) auto 18px;gap:11px;align-items:center;
-  border:1px solid var(--line);border-radius:16px;
+  border:1px solid var(--line);border-radius:var(--r-md);
   background:var(--surface);
   color:var(--ink);text-align:right;box-shadow:0 14px 40px -34px rgba(0,0,0,.8);
   overflow:hidden;position:relative;isolation:isolate;
@@ -51,5 +51,5 @@
   .favorite-hub:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 34%,var(--line));box-shadow:0 20px 46px -34px rgba(0,0,0,.9)}
   .library-favorite:hover::before{background:rgba(15,15,15,.82);transform:scale(1.04)}
 }
-@media(max-width:360px){.favorite-hub{grid-template-columns:44px minmax(0,1fr) auto 14px;padding-inline:9px;gap:8px}.favorite-hub__icon{width:44px;height:44px}.favorite-hub__text small{font-size:9.5px}.favorite-hub__count{min-width:27px;padding:0 7px}}
+@media(max-width:360px){.favorite-hub{grid-template-columns:44px minmax(0,1fr) auto 14px;padding-inline:9px;gap:8px}.favorite-hub__icon{width:44px;height:44px}.favorite-hub__text small{font-size:10px}.favorite-hub__count{min-width:27px;padding:0 7px}}
 @media(prefers-reduced-motion:reduce){.favorite-hub,.library-favorite::before,.library-favorite svg,.player-favorite,.player-favorite svg,#miniFav svg{transition:none!important}.tilawat-fav-burst{display:none!important}}

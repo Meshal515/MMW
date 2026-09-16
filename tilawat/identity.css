@@ -14,6 +14,12 @@
   --accent-ink:#090909;
   --copper:#ff4d5a;
   --favorite:#ff4d5a;
+  /* One corner scale for the whole app. Before this there were eleven distinct
+     radii between 5px and 16px, most of them a pixel or two apart. */
+  --r-xs:7px;   /* tags, badges, monograms */
+  --r-sm:10px;  /* small controls, toasts, thumbnails */
+  --r-md:14px;  /* cards, artwork, panels */
+  --r-lg:24px;  /* sheets and full-width overlays */
   --identity-radius:14px;
   --identity-ease:cubic-bezier(.2,.8,.2,1);
   color-scheme:dark;
@@ -28,8 +34,8 @@
   --muted:#666661;
   --faint:#91918a;
   --line:rgba(0,0,0,.10);
-  --accent:#8d7446;
-  --accent-strong:#755d35;
+  --accent:#8a7143;         /* as a fill under --accent-ink: 4.60:1 */
+  --accent-strong:#6b5530;  /* as text on --surface3, the lightest case: 5.00:1 */
   --accent-ink:#fff;
   --copper:#d92f42;
   --favorite:#d92f42;
@@ -53,7 +59,7 @@ body::before{
 .quick img,.art img,.reciter-art img,.result-row img,.browse-monogram img,.player-art img,.mini2 img,.surah-card__art img{filter:grayscale(1) contrast(1.02)}
 
 /* Header / navigation: quiet, editorial, less Spotify-like. */
-.brand img{border-radius:12px;box-shadow:inset 0 0 0 1px rgba(178,154,105,.18)}
+.brand img{border-radius:var(--r-md);box-shadow:inset 0 0 0 1px rgba(178,154,105,.18)}
 .round,.topadd{background:#0b0b0b;border:1px solid rgba(255,255,255,.055)}
 [data-theme='light'] .round,[data-theme='light'] .topadd{background:#fff;border-color:rgba(0,0,0,.07)}
 .topadd{background:var(--ink);color:var(--bg);border-color:transparent}
@@ -62,11 +68,11 @@ body::before{
 @keyframes tab-dot{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
 
 /* Home cards: white play affordances; brass is only a state cue. */
-.quick{background:#171717;border:1px solid rgba(255,255,255,.035);box-shadow:none;border-radius:10px}
+.quick{background:#171717;border:1px solid rgba(255,255,255,.035);box-shadow:none;border-radius:var(--r-sm)}
 [data-theme='light'] .quick{background:#ecece8;border-color:rgba(0,0,0,.04)}
 .quick i,.art__play{background:var(--ink);color:var(--bg);box-shadow:0 9px 28px rgba(0,0,0,.35)}
 .hero__stats span{background:var(--surface2);border:1px solid var(--line)}
-.art{border-radius:12px;background:var(--surface2);box-shadow:none}
+.art{border-radius:var(--r-md);background:var(--surface2);box-shadow:none}
 .art::after{display:none}
 .media-card{position:relative;transition:transform .22s var(--identity-ease),opacity .22s var(--identity-ease)}
 .media-card:active{transform:scale(.975)}
@@ -75,9 +81,11 @@ body::before{
 /* .tag and .badge sit on photography behind a fixed dark scrim, so their text
    cannot follow the theme: in light mode the brass went dark on a dark pill
    and dropped to 2.5:1. The source pill's own surface does follow the theme. */
-.tag.gold,.badge.gold{color:#c8b17d}
+.tag.gold{color:#c8b17d}
+.badge.gold{color:var(--accent-strong)}
 .source-pill.treasure{color:var(--accent-strong)}
-.entity-btn .n,.variant__icon,.surah-row .num,.row-play{color:var(--accent)}
+/* Brass as text needs the darker step to clear 4.5:1 on light surfaces. */
+.entity-btn .n,.variant__icon,.surah-row .num,.row-play{color:var(--accent-strong)}
 .seg button.on,.moshaf-tabs button.on{background:var(--ink);color:var(--bg)}
 
 /* Yasser Al-Dossari page: two vertical cards, square art, play outside the art. */
@@ -96,7 +104,7 @@ body::before{
   border:0;
   background:transparent;
   text-align:right;
-  border-radius:14px;
+  border-radius:var(--r-md);
   overflow:visible;
   transform-origin:center;
   animation:surah-card-in .42s var(--identity-ease) both;
@@ -108,7 +116,7 @@ body::before{
   width:100%;
   aspect-ratio:1/1;
   overflow:hidden;
-  border-radius:12px;
+  border-radius:var(--r-md);
   background:var(--surface2);
   border:1px solid rgba(255,255,255,.045);
   transition:transform .24s var(--identity-ease),box-shadow .24s var(--identity-ease),border-color .24s var(--identity-ease);
@@ -150,13 +158,13 @@ html:not(.is-audio-playing) .surah-card__eq i{animation-play-state:paused}
 .mini2{
   background:color-mix(in srgb,var(--surface2) 94%,transparent);
   border:1px solid var(--line);
-  border-radius:12px;
+  border-radius:var(--r-md);
   box-shadow:0 16px 34px rgba(0,0,0,.34);
   backdrop-filter:blur(18px);
   overflow:hidden;
 }
 .mini2::after{display:none!important}
-.mini2 img{border-radius:8px}
+.mini2 img{border-radius:var(--r-sm)}
 .mini2__progress{
   position:absolute;
   z-index:4;
@@ -181,7 +189,7 @@ html:not(.is-audio-playing) .surah-card__eq i{animation-play-state:paused}
 /* Player identity: monochrome depth, no Spotify green wash. */
 .player-page{background:linear-gradient(180deg,#181818 0,#0d0d0d 30%,var(--bg) 58%)}
 [data-theme='light'] .player-page{background:linear-gradient(180deg,#deded8 0,#f0f0ec 33%,var(--bg) 62%)}
-.player-art img{border-radius:14px;box-shadow:0 28px 66px -22px rgba(0,0,0,.78)}
+.player-art img{border-radius:var(--r-md);box-shadow:0 28px 66px -22px rgba(0,0,0,.78)}
 .seek input{accent-color:var(--accent)}
 .seek input:hover{accent-color:var(--accent-strong)}
 .transport .mainplay{background:var(--ink);color:var(--bg);box-shadow:0 10px 30px rgba(0,0,0,.26)}
@@ -190,7 +198,7 @@ html:not(.is-audio-playing) .surah-card__eq i{animation-play-state:paused}
 .progressbar span{background:var(--accent)}
 .browse{background:linear-gradient(180deg,#151515,var(--bg) 34%)}
 [data-theme='light'] .browse{background:linear-gradient(180deg,#e4e4df,var(--bg) 34%)}
-.browse-monogram{border-radius:14px;box-shadow:0 22px 44px -25px rgba(0,0,0,.7)}
+.browse-monogram{border-radius:var(--r-md);box-shadow:0 22px 44px -25px rgba(0,0,0,.7)}
 
 /* Interaction language: every control gives immediate visual feedback. */
 button{transition:transform .15s var(--identity-ease),opacity .15s var(--identity-ease),background-color .15s var(--identity-ease),color .15s var(--identity-ease)}

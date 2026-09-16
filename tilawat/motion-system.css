@@ -12,7 +12,7 @@ html[data-motion-ui] .seg button{min-height:44px;padding-block:8px}
 html[data-motion-ui] .dialog .actions button{min-height:44px}
 
 /* Header: lighter visual mass and controlled glass. */
-html[data-motion-ui] .brand img{border-radius:12px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),0 9px 28px rgba(0,0,0,.18)}
+html[data-motion-ui] .brand img{border-radius:var(--r-md);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),0 9px 28px rgba(0,0,0,.18)}
 html[data-motion-ui] .round,html[data-motion-ui] .topadd{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 5%,transparent),0 8px 24px rgba(0,0,0,.08)}
 html[data-motion-ui] #addBtn b{display:grid;place-items:center;width:22px;height:22px}
 html[data-motion-ui] #addBtn b svg{width:20px;height:20px;stroke-width:2.1}
@@ -72,6 +72,7 @@ html[data-motion-ui] .transport.transport--temporal>button{margin:0;position:rel
 html[data-motion-ui] .transport.transport--temporal #prev,html[data-motion-ui] .transport.transport--temporal #next{width:44px;height:44px}
 html[data-motion-ui] .transport-seek{width:52px!important;height:52px!important;border:1px solid color-mix(in srgb,var(--line) 92%,transparent)!important;border-radius:50%!important;background:color-mix(in srgb,var(--surface2) 72%,transparent)!important;color:var(--ink)!important;display:grid!important;place-items:center!important;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 html[data-motion-ui] .transport-seek svg{width:26px!important;height:26px!important;fill:none;stroke:currentColor;stroke-width:1.65}
+/* SVG user units inside a 24x24 viewBox, not screen pixels. */
 html[data-motion-ui] .transport-seek svg text{font-size:7.2px;font-family:ui-sans-serif,system-ui,sans-serif;font-weight:750;fill:currentColor;stroke:none}
 .seek-feedback{position:absolute;z-index:8;top:-5px;pointer-events:none;padding:5px 8px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.18);will-change:transform,opacity}
 html[data-motion-ui] .player-actions{margin-top:18px}

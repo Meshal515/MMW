@@ -35,3 +35,20 @@ test('same catalog recitation is detected instead of duplicated',()=>{
   const existing={id:'saved',catalogRef:ref,variants:[]};
   assert.equal(findEquivalentTrack([existing],{catalogRef:{...ref},variants:[]})?.id,'saved');
 });
+
+test('different catalog surahs sharing one archive page are never merged',()=>{
+  const sharedPage='https://mazameer.com/vb/threads/186322/';
+  const existing={
+    id:'anfal',
+    surah:'الأنفال',
+    catalogRef:{reciterId:92,moshafId:1425,surahId:8},
+    variants:[{sourceUrl:sharedPage,audioUrl:'https://archive.org/download/yasser_aldosary_alro7_net/008.mp3'}]
+  };
+  const incoming={
+    id:'anam',
+    surah:'الأنعام',
+    catalogRef:{reciterId:92,moshafId:1425,surahId:6},
+    variants:[{sourceUrl:sharedPage,audioUrl:'https://archive.org/download/yasser_aldosary_alro7_net/006.mp3'}]
+  };
+  assert.equal(findEquivalentTrack([existing],incoming),null);
+});

@@ -64,14 +64,14 @@ try{
   await page.waitForFunction(()=>document.querySelectorAll('#libraryGrid .library-row').length===2);
   await page.locator('#libraryGrid .library-row').first().locator('.library-row__play').click();
   await page.waitForSelector('#miniPlayer:not(.hidden)',{state:'visible'});
-  await page.waitForTimeout(650); // entrance animation must be finished before the gesture owns transform
+  await page.waitForTimeout(650);
 
   const mediaArtwork=await page.evaluate(()=>{
     if(!('mediaSession'in navigator))return 'unsupported';
     return navigator.mediaSession.metadata?.artwork?.[0]?.src||'';
   });
   if(mediaArtwork!=='unsupported'){
-    assert.ok(mediaArtwork, 'media session should receive artwork');
+    assert.ok(mediaArtwork,'media session should receive artwork');
     assert.equal(mediaArtwork.startsWith('blob:'),false,`media artwork must be OS-readable, got ${mediaArtwork}`);
     assert.match(mediaArtwork,/\/assets\/covers\/dossari-[1-4]\.jpg$/,`local Blob cover should fall back to a recitation photo, got ${mediaArtwork}`);
   }

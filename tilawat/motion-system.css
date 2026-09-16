@@ -67,10 +67,20 @@ html[data-motion-ui] .mainplay:active{transform:scale(.92)}
 html[data-motion-ui] .chip{border-color:color-mix(in srgb,var(--line) 90%,transparent);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
 
 /* Media time is directional, even inside an RTL product. This makes -10/play/+10 unambiguous. */
-html[data-motion-ui] .transport.transport--temporal{direction:ltr;position:relative;display:grid;grid-template-columns:44px 52px 68px 52px 44px;gap:8px;justify-content:center;align-items:center;margin-block:18px 12px}
+/* justify-items:center matters here: three of the five buttons are pinned to
+   a fixed px size (44/44/68) while their own grid tracks shrink under 560px
+   and 350px (42/42/64, then 40/40/60), so mainPlay/prev/next each overflow
+   their track by 2-8px. Grid's default alignment anchors that overflow to
+   the track's start edge (left, under direction:ltr) rather than splitting
+   it, which put every one of the five buttons a few px right of its track's
+   true centre — measured at 390px, before this rule: forward10 4px off its
+   mirror position, next 2px off its own. Centring every child in its track
+   fixes all three pairs from one place instead of chasing each separately;
+   confirmed symmetric to the pixel afterward. */
+html[data-motion-ui] .transport.transport--temporal{direction:ltr;position:relative;display:grid;grid-template-columns:44px 52px 68px 52px 44px;gap:8px;justify-content:center;justify-items:center;align-items:center;margin-block:18px 12px}
 html[data-motion-ui] .transport.transport--temporal>button{margin:0;position:relative}
 html[data-motion-ui] .transport.transport--temporal #prev,html[data-motion-ui] .transport.transport--temporal #next{width:44px;height:44px}
-html[data-motion-ui] .transport-seek{width:52px!important;height:52px!important;border:1px solid color-mix(in srgb,var(--line) 92%,transparent)!important;border-radius:50%!important;background:color-mix(in srgb,var(--surface2) 72%,transparent)!important;color:var(--ink)!important;display:grid!important;place-items:center!important;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+html[data-motion-ui] .transport-seek{width:52px!important;height:52px!important;border:1px solid color-mix(in srgb,var(--ink) 38%,transparent)!important;border-radius:50%!important;background:color-mix(in srgb,var(--surface3) 92%,transparent)!important;color:var(--ink)!important;display:grid!important;place-items:center!important;box-shadow:0 1px 3px color-mix(in srgb,var(--ink) 12%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 html[data-motion-ui] .transport-seek svg{width:26px!important;height:26px!important;fill:none;stroke:currentColor;stroke-width:1.65}
 /* SVG user units inside a 24x24 viewBox, not screen pixels. */
 html[data-motion-ui] .transport-seek svg text{font-size:7.2px;font-family:ui-sans-serif,system-ui,sans-serif;font-weight:750;fill:currentColor;stroke:none}

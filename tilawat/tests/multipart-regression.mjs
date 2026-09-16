@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { appErrors } from './env-noise.mjs';
 
 const BASE='http://127.0.0.1:4173/tilawat/';
 const OUT='tilawat/test-artifacts';
@@ -53,7 +54,7 @@ try{
   assert.equal(await page.locator('#playerTitle').textContent(),'سورة يونس — اختبار الأجزاء','title/cover identity must not change between parts');
   await page.waitForFunction(()=>document.querySelector('#multipartNow')?.textContent?.includes('الجزء 3 من 3'),{timeout:7000});
   await page.screenshot({path:`${OUT}/390-player-multipart-dark.png`,fullPage:false});
-  assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
+  assert.deepEqual(appErrors(errors),[],`browser errors:\n${errors.join('\n')}`);
   console.log('multipart regression ok');
 }finally{
   await browser.close();

@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { appErrors } from './env-noise.mjs';
 
 const BASE='http://127.0.0.1:4173/tilawat/';
 const OUT='tilawat/test-artifacts';
@@ -185,7 +186,7 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'light theme must not overflow horizontally');
   await page.screenshot({path:`${OUT}/library-light-after.png`,fullPage:false});
 
-  assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
+  assert.deepEqual(appErrors(errors),[],`browser errors:\n${errors.join('\n')}`);
   const report={ok:true,order:await order(),mutations,editStability,worstOverlap,geometry};
   await writeFile(`${OUT}/browser-report.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));

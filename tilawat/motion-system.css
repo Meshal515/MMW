@@ -73,8 +73,6 @@ html[data-motion-ui] .transport.transport--temporal #prev,html[data-motion-ui] .
 html[data-motion-ui] .transport-seek{width:52px!important;height:52px!important;border:1px solid color-mix(in srgb,var(--line) 92%,transparent)!important;border-radius:50%!important;background:color-mix(in srgb,var(--surface2) 72%,transparent)!important;color:var(--ink)!important;display:grid!important;place-items:center!important;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 html[data-motion-ui] .transport-seek svg{width:26px!important;height:26px!important;fill:none;stroke:currentColor;stroke-width:1.65}
 html[data-motion-ui] .transport-seek svg text{font-size:7.2px;font-family:ui-sans-serif,system-ui,sans-serif;font-weight:750;fill:currentColor;stroke:none}
-html[data-motion-ui] .transport-seek--back::after,html[data-motion-ui] .transport-seek--forward::after{position:absolute;bottom:-16px;font-size:8.5px;line-height:1;color:var(--muted);white-space:nowrap}
-html[data-motion-ui] .transport-seek--back::after{content:'−10 ث'}html[data-motion-ui] .transport-seek--forward::after{content:'+10 ث'}
 .seek-feedback{position:absolute;z-index:8;top:-5px;pointer-events:none;padding:5px 8px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.18);will-change:transform,opacity}
 html[data-motion-ui] .player-actions{margin-top:18px}
 
@@ -108,7 +106,7 @@ html[data-motion-ui] .tilawat-v28-action:active{background:color-mix(in srgb,var
   html[data-motion-ui] .transport.transport--temporal{grid-template-columns:42px 48px 64px 48px 42px;gap:6px}
   html[data-motion-ui] .transport-seek{width:48px!important;height:48px!important}
 }
-@media(max-width:350px){html[data-motion-ui] .transport.transport--temporal{grid-template-columns:40px 45px 60px 45px 40px;gap:4px}html[data-motion-ui] .transport-seek{width:45px!important;height:45px!important}.transport-seek--back::after,.transport-seek--forward::after{display:none}}
+@media(max-width:350px){html[data-motion-ui] .transport.transport--temporal{grid-template-columns:40px 45px 60px 45px 40px;gap:4px}html[data-motion-ui] .transport-seek{width:45px!important;height:45px!important}}
 @media(prefers-reduced-motion:reduce){
   html[data-motion-ui] *,html[data-motion-ui] *::before,html[data-motion-ui] *::after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
   .seek-feedback{display:none!important}

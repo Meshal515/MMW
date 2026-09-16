@@ -1,3 +1,7 @@
 .DS_Store
 Thumbs.db
 *.log
+
+# local tooling and test output
+node_modules/
+tilawat/test-artifacts/

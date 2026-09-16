@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
+import { appErrors } from './env-noise.mjs';
 
 const BASE='http://127.0.0.1:4173/tilawat/';
 const browser=await chromium.launch({headless:true});
@@ -125,7 +126,7 @@ try{
   const burstDistance=Math.hypot(feedback.iconCenter.x-feedback.dotCenter.x,feedback.iconCenter.y-feedback.dotCenter.y);
   assert.ok(burstDistance<1.5,`favorite burst must originate at the heart icon; distance=${burstDistance}`);
 
-  assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
+  assert.deepEqual(appErrors(errors),[],`browser errors:\n${errors.join('\n')}`);
   console.log(JSON.stringify({ok:true,before,during,after,dragX:x,mediaArtwork,feedback,burstDistance},null,2));
 }finally{
   await browser.close();

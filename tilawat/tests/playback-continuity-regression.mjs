@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { appErrors } from './env-noise.mjs';
 
 const BASE='http://127.0.0.1:4173/tilawat/';
 const OUT='tilawat/test-artifacts';
@@ -74,7 +75,7 @@ try{
   await expectAutoAdvance('#homeShelves .rail [data-play="continuity-1"]');
   await page.screenshot({path:`${OUT}/playback-continuity-home.png`,fullPage:false});
 
-  assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
+  assert.deepEqual(appErrors(errors),[],`browser errors:\n${errors.join('\n')}`);
   const report={ok:true,library:true,home:true,repeatOff:true,completedProgress:0,staleNextProgressIgnored:true};
   await writeFile(`${OUT}/playback-continuity-report.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));

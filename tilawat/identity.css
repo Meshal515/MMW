@@ -72,7 +72,11 @@ body::before{
 .media-card:active{transform:scale(.975)}
 .media-card.is-current h3{color:var(--accent-strong)}
 .media-card.is-current .art{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent)}
-.tag.gold,.badge.gold,.source-pill.treasure{color:var(--accent-strong)}
+/* .tag and .badge sit on photography behind a fixed dark scrim, so their text
+   cannot follow the theme: in light mode the brass went dark on a dark pill
+   and dropped to 2.5:1. The source pill's own surface does follow the theme. */
+.tag.gold,.badge.gold{color:#c8b17d}
+.source-pill.treasure{color:var(--accent-strong)}
 .entity-btn .n,.variant__icon,.surah-row .num,.row-play{color:var(--accent)}
 .seg button.on,.moshaf-tabs button.on{background:var(--ink);color:var(--bg)}
 
@@ -177,7 +181,6 @@ html:not(.is-audio-playing) .surah-card__eq i{animation-play-state:paused}
 /* Player identity: monochrome depth, no Spotify green wash. */
 .player-page{background:linear-gradient(180deg,#181818 0,#0d0d0d 30%,var(--bg) 58%)}
 [data-theme='light'] .player-page{background:linear-gradient(180deg,#deded8 0,#f0f0ec 33%,var(--bg) 62%)}
-.player-top{background:linear-gradient(180deg,rgba(0,0,0,.34),transparent)}
 .player-art img{border-radius:14px;box-shadow:0 28px 66px -22px rgba(0,0,0,.78)}
 .seek input{accent-color:var(--accent)}
 .seek input:hover{accent-color:var(--accent-strong)}

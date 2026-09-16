@@ -110,7 +110,7 @@ function favoriteBurst(target,active){
   if(g){g.killTweensOf(icon);g.fromTo(icon,{scale:.72,rotate:-7},{scale:1,rotate:0,duration:.5,ease:active?'elastic.out(1,.38)':'back.out(2)',clearProps:'transform'})}
   else icon.animate?.([{transform:'scale(.72)'},{transform:'scale(1.18)'},{transform:'scale(1)'}],{duration:480,easing:'cubic-bezier(.16,1,.3,1)'});
   if(!active)return;
-  const r=target.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const r=icon.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
   for(let i=0;i<6;i++){
     const dot=document.createElement('i');dot.className='tilawat-fav-burst';dot.style.left=`${cx-4}px`;dot.style.top=`${cy-4}px`;document.body.append(dot);
     const angle=(-Math.PI*.9)+(Math.PI*1.8)*(i/5),distance=18+(i%2)*8,dx=Math.cos(angle)*distance,dy=Math.sin(angle)*distance;

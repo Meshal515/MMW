@@ -197,7 +197,7 @@ function bindCardSemantics(){
 }
 function bindMini(){
   const mini=$('#miniPlayer');if(!mini)return;
-  mini.addEventListener('click',event=>{if(performance.now()>=ui.suppressClickUntil)return;event.preventDefault();event.stopImmediatePropagation()},true);
+  mini.addEventListener('click',event=>{if(!event.isTrusted||performance.now()>=ui.suppressClickUntil)return;event.preventDefault();event.stopImmediatePropagation()},true);
   mini.addEventListener('click',event=>{if(isMiniControl(event.target))return;if(event.target instanceof Element&&event.target.closest('#miniOpen'))return;$('#miniOpen')?.click()});
   mini.addEventListener('pointerdown',event=>{if(event.button!==undefined&&event.button!==0)return;if(isMiniControl(event.target))return;gesture.active=true;gesture.pointerId=event.pointerId;gesture.startX=event.clientX;gesture.startY=event.clientY;gesture.dx=0;gesture.dy=0;gesture.moved=false;mini.setPointerCapture?.(event.pointerId)});
   const apply=()=>{gesture.raf=0;const ax=Math.abs(gesture.dx),ay=Math.abs(gesture.dy);if(ay>ax*1.15){const y=Math.max(-30,Math.min(58,gesture.dy*.36)),opacity=gesture.dy>0?Math.max(.86,1-gesture.dy/620):1;mini.style.transform=`translate3d(0,${y}px,0)`;mini.style.opacity=String(opacity);$('#tilawatV28Hint')?.classList.toggle('on',gesture.dy>64)}else if(ax>ay*1.15){const x=Math.max(-56,Math.min(56,gesture.dx*.34));mini.style.transform=`translate3d(${x}px,0,0)`}};

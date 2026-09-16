@@ -104,10 +104,25 @@ function libraryRowHTML(rec){
   const cover=coverSync(rec),fallback=fallbackCover(rec),current=`local:${rec.id}`===currentActionKey();
   return`<div class="media-card library-row ${current?'is-current':''}" data-play="${esc(rec.id)}" role="button" tabindex="0" aria-label="تشغيل ${esc(rec.title||rec.surah||'التلاوة')}"><div class="art"><img src="${esc(cover)}" data-fallback="${esc(fallback)}" alt="" loading="lazy"></div><h3>${esc(rec.title||`سورة ${rec.surah}`)}</h3><p>${esc(recSubtitle(rec))}</p><button class="library-row__play" type="button" aria-label="تشغيل">${playSvg()}${eqSvg()}</button><button class="library-drag-handle" type="button" aria-label="تحريك ${esc(rec.title||rec.surah||'التلاوة')}" title="اسحب لإعادة الترتيب">≡</button></div>`;
 }
+function createLibraryRow(rec){
+  const box=document.createElement('div');box.innerHTML=libraryRowHTML(rec);return box.firstElementChild;
+}
+function syncLibraryRow(row,rec){
+  const title=rec.title||`سورة ${rec.surah}`,sub=recSubtitle(rec),cover=coverSync(rec),fallback=fallbackCover(rec),current=`local:${rec.id}`===currentActionKey();
+  row.dataset.play=rec.id;row.classList.toggle('is-current',current);row.setAttribute('aria-label',`تشغيل ${title||rec.surah||'التلاوة'}`);
+  const img=row.querySelector('.art img');if(img){if(img.dataset.fallback!==fallback)img.dataset.fallback=fallback;if((img.getAttribute('src')||'')!==cover){delete img.dataset.fallbackUsed;img.src=cover}}
+  const heading=row.querySelector('h3');if(heading&&heading.textContent!==title)heading.textContent=title;
+  const meta=row.querySelector('p');if(meta&&meta.textContent!==sub)meta.textContent=sub;
+  const handle=row.querySelector('.library-drag-handle');if(handle){handle.setAttribute('aria-label',`تحريك ${title||rec.surah||'التلاوة'}`);handle.title='اسحب لإعادة الترتيب'}
+}
+function syncLibraryChrome(list,s){
+  $('libraryCount').textContent=`${list.length} تسجيل`;$('libraryEmpty').classList.toggle('hidden',!!list.length);$$('#librarySegs button').forEach(b=>b.classList.toggle('on',b.dataset.seg===s));$('libraryView').classList.toggle('library-editing',state.editMode);$('libraryEditToggle')?.setAttribute('aria-pressed',String(state.editMode));
+}
 function renderLibrary(){
   let list=[...state.local],s=state.librarySeg;if(s==='favorite')list=list.filter(r=>r.favorite);else if(s==='offline')list=list.filter(isOffline);else if(s==='rare')list=list.filter(r=>r.rare);list=orderedLibrary(list);
-  $('libraryCount').textContent=`${list.length} تسجيل`;$('libraryGrid').classList.add('library-list');$('libraryGrid').innerHTML=list.map(libraryRowHTML).join('');$('libraryEmpty').classList.toggle('hidden',!!list.length);$$('#librarySegs button').forEach(b=>b.classList.toggle('on',b.dataset.seg===s));$('libraryView').classList.toggle('library-editing',state.editMode);$('libraryEditToggle')?.setAttribute('aria-pressed',String(state.editMode));
-  mountSortable();syncCurrentCards();
+  const grid=$('libraryGrid');grid.classList.add('library-list');const existing=new Map($$('.library-row[data-play]',grid).map(row=>[row.dataset.play,row])),keep=new Set();
+  list.forEach((rec,index)=>{let row=existing.get(rec.id);if(row)syncLibraryRow(row,rec);else{row=createLibraryRow(rec);syncLibraryRow(row,rec)}keep.add(rec.id);if(grid.children[index]!==row)grid.insertBefore(row,grid.children[index]||null)});
+  for(const[id,row]of existing)if(!keep.has(id))row.remove();syncLibraryChrome(list,s);mountSortable();syncCurrentCards();
 }
 function persistOrderFromDom(){state.libraryOrder=$$('#libraryGrid .library-row').map(x=>x.dataset.play).filter(Boolean);for(const rec of state.local)if(!state.libraryOrder.includes(rec.id))state.libraryOrder.push(rec.id);setPref(PREF_ORDER,state.libraryOrder).catch(()=>{})}
 function moveLibraryRow(row,delta){const grid=$('libraryGrid'),rows=$$('.library-row',grid),from=rows.indexOf(row),to=from+delta;if(from<0||to<0||to>=rows.length)return;if(delta>0)rows[to].after(row);else rows[to].before(row);persistOrderFromDom();row.querySelector('.library-drag-handle')?.focus()}
@@ -115,7 +130,7 @@ function mountSortable(){
   if(state.sortableMounted)return;state.sortableMounted=true;
   makeSortable($('libraryGrid'),{handle:'.library-drag-handle',item:'.library-row',onDrop:()=>persistOrderFromDom()});
 }
-$('libraryEditToggle').onclick=()=>{state.editMode=!state.editMode;if(state.editMode&&state.librarySeg!=='all')state.librarySeg='all';renderLibrary()};
+$('libraryEditToggle').onclick=()=>{state.editMode=!state.editMode;if(state.editMode&&state.librarySeg!=='all'){state.librarySeg='all';renderLibrary();return}syncLibraryChrome(orderedLibrary(state.local),state.librarySeg)};
 $('libraryGrid').addEventListener('keydown',e=>{const row=e.target.closest('.library-row');if(!row)return;if(e.target.closest('.library-drag-handle')&&state.editMode&&(e.key==='ArrowUp'||e.key==='ArrowDown')){e.preventDefault();moveLibraryRow(row,e.key==='ArrowUp'?-1:1);return}if(!state.editMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();playByElement(row)}});
 
 function allCatalogRecords(){const out=[];for(const r of state.reciters)for(const m of reciterMoshafs(r))for(const s of reciterSurahs(r,m))out.push(applyCatalogState(catalogRecitation(r,m,s.id)));return out}

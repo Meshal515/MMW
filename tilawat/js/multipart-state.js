@@ -2,9 +2,9 @@ let pending=null;
 
 const norm=value=>String(value||'').trim().toLowerCase();
 
-export function stageMultipart({title='',reciter='',parts=[]}={}){
+export function stageMultipart({title='',reciter='',parts=[],force=false}={}){
   const clean=(Array.isArray(parts)?parts:[]).filter(Boolean).slice(0,4);
-  pending=clean.length?{title:norm(title),reciter:norm(reciter),parts:clean,createdAt:Date.now()}:null;
+  pending=(force||clean.length)?{title:norm(title),reciter:norm(reciter),parts:clean,force:!!force,createdAt:Date.now()}:null;
 }
 
 export function clearStagedMultipart(){pending=null}

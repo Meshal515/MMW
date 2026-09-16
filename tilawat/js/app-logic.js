@@ -42,8 +42,11 @@ function sourceKeys(rec = {}) {
 
 export function findEquivalentTrack(local = [], rec = {}) {
   if (rec.catalogRef) {
-    const byCatalog = local.find(item => sameCatalogRef(item, rec));
-    if (byCatalog) return byCatalog;
+    /* Catalogue identity is authoritative. Collection/source pages can be shared
+       by many surahs (for example the Ramadan 1425 archive page), so falling
+       through to source-url matching can incorrectly replace the current surah
+       with another saved one. Different catalogue refs must never be merged. */
+    return local.find(item => sameCatalogRef(item, rec)) || null;
   }
   const incoming = sourceKeys(rec);
   if (incoming.size) {

@@ -1,0 +1,6 @@
+#saveRec{position:relative;color:var(--ink);border-color:var(--line);background:var(--surface2);transition:transform .2s cubic-bezier(.16,1,.3,1),background .2s,border-color .2s,color .2s}
+#saveRec svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+#saveRec.is-library-saved{color:var(--ink);background:color-mix(in srgb,var(--surface2) 82%,var(--accent) 18%);border-color:color-mix(in srgb,var(--accent) 30%,var(--line))}
+#saveRec:active{transform:scale(.92)}
+#saveRec[hidden]{display:none!important}
+@media(prefers-reduced-motion:reduce){#saveRec{transition:none!important}}

@@ -25,6 +25,9 @@ const state={
   seeking:false,lastSeekValue:0,downloadController:null,pendingYoutubeMeta:null,coverModeTouched:false,fallbackTriedFor:'',modalReturnFocus:new WeakMap()
 };
 const player=new Player('ytMount');
+/* Keep one long-lived media element eligible for continuous background playback.
+   Native looping is always off; repeat is owned only by the explicit app control. */
+player.audio.loop=false;player.audio.autoplay=true;player.audio.preload='auto';player.audio.playsInline=true;
 
 function toast(msg,ms=2600){const el=$('toast');if(!el)return;el.textContent=msg;el.classList.add('on');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>el.classList.remove('on'),ms)}
 function playSvg(){return'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5 19 12 7 19.5z"/></svg>'}
@@ -130,6 +133,18 @@ function showTab(tab){state.tab=tab;['home','search','library'].forEach(t=>$(t+'
 document.querySelector('.tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab)});$('brand').onclick=()=>showTab('home');$('searchInput').addEventListener('input',e=>renderSearch(e.target.value));$('librarySegs').addEventListener('click',e=>{const b=e.target.closest('[data-seg]');if(!b)return;state.librarySeg=b.dataset.seg;renderLibrary()});
 
 function findRec(id){return state.local.find(r=>r.id===id)||(state.current?.id===id?state.current:null)}
+function queueKey(rec){if(!rec)return'';if(isPersisted(rec))return`local:${rec.id}`;if(rec.catalogRef)return`catalog:${catalogRefKey(rec.catalogRef)}`;return`id:${rec.id||''}`}
+function catalogRecordFromAction(value=''){const [rid,mid,sid]=String(value).split('|').map(Number),r=state.reciters.find(x=>Number(x.id)===rid),m=reciterMoshafs(r).find(x=>Number(x.id)===mid);return r&&m?applyCatalogState(catalogRecitation(r,m,sid)):null}
+function recordFromAction(el){if(el?.dataset?.play)return findRec(el.dataset.play);if(el?.dataset?.catalogPlay)return catalogRecordFromAction(el.dataset.catalogPlay);return null}
+function fullCatalogQueue(rec){const ref=rec?.catalogRef;if(!ref)return[];const r=state.reciters.find(x=>Number(x.id)===Number(ref.reciterId)),m=reciterMoshafs(r).find(x=>Number(x.id)===Number(ref.moshafId));return r&&m?reciterSurahs(r,m).map(s=>applyCatalogState(catalogRecitation(r,m,s.id))):[]}
+function contextualQueue(el,rec){
+  const root=el?.closest?.('#libraryGrid,.rail,.library-grid,.reciter-surah-grid,.result-list');
+  let list=root?$$('[data-play],[data-catalog-play]',root).map(recordFromAction).filter(Boolean):[];
+  if(list.length<2)list=rec?.catalogRef?fullCatalogQueue(rec):isPersisted(rec)?orderedLibrary(state.local):list;
+  const seen=new Set();list=list.filter(item=>{const key=queueKey(item);if(!key||seen.has(key))return false;seen.add(key);return true});
+  return list;
+}
+function setQueueFromElement(el,rec){const list=contextualQueue(el,rec),key=queueKey(rec),i=list.findIndex(x=>queueKey(x)===key);if(i>=0){state.queue=list;state.queueIndex=i}else{state.queue=[rec];state.queueIndex=0}}
 function openBrowse(title,kicker,meta,body,mono='ق'){$('browseTitle').textContent=title;$('browseKicker').textContent=kicker;$('browseMeta').textContent=meta||'';const visual=/ياسر|سورة|القراء|القرآن/.test(`${title} ${kicker}`);$('browseMono').innerHTML=visual?`<img src="${dossariImage(`browse|${title}`)}" data-fallback="${QURAN_FALLBACK}" alt="">`:esc(mono);$('browseBody').innerHTML=body;$('browsePage').scrollTop=0;$('browsePage').classList.remove('hidden');animateEnter($('browsePage'))}
 $('browseClose').onclick=()=>$('browsePage').classList.add('hidden');
 function openAllReciters(){openBrowse('كل القراء','كتالوج القرآن',`${state.reciters.length} قارئ`,`<div class="library-grid">${state.reciters.map(reciterCardHTML).join('')}</div>`,'ق')}
@@ -141,8 +156,8 @@ function openSurah(id){const name=SURAHS[id-1],available=[];for(const r of state
 
 async function playByElement(el){
   if(state.editMode&&el.closest('#libraryGrid'))return;
-  if(el.dataset.play){const rec=findRec(el.dataset.play);if(rec)await playRecitation(rec,null,el.querySelector?.('.art')||el,{open:true});return}
-  if(el.dataset.catalogPlay){const [rid,mid,sid]=el.dataset.catalogPlay.split('|').map(Number),r=state.reciters.find(x=>Number(x.id)===rid),m=reciterMoshafs(r).find(x=>Number(x.id)===mid);if(!r||!m){toast('الكتالوج لم يكتمل بعد.');return}const rec=applyCatalogState(catalogRecitation(r,m,sid));await resolveCover(rec);state.queue=reciterSurahs(r,m).map(s=>applyCatalogState(catalogRecitation(r,m,s.id)));state.queueIndex=state.queue.findIndex(x=>x.id===rec.id);await playRecitation(rec,null,el,{open:true})}
+  if(el.dataset.play){const rec=findRec(el.dataset.play);if(rec){setQueueFromElement(el,rec);await playRecitation(rec,null,el.querySelector?.('.art')||el,{open:true})}return}
+  if(el.dataset.catalogPlay){const rec=catalogRecordFromAction(el.dataset.catalogPlay);if(!rec){toast('الكتالوج لم يكتمل بعد.');return}await resolveCover(rec);setQueueFromElement(el,rec);await playRecitation(rec,null,el,{open:true})}
 }
 document.addEventListener('click',async e=>{
   const handle=e.target.closest('.library-drag-handle');if(handle){e.preventDefault();e.stopPropagation();return}
@@ -157,12 +172,15 @@ document.addEventListener('click',async e=>{
 function playbackTrack(rec,v){const videoId=youtubeId(v?.sourceUrl||v?.videoUrl||v?.embedUrl||''),isYoutube=v?.provider==='youtube'||!!videoId,direct=String(v?.audioUrl||'').trim(),audioLike=/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(\?|#|$)/i.test(direct)||/^\/api\/yaldosry-audio/.test(direct),trusted=['mp3quran','archive','quranicaudio','islamway','tvquran','assabile','everyayah','surahquran','qurancom','yaldosry'].includes(v?.provider);return{...rec,localAudioKey:v?.localAudioKey||'',audioUrl:isYoutube?'':((audioLike||trusted)?direct:''),youtubeId:videoId||'',start:0,end:0}}
 function localVariant(rec,excludeId=''){return(rec.variants||[]).find(v=>v.localAudioKey&&v.id!==excludeId)||null}
 function chooseVariant(rec,explicit=null){if(explicit)return explicit;if(navigator.onLine===false){const local=localVariant(rec);if(local)return local}return resolveVariant(rec)}
+function playableVariant(rec,explicit=null){const variant=chooseVariant(rec,explicit);if(!variant)return null;const playable=playbackTrack(rec,variant);return playable.localAudioKey||playable.audioUrl||playable.youtubeId?{variant,playable}:null}
 async function updateLastListened(rec){const cover=await resolveCover(rec),action=isPersisted(rec)?{kind:'local',key:rec.id}:{kind:'catalog',key:catalogRefKey(rec.catalogRef)};state.lastListened={...action,title:rec.title||`سورة ${rec.surah}`,sub:recSubtitle(rec),cover,fallback:fallbackCover(rec),position:player.position||rec.lastPosition||0,at:Date.now()};setPref(PREF_LAST,state.lastListened).catch(()=>{});renderLastListened()}
-async function playRecitation(rec,variant=null,originEl=null,{resume=true,open=false}={}){
-  if(!rec)return;applyCatalogState(rec);variant=chooseVariant(rec,variant);if(!variant){toast('لا يوجد مصدر قابل للتشغيل لهذا التسجيل.');return}
-  const playable=playbackTrack(rec,variant);if(!playable.localAudioKey&&!playable.audioUrl&&!playable.youtubeId){toast('هذا المصدر مرجعي فقط؛ أضف MP3 أو اختر نسخة قابلة للتشغيل.');return}
-  const wasSame=state.current?.id===rec.id;state.current=rec;state.currentVariant=variant;state.fallbackTriedFor='';if(!state.queue.length||!state.queue.some(x=>x.id===rec.id)){state.queue=[rec];state.queueIndex=0}else state.queueIndex=state.queue.findIndex(x=>x.id===rec.id);
-  rec.lastPlayedAt=Date.now();rec.playCount=(rec.playCount||0)+1;if(isPersisted(rec))putTrack(rec).catch(()=>{});await renderPlayer(originEl);await updateLastListened(rec);if(open)openPlayer();await player.load({...playable,lastPosition:resume?(wasSame?player.position:rec.lastPosition||0):0},{autoplay:true,resume});player.setRate(state.speed);setPlayIcons();
+async function playRecitation(rec,variant=null,originEl=null,{resume=true,open=false,priorityPlayback=false}={}){
+  if(!rec)return;applyCatalogState(rec);const resolved=playableVariant(rec,variant);if(!resolved){toast('لا يوجد مصدر قابل للتشغيل لهذا التسجيل.');return}variant=resolved.variant;const playable=resolved.playable;
+  const wasSame=queueKey(state.current)===queueKey(rec),key=queueKey(rec),queueIndex=state.queue.findIndex(x=>queueKey(x)===key);state.current=rec;state.currentVariant=variant;state.fallbackTriedFor='';if(queueIndex<0){state.queue=[rec];state.queueIndex=0}else state.queueIndex=queueIndex;
+  rec.lastPlayedAt=Date.now();rec.playCount=(rec.playCount||0)+1;if(isPersisted(rec))putTrack(rec).catch(()=>{});
+  const payload={...playable,lastPosition:resume?(wasSame?player.position:rec.lastPosition||0):0};
+  if(priorityPlayback){const loading=player.load(payload,{autoplay:true,resume});player.setRate(state.speed);renderPlayer(originEl).catch(()=>{});updateLastListened(rec).catch(()=>{});if(open)openPlayer();await loading;setPlayIcons();return}
+  await renderPlayer(originEl);await updateLastListened(rec);if(open)openPlayer();await player.load(payload,{autoplay:true,resume});player.setRate(state.speed);setPlayIcons();
 }
 async function renderPlayer(originEl=null){
   const r=state.current;if(!r)return;const c=await resolveCover(r),fallback=fallbackCover(r);for(const img of [$('miniCover'),$('playerCover')]){img.src=c;img.dataset.fallback=fallback;img.onerror=()=>{img.onerror=null;img.src=fallback}}
@@ -172,7 +190,7 @@ function animateEnter(el){if(!el||matchMedia('(prefers-reduced-motion: reduce)')
 function openPlayer(){if(!state.current)return;$('playerPage').scrollTop=0;$('playerPage').classList.remove('hidden');document.body.style.overflow='hidden';animateEnter($('playerPage'))}
 function closePlayer(){$('playerPage').classList.add('hidden');document.body.style.overflow=''}
 $('miniOpen').onclick=openPlayer;$('playerClose').onclick=closePlayer;$('miniPlay').onclick=$('mainPlay').onclick=()=>player.toggle();$('back10').onclick=()=>player.nudge(-10);$('forward10').onclick=()=>player.nudge(10);
-function stepQueue(d,{wrap=true}={}){const i=queueTargetIndex(state.queueIndex,state.queue.length,d,{wrap});if(i<0)return false;state.queueIndex=i;playRecitation(state.queue[i],null,null,{resume:false,open:false});return true}
+function stepQueue(d,{wrap=true,priorityPlayback=false}={}){const len=state.queue.length;if(!len)return false;let cursor=state.queueIndex;for(let attempt=0;attempt<len;attempt++){const i=queueTargetIndex(cursor,len,d,{wrap});if(i<0)return false;const rec=state.queue[i],resolved=playableVariant(rec);if(resolved){state.queueIndex=i;playRecitation(rec,resolved.variant,null,{resume:false,open:false,priorityPlayback});return true}cursor=i;if(!wrap&&((d>0&&i>=len-1)||(d<0&&i<=0)))return false}return false}
 $('prev').onclick=()=>stepQueue(-1,{wrap:true});$('next').onclick=()=>stepQueue(1,{wrap:true});
 const speeds=[1,1.25,1.5,1.75,2,.75];$('speed').onclick=()=>{const i=speeds.indexOf(state.speed);state.speed=speeds[(i+1)%speeds.length];player.setRate(state.speed);$('speed').querySelector('[data-chip-value]').textContent=`${state.speed}×`;$('speed').setAttribute('aria-label',`سرعة التشغيل: ${state.speed}`)};$('repeat').onclick=()=>{state.repeat=!state.repeat;$('repeat').classList.toggle('on',state.repeat);$('repeat').setAttribute('aria-pressed',String(state.repeat));$('repeat').setAttribute('aria-label',state.repeat?'إلغاء تكرار السورة':'تكرار السورة');$('repeat').title=state.repeat?'إلغاء تكرار السورة':'تكرار السورة'};
 const sleepValues=[15,30,45,60,0];let sleepIndex=-1;function syncSleepButton(min=0){const button=$('sleep'),badge=button.querySelector('[data-chip-value]');button.classList.toggle('on',!!min);button.setAttribute('aria-pressed',String(!!min));button.setAttribute('aria-label',min?`إيقاف التشغيل بعد ${min} دقيقة`:'مؤقت النوم');button.title=min?`بعد ${min} دقيقة`:'مؤقت النوم';badge.hidden=!min;badge.textContent=min?`${min}د`:''}$('sleep').onclick=()=>{sleepIndex=(sleepIndex+1)%sleepValues.length;const min=sleepValues[sleepIndex];clearTimeout(state.sleepTimer);syncSleepButton(min);if(min)state.sleepTimer=setTimeout(()=>{player.pause();syncSleepButton(0);toast('انتهى مؤقت النوم.')},min*60000)};
@@ -188,11 +206,13 @@ async function persistProgress(force=false){
   if(isPersisted(state.current))await putTrack(state.current).catch(()=>{});else{state.catalogProgress[state.current.id]={lastPosition:t,lastPlayedAt:now};setPref(PREF_PROGRESS,state.catalogProgress).catch(()=>{})}
   if(state.lastListened){state.lastListened.position=t;state.lastListened.at=now;setPref(PREF_LAST,state.lastListened).catch(()=>{})}
 }
+function completeCurrentProgress(){const rec=state.current;if(!rec)return;const now=Date.now();rec.lastPosition=0;rec.lastPlayedAt=now;if(isPersisted(rec))putTrack(rec).catch(()=>{});else{state.catalogProgress[rec.id]={lastPosition:0,lastPlayedAt:now};setPref(PREF_PROGRESS,state.catalogProgress).catch(()=>{})}if(state.lastListened){state.lastListened.position=0;state.lastListened.at=now;setPref(PREF_LAST,state.lastListened).catch(()=>{})}}
+function repeatIsActive(){const button=$('repeat');return state.repeat===true&&button?.getAttribute('aria-pressed')==='true'&&button?.classList.contains('on')}
 function syncPlayerTime(){const d=player.duration||0,t=player.position||0;$('curTime').textContent=fmtTime(t);$('durTime').textContent=fmtTime(d);if(!state.seeking){const value=d?Math.round(t/d*1000):0;$('seek').value=value;$('miniSeek').value=value;$('miniSeek').style.setProperty('--mini-pct',`${value/10}%`)}persistProgress(false)}
-player.on('state',setPlayIcons);player.on('time',syncPlayerTime);player.on('duration',syncPlayerTime);player.on('source',info=>{$('ytPark').classList.toggle('active',info?.source==='youtube')});player.on('ended',()=>{persistProgress(true);if(state.repeat&&state.current)playRecitation(state.current,state.currentVariant,null,{resume:false,open:false});else stepQueue(1,{wrap:false})});
+player.on('state',setPlayIcons);player.on('time',syncPlayerTime);player.on('duration',syncPlayerTime);player.on('source',info=>{$('ytPark').classList.toggle('active',info?.source==='youtube')});player.on('ended',()=>{completeCurrentProgress();if(repeatIsActive()&&state.current){playRecitation(state.current,state.currentVariant,null,{resume:false,open:false,priorityPlayback:true});return}if(!stepQueue(1,{wrap:false,priorityPlayback:true}))setPlayIcons()});
 player.on('error',err=>{console.warn(err);setPlayIcons();const current=state.current,local=current&&localVariant(current,state.currentVariant?.id),fallbackKey=current?`${current.id}:${state.currentVariant?.id||''}`:'';if(current&&local&&state.fallbackTriedFor!==fallbackKey){state.fallbackTriedFor=fallbackKey;current.lastPosition=player.position||current.lastPosition||0;toast('تعذر المصدر الحالي، شغّلنا النسخة المحفوظة على الجهاز.');playRecitation(current,local,null,{resume:true,open:false});return}toast('تعذر تشغيل هذا المصدر. جرّب نسخة أخرى من التلاوة أو افتح المصدر.',4200)});
 addEventListener('tilawat:stop-playback',()=>{persistProgress(true);player.stop();state.current=null;state.currentVariant=null;state.queue=[];state.queueIndex=-1;state.fallbackTriedFor='';clearTimeout(state.sleepTimer);state.sleepTimer=null;$('miniPlayer').classList.add('hidden');$('app').classList.remove('has-mini');$('playerPage').classList.add('hidden');$('seek').value=0;$('miniSeek').value=0;$('miniSeek').style.setProperty('--mini-pct','0%');$('curTime').textContent='0:00';$('durTime').textContent='0:00';document.body.style.overflow='';document.documentElement.classList.remove('is-audio-playing');syncCurrentCards();renderLibrary()});
-bindMediaSession(player,{previous:()=>stepQueue(-1,{wrap:true}),next:()=>stepQueue(1,{wrap:true})},track=>coverSync(track));
+bindMediaSession(player,{previous:()=>stepQueue(-1,{wrap:true,priorityPlayback:true}),next:()=>stepQueue(1,{wrap:true,priorityPlayback:true})},track=>coverSync(track));
 
 function variantBadges(v,bestId){const a=[];if(v.id===bestId)a.push('<span class="badge gold">أفضل جودة</span>');if(v.original)a.push('<span class="badge">أصلية</span>');if(v.restored||v.remastered)a.push('<span class="badge">منقحة</span>');if(v.corrected)a.push('<span class="badge">مصححة</span>');if(v.localAudioKey)a.push('<span class="badge gold">بلا نت</span>');if(v.rare)a.push('<span class="badge">نادرة</span>');return a.join('')}
 function renderVariants(){

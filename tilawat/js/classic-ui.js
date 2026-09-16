@@ -4,6 +4,8 @@ import './interaction-v28.js';
 import './favorites.js';
 import './motion-system.js';
 import './multipart-ui.js';
+import './recitation-edit.js';
+import './library-membership.js';
 
 const $=s=>document.querySelector(s);
 let installPrompt=null;

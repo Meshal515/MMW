@@ -76,15 +76,19 @@ function ensurePlayerFavorite(){
   return button;
 }
 
+function setFavoriteVisual(button,active){
+  if(!button)return;
+  button.classList.toggle('is-favorite',active);
+  button.setAttribute('aria-pressed',String(active));
+  button.setAttribute('aria-label',active?'إزالة من المفضلة':'إضافة للمفضلة');
+  button.title=active?'إزالة من المفضلة':'إضافة للمفضلة';
+}
 function syncCurrentFavorite(){
   const source=document.getElementById('miniFav');
   const target=document.getElementById('playerFav');
   if(!source||!target)return;
   const active=source.getAttribute('aria-pressed')==='true'||source.classList.contains('is-favorite');
-  target.classList.toggle('is-favorite',active);
-  target.setAttribute('aria-pressed',String(active));
-  target.setAttribute('aria-label',active?'إزالة من المفضلة':'إضافة للمفضلة');
-  target.title=active?'إزالة من المفضلة':'إضافة للمفضلة';
+  setFavoriteVisual(target,active);
 }
 
 function decorateRows(records){
@@ -106,10 +110,7 @@ function decorateRows(records){
     }
     const active=!!rec.favorite;
     row.classList.toggle('is-favorite',active);
-    button.classList.toggle('is-favorite',active);
-    button.setAttribute('aria-pressed',String(active));
-    button.setAttribute('aria-label',active?'إزالة من المفضلة':'إضافة للمفضلة');
-    button.title=active?'إزالة من المفضلة':'إضافة للمفضلة';
+    setFavoriteVisual(button,active);
   }
 }
 
@@ -177,8 +178,7 @@ async function toggleRowFavorite(button){
   const record=await getTrack(id).catch(()=>null);
   if(!record)return;
   const active=!record.favorite;
-  button.classList.toggle('is-favorite',active);
-  button.setAttribute('aria-pressed',String(active));
+  setFavoriteVisual(button,active);
   row?.classList.toggle('is-favorite',active);
   dispatchEvent(new CustomEvent('tilawat:favorite-feedback',{detail:{target:button,active}}));
   try{
@@ -188,8 +188,7 @@ async function toggleRowFavorite(button){
     dispatchEvent(new CustomEvent('tilawat-library-imported'));
   }catch(err){
     console.warn(err);
-    button.classList.toggle('is-favorite',!active);
-    button.setAttribute('aria-pressed',String(!active));
+    setFavoriteVisual(button,!active);
     row?.classList.toggle('is-favorite',!active);
     notify('تعذر تحديث المفضلة.');
   }
@@ -215,12 +214,18 @@ function boot(){
     toggleRowFavorite(button);
   },true);
 
-  miniFav?.addEventListener('click',()=>setTimeout(()=>{
-    syncCurrentFavorite();
+  miniFav?.addEventListener('click',()=>{
+    /* v2 owns persistence, but waiting for IndexedDB before painting the heart
+       makes the mini/full/glass players visibly lag and can make the glass card
+       snap back to the old state. Paint the intended state immediately; the DB
+       refresh below remains the source of truth and will reconcile if needed. */
     const active=miniFav.getAttribute('aria-pressed')==='true'||miniFav.classList.contains('is-favorite');
-    dispatchEvent(new CustomEvent('tilawat:favorite-feedback',{detail:{target:miniFav,active}}));
-    queueRefresh();
-  },45));
+    const next=!active;
+    setFavoriteVisual(miniFav,next);
+    const playerFav=document.getElementById('playerFav');setFavoriteVisual(playerFav,next);
+    dispatchEvent(new CustomEvent('tilawat:favorite-feedback',{detail:{target:miniFav,active:next}}));
+    setTimeout(()=>{syncCurrentFavorite();queueRefresh()},55);
+  });
 
   document.getElementById('librarySegs')?.addEventListener('click',()=>setTimeout(queueRefresh,0));
   document.querySelector('.tabbar')?.addEventListener('click',event=>{if(event.target.closest('[data-tab="library"]'))setTimeout(queueRefresh,0)});

@@ -129,9 +129,11 @@ try{
   await page.waitForSelector('#tilawatV28ActionBackdrop.is-open');
   await snapshot('390-player-more-dark',{settle:360});
   await page.click('[data-v28-action="edit"]');
-  await page.waitForSelector('#tilawatV28EditBackdrop.is-open');
+  await page.waitForSelector('#addDialog:not(.hidden)');
+  assert.equal(await page.locator('#addDialogTitle').textContent(),'تعديل التلاوة');
+  assert.equal(await page.locator('#tilawatV28EditBackdrop').count(),0,'legacy edit UI must stay removed');
   await snapshot('390-track-edit-dark',{settle:420});
-  await page.click('#tilawatV28EditClose');
+  await page.click('[data-close="addDialog"]');
   await page.waitForTimeout(280);
   await page.click('#playerClose');
   await page.waitForSelector('#playerPage',{state:'hidden'});
@@ -145,7 +147,8 @@ try{
   await page.click('#addBtn');
   await page.waitForSelector('#addDialog:not(.hidden)');
   await snapshot('390-add-dark',{settle:520});
-  await page.keyboard.press('Escape');
+  await page.click('[data-close="addDialog"]');
+  await page.waitForTimeout(220);
 
   await page.click('#themeBtn');
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');

@@ -80,11 +80,11 @@ html[data-motion-ui] .transport-seek--back::after{content:'−10 ث'}html[data-m
 .seek-feedback{position:absolute;z-index:8;top:-5px;pointer-events:none;padding:5px 8px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.18);will-change:transform,opacity}
 html[data-motion-ui] .player-actions{margin-top:18px}
 
-/* Dialogs / settings / v28 overlays. */
+/* Dialogs / settings / v28 overlays. Dialogs stay effectively opaque while moving. */
 html[data-motion-ui] .dialog{background:color-mix(in srgb,#000 62%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-html[data-motion-ui] .dialog:not(.hidden) .sheet{animation:motion-sheet-in .46s var(--motion-ease) both}
+html[data-motion-ui] .dialog:not(.hidden) .sheet{animation:motion-sheet-in .42s var(--motion-ease) both}
 html[data-motion-ui] .sheet{box-shadow:0 34px 110px rgba(0,0,0,.5);border:1px solid color-mix(in srgb,var(--ink) 8%,transparent)}
-@keyframes motion-sheet-in{from{opacity:.45;transform:translateY(26px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes motion-sheet-in{from{opacity:.96;transform:translateY(24px) scale(.988)}to{opacity:1;transform:none}}
 html[data-motion-ui] .classic-settings{transition:opacity .2s var(--motion-ease),transform .28s var(--motion-ease);transform-origin:center bottom}
 html[data-motion-ui] .classic-settings:not(.open){opacity:0;transform:translateY(10px) scale(.99)}
 html[data-motion-ui] .classic-settings.open{opacity:1;transform:none}
@@ -92,13 +92,12 @@ html[data-motion-ui] .classic-panel{box-shadow:inset 0 1px 0 color-mix(in srgb,v
 
 html[data-motion-ui] .tilawat-v28-sheet{opacity:0;transform:translateY(18px) scale(.985);transition:opacity .22s var(--motion-ease),transform .28s var(--motion-ease)}
 html[data-motion-ui] .tilawat-v28-backdrop.is-open .tilawat-v28-sheet{opacity:1;transform:none}
-html[data-motion-ui] .tilawat-v28-edit{opacity:0;transform:translateY(20px) scale(.99);transition:opacity .22s var(--motion-ease),transform .3s var(--motion-ease)}
-html[data-motion-ui] .tilawat-v28-backdrop.is-open .tilawat-v28-edit{opacity:1;transform:none}
 html[data-motion-ui] .tilawat-v28-action{transition:background .16s ease,transform .16s var(--motion-ease)}
 html[data-motion-ui] .tilawat-v28-action:active{background:color-mix(in srgb,var(--ink) 5%,transparent);transform:scale(.992)}
 
-.motion-view-enter{animation:motion-view-fallback .44s var(--motion-ease) both}
-@keyframes motion-view-fallback{from{opacity:.55;transform:translateY(9px)}to{opacity:1;transform:none}}
+/* CSS fallback mirrors the GSAP path: positional settle only, never page dimming. */
+.motion-view-enter{animation:motion-view-fallback .4s var(--motion-ease) both}
+@keyframes motion-view-fallback{from{transform:translateY(7px)}to{transform:none}}
 
 @media(hover:hover){
   html[data-motion-ui] .last-listened-card:hover{border-color:color-mix(in srgb,var(--accent) 42%,var(--line));box-shadow:0 24px 70px rgba(0,0,0,.24)}

@@ -1,4 +1,4 @@
-const VERSION='tilawat-v30';
+const VERSION='tilawat-v32';
 const SHELL=`${VERSION}-shell`;
 
 /* Everything index.html actually loads. Keep this list in step with the <link>
@@ -64,12 +64,20 @@ self.addEventListener('fetch',event=>{
 
   event.respondWith((async()=>{
     const cache=await caches.open(SHELL);
-    const network=fetch(request).then(response=>{
+    const fromNetwork=async()=>{
+      const response=await fetch(request).catch(()=>null);
       if(response?.ok)cache.put(request,response.clone()).catch(()=>{});
       return response;
-    }).catch(()=>null);
-    const isCode=/\.(?:html|css|js|json|webmanifest)$/i.test(url.pathname);
-    if(isCode)return (await network)||(await cache.match(request))||Response.error();
-    return (await cache.match(request))||(await network)||Response.error();
+    };
+
+    /* Code should be the deployed version; the cache is the offline answer. */
+    if(/\.(?:html|css|js|json|webmanifest)$/i.test(url.pathname))
+      return (await fromNetwork())||(await cache.match(request))||Response.error();
+
+    /* Images, fonts and media do not change under the same name, so a hit is
+       the answer. The previous version started the network request before it
+       looked, which meant every cover and every font came down the wire again
+       on every visit even though the cache already held them. */
+    return (await cache.match(request))||(await fromNetwork())||Response.error();
   })());
 });

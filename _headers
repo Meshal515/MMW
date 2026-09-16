@@ -4,6 +4,24 @@
 /tilawat/sw.js
   Cache-Control: no-cache, no-store, must-revalidate
 
+# Pages serves static assets with max-age=0, must-revalidate by default, so every
+# cover, font and vendor script costs a revalidation round trip on every load.
+# These files are stable, and the service worker is the layer that decides when
+# to refresh them, so let the browser keep them.
+/tilawat/assets/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/tilawat/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# A week rather than a year: covers can be replaced under the same name, and a
+# bumped worker VERSION should not leave a stale one stranded in the browser.
+/tilawat/assets/covers/*
+  Cache-Control: public, max-age=604800
+
+/tilawat/assets/*
+  Cache-Control: public, max-age=604800
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

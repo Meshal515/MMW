@@ -4,7 +4,7 @@
    instead of trusting the list. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,10 +13,11 @@ const read = p => readFileSync(join(ROOT, p), 'utf8');
 const html = read('index.html');
 const sw = read('sw.js');
 
-const precache = new Set(
-  (sw.match(/const PRECACHE=\[([\s\S]*?)\];/)?.[1] ?? '')
+const list = name => new Set(
+  (sw.match(new RegExp(`const ${name}=\\[([\\s\\S]*?)\\];`))?.[1] ?? '')
     .match(/'([^']+)'/g)?.map(s => s.slice(1, -1).replace(/^\.\//, '')) ?? []
 );
+const precache = list('PRECACHE');
 assert.ok(precache.size > 20, 'PRECACHE should be populated');
 
 const attrs = re => [...html.matchAll(re)].map(m => m[1]).filter(u => u.startsWith('./')).map(u => u.slice(2));
@@ -49,8 +50,14 @@ test('every module reachable from the entry point is precached', () => {
 test('every precached file exists on disk', () => {
   for (const f of precache) {
     if (f === '' || f.endsWith('/')) continue;
-    assert.ok(existsSync(join(ROOT, f)), `sw.js precaches a file that is not there: ${f}`);
+    assert.ok(existsSync(join(ROOT, f)), `sw.js caches a file that is not there: ${f}`);
   }
+});
+
+test('every cover on disk is cached for offline use', () => {
+  for (const f of readdirSync(join(ROOT, 'assets/covers')))
+    if (/\.(jpe?g|png|webp)$/i.test(f))
+      assert.ok(precache.has(`assets/covers/${f}`), `cover not precached: ${f}`);
 });
 
 test('fonts the stylesheet asks for are inside the service worker scope', () => {

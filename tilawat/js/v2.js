@@ -93,7 +93,8 @@ function renderHome(){
     const reciter=state.reciters[0],moshafs=reciterMoshafs(reciter),archive=moshafs.find(m=>Number(m.id)===1425),murattal=moshafs.find(m=>Number(m.id)===1);
     if(archive){const ids=reciterSurahs(reciter,archive).map(s=>s.id),tracks=catalogueSet(archive,ids.slice(0,12));if(tracks.length)blocks.push(shelf('رمضان 1425هـ',rail(tracks.map(r=>cardHTML(r,{tag:'نادرة'}))),'تسجيلات الأرشيف القديمة'))}
     const murattalTracks=catalogueSet(murattal,[18,36,55,56,67,78,112,113,114,2,19,20]);if(murattalTracks.length)blocks.push(shelf('المصحف المرتل',rail(murattalTracks.map(cardHTML)),'تلاوات مختارة بصوت ياسر الدوسري'));
-    blocks.push(shelf('القراء',rail(featuredReciters().map(reciterCardHTML)),'المصاحف والتسجيلات','reciters'));
+    const featured=featuredReciters();
+    blocks.push(shelf('القراء',rail(featured.map(reciterCardHTML)),'المصاحف والتسجيلات',state.reciters.length>featured.length?'reciters':''));
   }else blocks.push(shelf(state.catalogError?'تعذر تحميل الكتالوج':'جارٍ تجهيز التلاوات',''));
   const rare=state.local.filter(r=>r.rare).slice(0,10);if(rare.length)blocks.push(shelf('كنوز الأرشيف',rail(rare.map(r=>cardHTML(r,{tag:'نادرة'})))));
   $('homeShelves').innerHTML=blocks.join('');syncCurrentCards();

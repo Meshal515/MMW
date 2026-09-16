@@ -2,12 +2,13 @@
    Drag a row by its handle and rearrange the list without rebuilding it.
 
    Pointer movement updates only the dragged row on every animation frame. Other
-   rows are touched only when the target slot changes. On drop, transitions are
-   temporarily disabled while the DOM node is moved so the generic card transform
-   transition cannot replay a second, visible settling animation. */
+   rows are touched only when the target slot changes. On drop we use a FLIP-style
+   handoff: capture the pixels users are looking at, move the existing DOM node,
+   invert that layout change, then settle to the new slot. That prevents a frame
+   where the old translated layout and the committed layout visually overlap. */
 
-const EASE = 'transform .19s cubic-bezier(.2, .8, .26, 1)';
-const SETTLE_MS = 190;
+const EASE = 'transform .20s cubic-bezier(.16, 1, .3, 1)';
+const SETTLE_MS = 210;
 const ACTIVATION_PX = 6;
 const EDGE = 84;
 const EDGE_SPEED = 13;
@@ -128,18 +129,19 @@ export function makeSortable(list, { handle: handleSelector, item: itemSelector,
     scheduleFrame();
   }
 
-  function clearInlineStyles(done) {
-    const touched = new Set([done.item, ...done.shifted]);
+  function touchedRows(done) {
+    return new Set([done.item, ...done.shifted]);
+  }
+
+  function finishCleanup(done, touched) {
     for (const el of touched) {
-      el.style.transition = 'none';
+      el.style.transition = '';
       el.style.transform = '';
+      el.style.willChange = '';
     }
-    requestAnimationFrame(() => {
-      for (const el of touched) {
-        el.style.transition = '';
-        el.style.willChange = '';
-      }
-    });
+    done.item.classList.remove('is-dragging');
+    list.classList.remove('is-sorting');
+    document.body.classList.remove('is-dragging');
   }
 
   function commitDom(done) {
@@ -147,6 +149,61 @@ export function makeSortable(list, { handle: handleSelector, item: itemSelector,
     const target = done.items[done.to];
     if (done.to > done.from) target.after(done.item);
     else target.before(done.item);
+  }
+
+  function settleWithoutMove(done) {
+    const touched = touchedRows(done);
+    if (REDUCED()) {
+      finishCleanup(done, touched);
+      return;
+    }
+    for (const el of touched) {
+      el.style.transition = EASE;
+      el.style.transform = '';
+      el.style.willChange = 'transform';
+    }
+    setTimeout(() => finishCleanup(done, touched), SETTLE_MS + 24);
+  }
+
+  function commitWithFlip(done) {
+    const touched = touchedRows(done);
+    const before = new Map();
+    for (const el of touched) before.set(el, el.getBoundingClientRect());
+
+    /* Move only the existing row. No clone and no list rebuild. */
+    for (const el of touched) el.style.transition = 'none';
+    commitDom(done);
+    for (const el of touched) el.style.transform = '';
+
+    if (REDUCED()) {
+      if (done.to !== done.from) onDrop(done.from, done.to);
+      finishCleanup(done, touched);
+      return;
+    }
+
+    const after = new Map();
+    for (const el of touched) after.set(el, el.getBoundingClientRect());
+    for (const el of touched) {
+      const a = before.get(el), b = after.get(el);
+      if (!a || !b) continue;
+      const dx = a.left - b.left;
+      const dy = a.top - b.top;
+      const scale = el === done.item ? ' scale(1.02)' : '';
+      el.style.transform = `translate3d(${dx}px,${dy}px,0)${scale}`;
+      el.style.willChange = 'transform';
+    }
+
+    /* One deliberate layout read at drop time establishes the inverted frame.
+       Pointer movement itself remains transform-only and layout-free. */
+    void list.offsetWidth;
+    if (done.to !== done.from) onDrop(done.from, done.to);
+    requestAnimationFrame(() => {
+      for (const el of touched) {
+        el.style.transition = EASE;
+        el.style.transform = '';
+      }
+      setTimeout(() => finishCleanup(done, touched), SETTLE_MS + 24);
+    });
   }
 
   function finish(commit, pointerId) {
@@ -158,25 +215,8 @@ export function makeSortable(list, { handle: handleSelector, item: itemSelector,
     try { done.handle.releasePointerCapture(done.pointerId); } catch {}
 
     if (!done.active) return;
-
-    done.item.classList.remove('is-dragging');
-    const targetOffset = commit ? (done.to - done.from) * done.step : 0;
-    done.item.style.transition = REDUCED() ? 'none' : EASE;
-    done.item.style.transform = targetOffset ? `translate3d(0,${targetOffset}px,0) scale(1.02)` : '';
-
-    const settle = REDUCED() ? 0 : SETTLE_MS;
-    setTimeout(() => {
-      // Keep transitions disabled across the DOM move and transform cleanup. This
-      // prevents identity.css's generic .media-card transform transition from
-      // replaying after the row has already visually settled into its slot.
-      const touched = new Set([done.item, ...done.shifted]);
-      for (const el of touched) el.style.transition = 'none';
-      if (commit) commitDom(done);
-      clearInlineStyles(done);
-      list.classList.remove('is-sorting');
-      document.body.classList.remove('is-dragging');
-      if (commit && done.to !== done.from) onDrop(done.from, done.to);
-    }, settle);
+    if (commit && done.to !== done.from) commitWithFlip(done);
+    else settleWithoutMove(done);
   }
 
   list.addEventListener('pointerdown', onDown);

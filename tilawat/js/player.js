@@ -161,9 +161,29 @@ export class Player{
   _tick(){if(!this.track||!this.engine)return;this._saveMultipartProgress();if(this.engine==='youtube'&&this._checkTrimEnd())return;if(this.engine==='youtube'&&(this.playing||this._pendingSeek))this.emit('time')}
 }
 
+function stableMediaHash(value=''){
+  let h=2166136261;
+  for(const ch of String(value)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}
+  return h>>>0;
+}
+function mediaArtworkFallback(track){
+  const direct=track?.sourceThumbnail||(track?.variants||[]).find(v=>v?.thumbnail)?.thumbnail||track?.cover||'';
+  if(direct&&!String(direct).startsWith('blob:')){try{return new URL(direct,location.href).href}catch{return direct}}
+  const name=String(track?.reciter||'').normalize('NFKD').replace(/[ً-ْٰـ]/g,'').replace(/[أإآٱ]/g,'ا').toLowerCase();
+  const dossari=(name.includes('ياسر')&&name.includes('دوسري'))||/(yasser|yaser).*(dosari|dossari|aldosari|al-dosari)/i.test(name);
+  const pool=dossari?['./assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg','./assets/covers/dossari-4.jpg']:['./assets/covers/fallback-1.jpg','./assets/covers/fallback-2.jpg','./assets/covers/fallback-3.jpg'];
+  const seed=`${track?.reciter||''}|${track?.surah||''}|${track?.id||track?.title||''}`;
+  try{return new URL(pool[stableMediaHash(seed)%pool.length],location.href).href}catch{return pool[0]}
+}
+function stableMediaArtwork(track,resolved){
+  const value=String(resolved||'').trim();
+  if(value&&!value.startsWith('blob:')){try{return new URL(value,location.href).href}catch{return value}}
+  return mediaArtworkFallback(track);
+}
+
 export function bindMediaSession(player,handlers,artworkResolver){
   if(!('mediaSession'in navigator))return;const ms=navigator.mediaSession;const safe=(action,fn)=>{try{ms.setActionHandler(action,fn)}catch{}};let currentTrack=null;
-  const syncMetadata=part=>{const track=currentTrack;if(!track)return;const resolved=artworkResolver?artworkResolver(track):(track.cover||track.thumb||'./assets/icon-512.png');const artwork=resolved?[{src:resolved}]:[];const partText=part?.count>1?` · الجزء ${Number(part.index)+1} من ${part.count}`:'';try{ms.metadata=new MediaMetadata({title:track.title||'تلاوة',artist:track.reciter||'',album:([track.surah,track.year].filter(Boolean).join(' · ')||track.collection||'تلاوات')+partText,artwork})}catch{}};
+  const syncMetadata=part=>{const track=currentTrack;if(!track)return;const raw=artworkResolver?artworkResolver(track):(track.cover||track.thumb||'./assets/icon-512.png');const resolved=stableMediaArtwork(track,raw);const artwork=resolved?[{src:resolved}]:[];const partText=part?.count>1?` · الجزء ${Number(part.index)+1} من ${part.count}`:'';try{ms.metadata=new MediaMetadata({title:track.title||'تلاوة',artist:track.reciter||'',album:([track.surah,track.year].filter(Boolean).join(' · ')||track.collection||'تلاوات')+partText,artwork})}catch{}};
   safe('play',()=>player.play());safe('pause',()=>player.pause());safe('stop',()=>player.stop());safe('previoustrack',()=>handlers.previous());safe('nexttrack',()=>handlers.next());
   safe('seekbackward',d=>player.nudge(-(d?.seekOffset||10)));safe('seekforward',d=>player.nudge(d?.seekOffset||10));safe('seekto',d=>{if(typeof d?.seekTime==='number')player.seek(d.seekTime-player.start)});
   player.on('track',track=>{currentTrack=track;if(!track){ms.metadata=null;ms.playbackState='none';return}syncMetadata({index:player.partIndex,count:player.partCount})});

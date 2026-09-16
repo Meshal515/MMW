@@ -51,6 +51,14 @@ function ensureFavoriteSegment(){
   button.innerHTML=`<span class="favorite-seg__heart">${HEART}</span><span>المفضلة</span>`;
 }
 
+function relayFavoriteToMini(source){
+  const mini=document.getElementById('miniFav');
+  if(!mini)return false;
+  mini._tilawatFavoriteFeedbackTarget=source||mini;
+  mini.click();
+  return true;
+}
+
 function ensurePlayerFavorite(){
   const more=document.getElementById('playerMore');
   if(!more)return null;
@@ -66,11 +74,8 @@ function ensurePlayerFavorite(){
     more.insertAdjacentElement('beforebegin',button);
     button.addEventListener('click',event=>{
       event.preventDefault();
-      document.getElementById('miniFav')?.click();
-      setTimeout(()=>{
-        syncCurrentFavorite();
-        dispatchEvent(new CustomEvent('tilawat:favorite-feedback',{detail:{target:button,active:button.getAttribute('aria-pressed')==='true'}}));
-      },40);
+      relayFavoriteToMini(button);
+      setTimeout(syncCurrentFavorite,40);
     });
   }
   return button;
@@ -171,7 +176,7 @@ async function toggleRowFavorite(button){
   if(!id)return;
   const row=button.closest('.library-row');
   if(row?.classList.contains('is-current')&&document.getElementById('miniFav')){
-    document.getElementById('miniFav').click();
+    relayFavoriteToMini(button);
     setTimeout(queueRefresh,50);
     return;
   }
@@ -214,16 +219,23 @@ function boot(){
     toggleRowFavorite(button);
   },true);
 
+  document.addEventListener('click',event=>{
+    const proxy=event.target instanceof Element?event.target.closest('#tilawatV28GlassFav'):null;
+    if(proxy&&miniFav)miniFav._tilawatFavoriteFeedbackTarget=proxy;
+  },true);
+
   miniFav?.addEventListener('click',()=>{
     /* v2 owns persistence, but waiting for IndexedDB before painting the heart
        makes the mini/full/glass players visibly lag and can make the glass card
        snap back to the old state. Paint the intended state immediately; the DB
        refresh below remains the source of truth and will reconcile if needed. */
+    const feedbackTarget=miniFav._tilawatFavoriteFeedbackTarget||miniFav;
+    miniFav._tilawatFavoriteFeedbackTarget=null;
     const active=miniFav.getAttribute('aria-pressed')==='true'||miniFav.classList.contains('is-favorite');
     const next=!active;
     setFavoriteVisual(miniFav,next);
     const playerFav=document.getElementById('playerFav');setFavoriteVisual(playerFav,next);
-    dispatchEvent(new CustomEvent('tilawat:favorite-feedback',{detail:{target:miniFav,active:next}}));
+    dispatchEvent(new CustomEvent('tilawat:favorite-feedback',{detail:{target:feedbackTarget,active:next}}));
     setTimeout(()=>{syncCurrentFavorite();queueRefresh()},55);
   });
 

@@ -3,8 +3,11 @@ import { getTrack, deleteTrack, deleteBlob, getPref, setPref } from './store.js'
 const STYLE_URL='./library-membership.css';
 const $=s=>document.querySelector(s);
 const PREF_ORDER='tilawat-library-order-v2';
-const ADD_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/><path d="M16.5 12v5M14 14.5h5"/></svg>';
-const REMOVE_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/><path d="M14.5 14.5h5"/></svg>';
+/* One plain bookmark, not a shape-per-state: three overlapping paths (two book
+   spines, a tilted page, a tiny +/-) read as noise at 22px, and the row's other
+   chips (repeat, sleep) already say "on" with colour alone via .is-library-saved
+   below — that state doesn't need a second icon to carry it too. */
+const BOOKMARK_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5A1.5 1.5 0 0 1 8.5 3h7A1.5 1.5 0 0 1 17 4.5V20l-5-3.4L7 20Z"/></svg>';
 let syncing=false;
 
 function ensureStyle(){if(document.querySelector('link[data-tilawat-membership]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=STYLE_URL;link.dataset.tilawatMembership='';document.head.append(link)}
@@ -20,7 +23,7 @@ function paint(button,{saved=false,manual=false}={}){
   setAttr(button,'aria-pressed',saved);
   setAttr(button,'aria-label',saved?'إزالة من مكتبتي':'أضف إلى مكتبتي');
   const title=saved?'إزالة من مكتبتي':'أضف إلى مكتبتي';if(button.title!==title)button.title=title;
-  const key=saved?'remove':'add';if(button.dataset.membershipIcon!==key){button.innerHTML=saved?REMOVE_ICON:ADD_ICON;button.dataset.membershipIcon=key}
+  if(!button.dataset.membershipIcon){button.innerHTML=BOOKMARK_ICON;button.dataset.membershipIcon='1'}
 }
 async function sync(){
   if(syncing)return;syncing=true;

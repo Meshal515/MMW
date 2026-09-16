@@ -65,6 +65,7 @@ jobs:
           node --check tilawat/tests/mini-swipe-regression.mjs
           node --check tilawat/tests/multipart-regression.mjs
           node --check tilawat/tests/ux-stability-regression.mjs
+          node --check tilawat/tests/playback-continuity-regression.mjs
           node --check tilawat/tests/visual-audit.mjs
       - name: Run Tilawat behavior tests
         working-directory: tilawat
@@ -87,6 +88,7 @@ jobs:
           node tilawat/tests/mini-swipe-regression.mjs
           node tilawat/tests/multipart-regression.mjs
           node tilawat/tests/ux-stability-regression.mjs
+          node tilawat/tests/playback-continuity-regression.mjs
           node tilawat/tests/visual-audit.mjs
       - name: Upload Tilawat visual QA artifacts
         if: always()
@@ -120,7 +122,7 @@ jobs:
                     'tilawat/tests/logic.test.mjs','tilawat/tests/backend-source.test.mjs',
                     'tilawat/tests/browser-regression.mjs','tilawat/tests/mini-swipe-regression.mjs',
                     'tilawat/tests/multipart-regression.mjs','tilawat/tests/ux-stability-regression.mjs',
-                    'tilawat/tests/visual-audit.mjs','tilawat/package.json']
+                    'tilawat/tests/playback-continuity-regression.mjs','tilawat/tests/visual-audit.mjs','tilawat/package.json']
           missing=[f for f in required if not Path(f).exists()]
           assert not missing, f'Missing: {missing}'
           print('Validation OK')

@@ -47,7 +47,7 @@ async function openEdit(id){
   $('#addFile').value='';$('#addFileStatus').textContent=preferred?.localAudioKey?'المصدر الحالي محفوظ على الجهاز':'لم يُختر ملف جديد';$('#addCoverFile').value='';$('#addCoverFileStatus').textContent=rec.coverKey?'الصورة الحالية محفوظة من جهازك':'اختياري';
   const thumb=rec.sourceThumbnail||preferred?.thumbnail||'';const yt=$('#coverModeYoutube'),local=$('#coverModeLocal'),upload=$('#coverModeUpload');yt.disabled=!thumb;upload.disabled=!rec.coverKey;let selected=local;if(rec.coverMode==='upload'&&rec.coverKey){upload.checked=true;selected=upload}else if(rec.coverMode==='youtube'&&thumb){yt.checked=true;selected=yt}else local.checked=true;
   selected.dispatchEvent(new Event('change',{bubbles:true}));
-  const preview=$('#addCoverPreview');preview.dataset.fallback=preview.dataset.fallback||'./assets/covers/fallback-1.jpg';preview.src=await coverFor(rec);ensureExistingUploadPreview();
+  const preview=$('#addCoverPreview');preview.onload=null;preview.dataset.fallback=preview.dataset.fallback||'./assets/covers/fallback-1.jpg';preview.src=await coverFor(rec);ensureExistingUploadPreview();
   $('#sourceHint').textContent='عدّل المصدر فقط إذا أردت إضافة مصدر جديد للتلاوة؛ المصادر القديمة لن تُحذف.';
   $('#addDialog').classList.remove('hidden');dispatchEvent(new CustomEvent('tilawat:edit-form-opened',{detail:{track:rec}}));requestAnimationFrame(()=>$('#addTitle')?.focus());
 }

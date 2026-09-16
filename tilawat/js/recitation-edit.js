@@ -40,8 +40,6 @@ async function openEdit(id){
   const preferred=(rec.variants||[]).find(v=>v.id===rec.preferredVariantId)||(rec.variants||[])[0];$('#addOriginal').checked=!!preferred?.original;$('#addRestored').checked=!!(preferred?.restored||preferred?.remastered);
   $('#addFile').value='';$('#addFileStatus').textContent=preferred?.localAudioKey?'المصدر الحالي محفوظ على الجهاز':'لم يُختر ملف جديد';$('#addCoverFile').value='';$('#addCoverFileStatus').textContent=rec.coverKey?'الصورة الحالية محفوظة من جهازك':'اختياري';
   const thumb=rec.sourceThumbnail||preferred?.thumbnail||'';const yt=$('#coverModeYoutube'),local=$('#coverModeLocal'),upload=$('#coverModeUpload');yt.disabled=!thumb;upload.disabled=!rec.coverKey;let selected=local;if(rec.coverMode==='upload'&&rec.coverKey){upload.checked=true;selected=upload}else if(rec.coverMode==='youtube'&&thumb){yt.checked=true;selected=yt}else local.checked=true;
-  /* Also tell v2's cover picker this was an explicit user choice. Otherwise a
-     later YouTube metadata response can silently switch an uploaded phone cover. */
   selected.dispatchEvent(new Event('change',{bubbles:true}));
   const preview=$('#addCoverPreview');preview.dataset.fallback=preview.dataset.fallback||'./assets/covers/fallback-1.jpg';preview.src=await coverFor(rec);ensureExistingUploadPreview();
   $('#sourceHint').textContent='عدّل المصدر فقط إذا أردت إضافة مصدر جديد للتلاوة؛ المصادر القديمة لن تُحذف.';
@@ -75,14 +73,15 @@ async function saveEdit(event){
       if(mode==='youtube'){const thumb=rec.sourceThumbnail||(rec.variants||[]).find(v=>v.thumbnail)?.thumbnail||'';if(!thumb)rec.coverMode='local'}
       if(mode==='local')rec.cover='';
     }
-    /* Multipart preparation is owned by multipart-ui, but the edit controller is
-       the persistence owner. Apply the staged parts to this same track before the
-       atomic track write so editing parts cannot silently diverge from metadata. */
     applyStagedMultipart(rec);
-    delete rec._coverResolved;await putTrack(rec);
-    const newPartKeys=new Set((rec.parts||[]).map(p=>p.localAudioKey).filter(Boolean));for(const key of oldPartKeys)if(!newPartKeys.has(key))await deleteBlob(key).catch(()=>{});
+    const newPartKeys=new Set((rec.parts||[]).map(p=>p.localAudioKey).filter(Boolean));
     const escaped=globalThis.CSS?.escape?CSS.escape(rec.id):rec.id.replace(/["\\]/g,'\\$&'),wasCurrent=$(`#libraryGrid .library-row.is-current[data-play="${escaped}"]`);
+    /* The central stop handler persists the in-memory current track. Do that
+       before writing the edited entity; otherwise its stale object overwrites
+       the just-saved title/cover/parts. */
     if(wasCurrent)dispatchEvent(new CustomEvent('tilawat:stop-playback',{detail:{reason:'edited-current'}}));
+    delete rec._coverResolved;await putTrack(rec);
+    for(const key of oldPartKeys)if(!newPartKeys.has(key))await deleteBlob(key).catch(()=>{});
     $('#addDialog').classList.add('hidden');resetEditState();dispatchEvent(new CustomEvent('tilawat-library-imported'));toast('حُفظت كل تعديلات التلاوة.');
   }catch(err){console.warn(err);clearStagedMultipart();toast('تعذر حفظ التعديل. تأكد من المصدر أو الملف.',4200)}
 }

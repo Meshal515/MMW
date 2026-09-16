@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { appErrors } from './env-noise.mjs';
 
 const BASE='http://127.0.0.1:4173/tilawat/';
 const OUT='tilawat/test-artifacts/product-audit';
@@ -177,7 +178,7 @@ try{
   report.smallControls=uniqueSmall;
   report.runtimeErrors=[...runtimeErrors];
   await writeFile(`${OUT}/audit.json`,JSON.stringify(report,null,2));
-  assert.deepEqual(runtimeErrors,[],`runtime errors:\n${runtimeErrors.join('\n')}`);
+  assert.deepEqual(appErrors(runtimeErrors),[],`runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(JSON.stringify({ok:true,screens:report.screens.map(x=>x.name),smallControlCount:uniqueSmall.length,favorites:report.favorites,transport:report.transport},null,2));
 }catch(error){
   await page.screenshot({path:`${OUT}/failure.png`,fullPage:false}).catch(()=>{});

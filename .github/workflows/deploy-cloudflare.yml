@@ -51,21 +51,15 @@ jobs:
             rm -rf dist-tilawat/functions
           fi
 
-          mkdir -p dist-tilawat/assets/fonts
-          cp -R assets/fonts/. dist-tilawat/assets/fonts/
-
           jq '.id = "/" | .start_url = "./" | .scope = "./"' \
             dist-tilawat/manifest.webmanifest > dist-tilawat/manifest.tmp
           mv dist-tilawat/manifest.tmp dist-tilawat/manifest.webmanifest
 
-          cat > dist-tilawat/_headers <<'EOF'
-          /sw.js
-            Cache-Control: no-cache, no-store, must-revalidate
-
-          /*
-            X-Content-Type-Options: nosniff
-            Referrer-Policy: strict-origin-when-cross-origin
-          EOF
+          # tilawat/_headers ships with the `cp -R tilawat/.` above and is the
+          # single source of truth for this project's caching rules; nothing
+          # here should overwrite it. (Fonts now live inside tilawat/assets/
+          # fonts/ too, so the old copy-from-repo-root step is gone with it.)
+          test -f dist-tilawat/_headers
 
       - name: Ensure standalone Tilawat Pages project exists
         shell: bash

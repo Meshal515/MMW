@@ -41,11 +41,9 @@ jobs:
           node --check js/main.js
           node --check js/timeline.js
           node --check tilawat/sw.js
-          node --check tilawat/js/app.js
           node --check tilawat/js/store.js
           node --check tilawat/js/player.js
           node --check tilawat/js/sources.js
-          node --check tilawat/js/covers.js
           node --check tilawat/js/reorder.js
           node --check tilawat/js/v2.js
           node --check tilawat/js/classic-ui.js
@@ -109,9 +107,9 @@ jobs:
           for m in ['manifest.webmanifest','tilawat/manifest.webmanifest']:
               json.loads(Path(m).read_text())
           required=['styles.css','manifest.webmanifest','assets/logo.svg','sw.js',
-                    'tilawat/styles.css','tilawat/sw.js','tilawat/assets/logo.svg',
+                    'tilawat/sw.js','tilawat/assets/logo.svg',
                     'tilawat/assets/icon-192.png','tilawat/assets/icon-512.png',
-                    'tilawat/js/covers.js','tilawat/js/reorder.js','tilawat/js/app-logic.js',
+                    'tilawat/js/reorder.js','tilawat/js/app-logic.js',
                     'tilawat/js/interaction-v28.js','tilawat/interaction-v28.css',
                     'tilawat/js/favorites.js','tilawat/favorites.css',
                     'tilawat/js/motion-system.js','tilawat/motion-system.css',

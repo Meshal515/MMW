@@ -1,5 +1,6 @@
 import { getTrack, getBlob, putTrack, putBlob, deleteBlob, newId } from './store.js';
 import { detectSource, youtubeId, youtubeMeta, normalizeVariant } from './catalog/core.js';
+import { applyStagedMultipart, clearStagedMultipart } from './multipart-state.js';
 
 const $=s=>document.querySelector(s);
 const YALDOSRY_HOST=/^(?:www\.)?yaldosry\.com$/i;
@@ -22,7 +23,7 @@ function setDialogMode(editing){
   if(title)title.textContent=editing?'تعديل التلاوة':'أضف تسجيلًا';
   if(submit)submit.textContent=editing?'حفظ التعديل':'حفظ التسجيل';
 }
-function resetEditState(){editId='';original=null;clearPreviewUrls();setDialogMode(false);$('#addForm')?.removeAttribute('data-editing-track')}
+function resetEditState(){editId='';original=null;clearStagedMultipart();clearPreviewUrls();setDialogMode(false);$('#addForm')?.removeAttribute('data-editing-track')}
 function ensureExistingUploadPreview(){
   if(!editId||!original||chosenMode()!=='upload'||$('#addCoverFile')?.files?.[0])return;
   const upload=$('#coverModeUpload'),preview=$('#addCoverPreview');
@@ -33,7 +34,7 @@ async function resolveSource(value){if(!value)return null;try{const u=new URL(va
 
 async function openEdit(id){
   const rec=await getTrack(id).catch(()=>null);if(!rec){toast('تعذر العثور على التلاوة.');return}
-  clearPreviewUrls();editId=id;original=rec;
+  clearPreviewUrls();clearStagedMultipart();editId=id;original=rec;
   const form=$('#addForm');form.reset();form.dataset.editingTrack=id;setDialogMode(true);
   $('#addSource').value=sourceOf(rec);$('#addTitle').value=rec.title||'';$('#addReciter').value=rec.reciter||'';$('#addSurah').value=rec.surah||'';$('#addYear').value=rec.year||'';$('#addCollection').value=rec.collection||'';$('#addMosque').value=rec.mosque||'';$('#addOccasion').value=rec.occasion||'';$('#addTags').value=(rec.tags||[]).join('، ');$('#addRare').checked=!!rec.rare;
   const preferred=(rec.variants||[]).find(v=>v.id===rec.preferredVariantId)||(rec.variants||[])[0];$('#addOriginal').checked=!!preferred?.original;$('#addRestored').checked=!!(preferred?.restored||preferred?.remastered);
@@ -74,12 +75,16 @@ async function saveEdit(event){
       if(mode==='youtube'){const thumb=rec.sourceThumbnail||(rec.variants||[]).find(v=>v.thumbnail)?.thumbnail||'';if(!thumb)rec.coverMode='local'}
       if(mode==='local')rec.cover='';
     }
+    /* Multipart preparation is owned by multipart-ui, but the edit controller is
+       the persistence owner. Apply the staged parts to this same track before the
+       atomic track write so editing parts cannot silently diverge from metadata. */
+    applyStagedMultipart(rec);
     delete rec._coverResolved;await putTrack(rec);
     const newPartKeys=new Set((rec.parts||[]).map(p=>p.localAudioKey).filter(Boolean));for(const key of oldPartKeys)if(!newPartKeys.has(key))await deleteBlob(key).catch(()=>{});
     const escaped=globalThis.CSS?.escape?CSS.escape(rec.id):rec.id.replace(/["\\]/g,'\\$&'),wasCurrent=$(`#libraryGrid .library-row.is-current[data-play="${escaped}"]`);
     if(wasCurrent)dispatchEvent(new CustomEvent('tilawat:stop-playback',{detail:{reason:'edited-current'}}));
     $('#addDialog').classList.add('hidden');resetEditState();dispatchEvent(new CustomEvent('tilawat-library-imported'));toast('حُفظت كل تعديلات التلاوة.');
-  }catch(err){console.warn(err);toast('تعذر حفظ التعديل. تأكد من المصدر أو الملف.',4200)}
+  }catch(err){console.warn(err);clearStagedMultipart();toast('تعذر حفظ التعديل. تأكد من المصدر أو الملف.',4200)}
 }
 
 function boot(){

@@ -13,10 +13,17 @@
 
 # A week rather than a year: covers can be replaced under the same name, and a
 # bumped worker VERSION should not leave a stale one stranded in the browser.
+#
+# No generic /assets/* catch-all here: Cloudflare Pages does not let the most
+# specific _headers rule win — every pattern that matches a path has its
+# Cache-Control appended to the others, so a broader rule below this one would
+# not override it, it would concatenate with it (confirmed live: covers and
+# fonts both shipped two comma-joined Cache-Control values before this fix).
+# logo.svg and the two icon PNGs are what would have fallen under a catch-all;
+# they're a few KB each and unchanged since launch, so Pages' own default
+# (max-age=0, revalidate) for them is a fair trade against not re-introducing
+# the bug this comment describes.
 /assets/covers/*
-  Cache-Control: public, max-age=604800
-
-/assets/*
   Cache-Control: public, max-age=604800
 
 /*

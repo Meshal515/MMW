@@ -90,7 +90,8 @@ export class Player{
 
   async load(track,{autoplay=true,resume=true}={}){
     this._saveMultipartProgress(true);const seq=++this._seq;this._ended=false;this._wantPlay=autoplay;this._stopEverything();this.track=track;this._parts=this._buildParts(track);
-    const saved=resume?this._readMultipartProgress():null;this._partIndex=saved?.index||0;this._resumeAt=this._parts.length>1?(saved?.position||0):(resume&&track.lastPosition>8?track.lastPosition:0);
+    if(!resume){this._partIndex=0;this._resumeAt=0;this._clearMultipartProgress()}
+    else{const saved=this._readMultipartProgress();this._partIndex=saved?.index||0;this._resumeAt=this._parts.length>1?(saved?.position||0):(track.lastPosition>8?track.lastPosition:0)}
     this.emit('track',track);this.emit('state');
     try{await this._loadPart(this._partIndex,seq)}catch(err){if(seq===this._seq)this.emit('error',err)}
   }
@@ -107,7 +108,8 @@ export class Player{
   async _loadAudio(src,source,seq){
     if(seq!==this._seq)return;this.engine='audio';this.source=source;this.audio.src=src;this.audio.playbackRate=this.rate;this.audio.volume=this.volume;this.audio.load();
     const desired=this._resumeAt>this.start?this._resumeAt:this.start;
-    if(desired>0){const seek=()=>{try{const max=this.end||this.rawDuration||desired;this.audio.currentTime=Math.min(desired,Math.max(this.start,max-1))}catch{}};this.audio.addEventListener('loadedmetadata',seek,{once:true})}
+    const positionSource=()=>{if(seq!==this._seq)return;try{const max=this.end||this.rawDuration||desired||this.start,target=desired>0?Math.min(desired,Math.max(this.start,max-1)):this.start;this.audio.currentTime=Number.isFinite(target)?target:this.start;this.emit('time')}catch{}};
+    if(this.audio.readyState>=1)positionSource();else this.audio.addEventListener('loadedmetadata',positionSource,{once:true});
     this.emit('source',{source:this.source,backgroundCapable:true,partIndex:this._partIndex,partCount:this.partCount});if(this._wantPlay)this.play();
   }
   async _loadYouTube(videoId,seq){

@@ -13,7 +13,13 @@ function toast(text,ms=2800){const el=$('#toast');if(!el)return;el.textContent=t
 function splitTags(value=''){return String(value).split(/[،,]/).map(x=>x.trim()).filter(Boolean)}
 function sourceOf(rec){const preferred=(rec.variants||[]).find(v=>v.id===rec.preferredVariantId),variant=preferred||(rec.variants||[])[0];return variant?.sourceUrl||variant?.audioUrl||''}
 function chosenMode(){return document.querySelector('input[name="addCoverMode"]:checked')?.value||original?.coverMode||'local'}
-function clearPreviewUrls(){if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=''}if(existingCoverUrl){URL.revokeObjectURL(existingCoverUrl);existingCoverUrl=''}}
+function revokeLater(url){if(!url)return;requestAnimationFrame(()=>{try{URL.revokeObjectURL(url)}catch{}})}
+function clearPreviewUrls(){
+  const urls=[previewUrl,existingCoverUrl].filter(Boolean),preview=$('#addCoverPreview');
+  if(preview&&urls.some(url=>preview.src===url||preview.currentSrc===url))preview.src=preview.dataset.fallback||'./assets/covers/fallback-1.jpg';
+  previewUrl='';existingCoverUrl='';
+  for(const url of urls)revokeLater(url);
+}
 async function coverFor(rec){
   if(rec.coverKey){const blob=await getBlob(rec.coverKey).catch(()=>null);if(blob){existingCoverUrl=URL.createObjectURL(blob);return existingCoverUrl}}
   return rec.cover||rec.sourceThumbnail||(rec.variants||[]).find(v=>v.thumbnail)?.thumbnail||$('#addCoverPreview')?.dataset.fallback||'./assets/covers/fallback-1.jpg';
@@ -94,6 +100,9 @@ function boot(){
   document.addEventListener('click',event=>{const close=event.target.closest?.('[data-close="addDialog"]');if(close&&editId)resetEditState()},true);
   document.querySelectorAll('input[name="addCoverMode"]').forEach(input=>input.addEventListener('change',()=>{if(editId)ensureExistingUploadPreview()}));
   ['#addTitle','#addReciter','#addSurah','#addSource'].forEach(selector=>$(selector)?.addEventListener('input',()=>{if(editId)ensureExistingUploadPreview()}));
-  $('#addCoverFile')?.addEventListener('change',()=>{if(!editId)return;const file=$('#addCoverFile').files?.[0];if(file){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(file);$('#addCoverPreview').src=previewUrl}});
+  $('#addCoverFile')?.addEventListener('change',()=>{
+    if(!editId)return;const file=$('#addCoverFile').files?.[0];if(!file)return;
+    const old=previewUrl;previewUrl=URL.createObjectURL(file);$('#addCoverPreview').src=previewUrl;if(old)revokeLater(old);
+  });
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

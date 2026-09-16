@@ -100,10 +100,12 @@ try{
   });
   await page.waitForTimeout(220);await page.click('#tilawatV28GlassBackdrop');await page.waitForTimeout(220);
   await page.locator('.tabbar [data-tab="library"]').click();await page.waitForFunction(()=>[...document.querySelectorAll('#libraryGrid .library-row')].some(r=>r.dataset.play==='qa-catalog-saved'));
-  /* Mark it current without depending on remote catalogue audio, then let membership controller sync. */
-  await page.evaluate(()=>{document.querySelectorAll('#libraryGrid .library-row').forEach(r=>r.classList.toggle('is-current',r.dataset.play==='qa-catalog-saved'));document.querySelector('#saveRec').hidden=false;document.querySelector('#saveRec').setAttribute('aria-pressed','true')});
+  /* This fixture deliberately has no playable source, so the full player is not
+     open. Invoke the membership controller directly rather than asking Playwright
+     to physically click a button inside a hidden player page. */
+  await page.evaluate(()=>{document.querySelectorAll('#libraryGrid .library-row').forEach(r=>r.classList.toggle('is-current',r.dataset.play==='qa-catalog-saved'));const save=document.querySelector('#saveRec');save.hidden=false;save.setAttribute('aria-pressed','true')});
   await page.waitForTimeout(120);assert.equal(await page.locator('#saveRec').getAttribute('aria-label'),'إزالة من مكتبتي');
-  await page.click('#saveRec');await page.waitForTimeout(240);
+  await page.evaluate(()=>document.querySelector('#saveRec').click());await page.waitForTimeout(240);
   assert.equal((await getTracks()).some(t=>t.id==='qa-catalog-saved'),false,'second library press must remove a saved catalog item');
 
   assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);

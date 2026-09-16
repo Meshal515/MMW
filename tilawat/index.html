@@ -14,16 +14,23 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="تلاوات" />
   <script>(()=>{try{let t=localStorage.getItem('tilawat-theme');if(t!=='dark'&&t!=='light')t='dark';document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==='dark'?'#08090A':'#F6F2E9'}catch{}})();</script>
-  <link rel="preload" href="../assets/fonts/plex-ar-arabic-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./assets/fonts/plex-ar-arabic-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./assets/fonts/plex-ar-arabic-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./assets/covers/dossari-3.jpg" as="image" />
+  <!-- Every stylesheet the app uses, in cascade order. The feature modules below
+       skip their own injection when they find their marker attribute here, so the
+       order is fixed at parse time instead of by module execution order. -->
   <link rel="stylesheet" href="./v2.css" />
   <link rel="stylesheet" href="./identity.css" />
   <link rel="stylesheet" href="./v14.css" />
   <link rel="stylesheet" href="./v15.css" />
   <link rel="stylesheet" href="./classic.css" />
+  <link rel="stylesheet" href="./interaction-v28.css" data-tilawat-v28="1" />
+  <link rel="stylesheet" href="./favorites.css" data-tilawat-favorites />
+  <link rel="stylesheet" href="./motion-system.css" data-tilawat-motion />
+  <link rel="stylesheet" href="./multipart.css" data-tilawat-multipart />
+  <link rel="stylesheet" href="./library-membership.css" data-tilawat-membership />
   <script src="./vendor/gsap/gsap.min.js" defer></script>
-  <script src="./vendor/gsap/ScrollTrigger.min.js" defer></script>
-  <script src="./vendor/gsap/Flip.min.js" defer></script>
 </head>
 <body>
 <div class="app" id="app">
@@ -34,7 +41,7 @@
 
     <section class="view hidden" id="searchView"><div class="search-head"><p class="eyebrow">ابحث في الكتالوج ومكتبتك</p><h1 class="page-title">البحث</h1><label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg><input id="searchInput" type="search" autocomplete="off" placeholder="ياسر 1425 الكهف…"></label></div><div class="search-results" id="searchResults"></div></section>
 
-    <section class="view hidden" id="libraryView"><div class="library-head"><div><p class="eyebrow">المحفوظ عندك</p><h1>مكتبتي</h1></div><div class="library-head__actions"><span id="libraryCount"></span><button class="library-edit-toggle" id="libraryEditToggle" type="button" aria-label="ترتيب السور" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button></div></div><div class="seg" id="librarySegs"><button class="on" data-seg="all">الكل</button><button data-seg="favorite">المفضلة</button><button data-seg="offline">التنزيلات</button><button data-seg="rare">النوادر</button><button data-seg="recent">الأخيرة</button></div><div class="library-grid" id="libraryGrid"></div><div class="empty hidden" id="libraryEmpty"><h2>مكتبتك جاهزة</h2><p>شغّل أي سورة من الكتالوج، أو احفظ التسجيل عندك، أو أضف تسجيلًا من رابط أو ملف.</p></div></section>
+    <section class="view hidden" id="libraryView"><div class="library-head"><div><p class="eyebrow">المحفوظ عندك</p><h1>مكتبتي</h1><span id="libraryCount"></span></div><div class="library-head__actions"><button class="library-edit-toggle" id="libraryEditToggle" type="button" aria-label="ترتيب السور" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button></div></div><div class="seg" id="librarySegs"><button class="on" data-seg="all">الكل</button><button data-seg="favorite">المفضلة</button><button data-seg="offline">التنزيلات</button><button data-seg="rare">النوادر</button><button data-seg="recent">الأخيرة</button></div><div class="library-grid" id="libraryGrid"></div><div class="empty hidden" id="libraryEmpty"><span class="empty__mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/></svg></span><h2>مكتبتك جاهزة</h2><p>شغّل أي سورة من الكتالوج، أو احفظ التسجيل عندك، أو أضف تسجيلًا من رابط أو ملف.</p><div class="empty__actions"><button class="btn primary" id="libraryEmptyBrowse" type="button">تصفح الكتالوج</button><button class="btn" id="libraryEmptyAdd" type="button">أضف تسجيلًا</button></div></div></section>
   </main>
 
   <nav class="tabbar" aria-label="التنقل"><button class="tab" data-tab="home" aria-current="page" type="button"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span>الرئيسية</span></button><button class="tab" data-tab="search" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg><span>البحث</span></button><button class="tab" data-tab="library" type="button"><svg viewBox="0 0 24 24"><path d="M4 5v15M9 5v15"/><path d="m13.5 6.2 4.3-1.1 2.7 13.9-4.3 1.1z"/></svg><span>مكتبتي</span></button></nav>

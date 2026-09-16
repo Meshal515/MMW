@@ -33,7 +33,7 @@ function ensureHub(){
     hub.id='favoriteHub';
     hub.type='button';
     hub.className='favorite-hub';
-    hub.innerHTML=`<span class="favorite-hub__icon">${HEART}</span><span class="favorite-hub__text"><b>المفضلة</b><small>تلاواتك الأقرب — ترجع لها بضغطة</small></span><span class="favorite-hub__count" id="favoriteHubCount">0</span><span class="favorite-hub__arrow" aria-hidden="true">‹</span>`;
+    hub.innerHTML=`<span class="favorite-hub__icon">${HEART}</span><span class="favorite-hub__text"><b>المفضلة</b><small>تلاواتك الأقرب — ترجع لها بضغطة</small></span><span class="favorite-hub__count" id="favoriteHubCount">0</span><span class="favorite-hub__arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span>`;
     hub.addEventListener('click',()=>{
       const target=segs.querySelector('[data-seg="favorite"]');
       target?.click();

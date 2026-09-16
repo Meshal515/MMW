@@ -1,13 +1,30 @@
-const VERSION='tilawat-v29';
+const VERSION='tilawat-v30';
 const SHELL=`${VERSION}-shell`;
+
+/* Everything index.html actually loads. Keep this list in step with the <link>
+   and <script> tags and with the module graph under ./js — a name that is not
+   here is a file the app cannot open without a network. */
 const PRECACHE=[
-  './','./index.html','./v2.css','./classic.css','./identity.css','./v14.css','./v15.css','./codex-ui-recovery.css','./interaction-v28.css','./manifest.webmanifest',
-  './js/v2.js','./js/player.js','./js/store.js','./js/app-logic.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/interaction-v28.js','./js/codex-ui-recovery.js','./js/reorder.js',
-  './js/catalog/core.js','./js/catalog/mp3quran.js',
-  './vendor/gsap/gsap.min.js','./vendor/gsap/ScrollTrigger.min.js','./vendor/gsap/Flip.min.js',
+  './','./index.html','./manifest.webmanifest',
+
+  './v2.css','./identity.css','./v14.css','./v15.css','./classic.css',
+  './interaction-v28.css','./favorites.css','./motion-system.css','./multipart.css','./library-membership.css',
+
+  './js/v2.js','./js/store.js','./js/multipart-state.js','./js/app-logic.js','./js/player.js',
+  './js/reorder.js','./js/ui-dossari-only.js','./js/classic-ui.js','./js/interaction-v28.js',
+  './js/favorites.js','./js/motion-system.js','./js/multipart-ui.js','./js/recitation-edit.js',
+  './js/library-membership.js','./js/catalog/core.js','./js/catalog/mp3quran.js',
+
+  './vendor/gsap/gsap.min.js',
+
+  './assets/fonts/plex-ar-arabic-400.woff2','./assets/fonts/plex-ar-arabic-600.woff2','./assets/fonts/plex-ar-arabic-700.woff2',
+
   './assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png',
+  './assets/icon-maskable-192.png','./assets/icon-maskable-512.png',
+
+  './assets/covers/default.jpg','./assets/covers/dossari.jpg',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg',
-  './assets/covers/dossari-4.jpg',
+  './assets/covers/dossari-4.jpg','./assets/covers/dossari-5.jpg',
   './assets/covers/fallback-1.jpg','./assets/covers/fallback-2.jpg','./assets/covers/fallback-3.jpg'
 ];
 

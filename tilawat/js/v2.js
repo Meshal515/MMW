@@ -144,8 +144,8 @@ function renderSearch(q=''){
   root.innerHTML=html||'<div class="empty"><h2>لا توجد نتيجة مطابقة</h2><p>جرّب اسم القارئ أو السورة أو السنة بشكل أقصر.</p></div>';syncCurrentCards();
 }
 
-function showTab(tab){state.tab=tab;['home','search','library'].forEach(t=>$(t+'View').classList.toggle('hidden',t!==tab));$$('.tab').forEach(b=>b.toggleAttribute('aria-current',b.dataset.tab===tab));if(tab==='library')renderLibrary();if(tab==='search'){renderSearch($('searchInput').value);setTimeout(()=>$('searchInput').focus(),80)}window.scrollTo({top:0,behavior:'auto'})}
-document.querySelector('.tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab)});$('brand').onclick=()=>showTab('home');$('searchInput').addEventListener('input',e=>renderSearch(e.target.value));$('librarySegs').addEventListener('click',e=>{const b=e.target.closest('[data-seg]');if(!b)return;state.librarySeg=b.dataset.seg;renderLibrary()});
+function showTab(tab){state.tab=tab;['home','search','library'].forEach(t=>$(t+'View').classList.toggle('hidden',t!==tab));$$('.tab').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(tab==='library')renderLibrary();if(tab==='search'){renderSearch($('searchInput').value);setTimeout(()=>$('searchInput').focus(),80)}window.scrollTo({top:0,behavior:'auto'})}
+document.querySelector('.tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab)});$('brand').onclick=()=>showTab('home');$('libraryEmptyBrowse').onclick=()=>showTab('home');$('libraryEmptyAdd').onclick=()=>$('addBtn').click();$('searchInput').addEventListener('input',e=>renderSearch(e.target.value));$('librarySegs').addEventListener('click',e=>{const b=e.target.closest('[data-seg]');if(!b)return;state.librarySeg=b.dataset.seg;renderLibrary()});
 
 function findRec(id){return state.local.find(r=>r.id===id)||(state.current?.id===id?state.current:null)}
 function queueKey(rec){if(!rec)return'';if(isPersisted(rec))return`local:${rec.id}`;if(rec.catalogRef)return`catalog:${catalogRefKey(rec.catalogRef)}`;return`id:${rec.id||''}`}

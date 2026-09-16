@@ -40,12 +40,14 @@ async function removeSavedCatalog(button){
   const id=currentPersistedId();if(!id)return false;
   const rec=await getTrack(id).catch(()=>null);if(!rec||!rec.catalogRef)return false;
   const keys=new Set([rec.coverKey,...(rec.variants||[]).map(v=>v.localAudioKey),...(rec.parts||[]).map(p=>p.localAudioKey)].filter(Boolean));
+  /* The v2 stop handler persists the current in-memory track. Stop while the row
+     still exists, then delete it, so a stale player object cannot resurrect the
+     record after deletion. */
+  dispatchEvent(new CustomEvent('tilawat:stop-playback',{detail:{reason:'removed-from-library'}}));
   for(const key of keys)await deleteBlob(key).catch(()=>{});
   await deleteTrack(id);
   const order=await getPref(PREF_ORDER).catch(()=>[]);if(Array.isArray(order))await setPref(PREF_ORDER,order.filter(x=>x!==id)).catch(()=>{});
   paint(button,{saved:false});
-  /* Stop before reload so v2 cannot persist its stale in-memory copy back into IDB. */
-  dispatchEvent(new CustomEvent('tilawat:stop-playback',{detail:{reason:'removed-from-library'}}));
   dispatchEvent(new CustomEvent('tilawat-library-imported'));
   toast('أزيلت التلاوة من مكتبتك.');
   return true;

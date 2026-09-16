@@ -114,7 +114,14 @@ function ensureGlass(){
   $('#tilawatV28GlassPrev').addEventListener('click',()=>$('#prev')?.click());
   $('#tilawatV28GlassNext').addEventListener('click',()=>$('#next')?.click());
   $('#tilawatV28GlassPlay').addEventListener('click',()=>{$('#miniPlay')?.click();setTimeout(syncGlass,30)});
-  $('#tilawatV28GlassFav').addEventListener('click',()=>{$('#miniFav')?.click();setTimeout(syncGlass,35)});
+  $('#tilawatV28GlassFav').addEventListener('click',event=>{
+    const button=event.currentTarget,next=button.getAttribute('aria-pressed')!=='true';
+    button.classList.toggle('is-favorite',next);
+    button.setAttribute('aria-pressed',String(next));
+    button.setAttribute('aria-label',next?'إزالة من المفضلة':'إضافة للمفضلة');
+    $('#miniFav')?.click();
+    setTimeout(syncGlass,120);
+  });
   $('#tilawatV28GlassFull').addEventListener('click',async()=>{await collapseGlass();$('#miniOpen')?.click()});
 
   const card=$('#tilawatV28GlassCard');let active=false,pid=null,startY=0,dy=0,raf=0;

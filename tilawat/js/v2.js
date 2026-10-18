@@ -171,8 +171,8 @@ function openSurah(id){const name=SURAHS[id-1],available=[];for(const r of state
 
 async function playByElement(el){
   if(state.editMode&&el.closest('#libraryGrid'))return;
-  if(el.dataset.play){const rec=findRec(el.dataset.play);if(rec){setQueueFromElement(el,rec);await playRecitation(rec,null,el.querySelector?.('.art')||el,{open:true})}return}
-  if(el.dataset.catalogPlay){const rec=catalogRecordFromAction(el.dataset.catalogPlay);if(!rec){toast('الكتالوج لم يكتمل بعد.');return}await resolveCover(rec);setQueueFromElement(el,rec);await playRecitation(rec,null,el,{open:true})}
+  if(el.dataset.play){const rec=findRec(el.dataset.play);if(rec){failedBackgroundVariants.clear();setQueueFromElement(el,rec);await playRecitation(rec,null,el.querySelector?.('.art')||el,{open:true})}return}
+  if(el.dataset.catalogPlay){const rec=catalogRecordFromAction(el.dataset.catalogPlay);if(!rec){toast('الكتالوج لم يكتمل بعد.');return}failedBackgroundVariants.clear();await resolveCover(rec);setQueueFromElement(el,rec);await playRecitation(rec,null,el,{open:true})}
 }
 document.addEventListener('click',async e=>{
   const handle=e.target.closest('.library-drag-handle');if(handle){e.preventDefault();e.stopPropagation();return}
@@ -187,7 +187,26 @@ document.addEventListener('click',async e=>{
 function playbackTrack(rec,v){const videoId=youtubeId(v?.sourceUrl||v?.videoUrl||v?.embedUrl||''),isYoutube=v?.provider==='youtube'||!!videoId,direct=String(v?.audioUrl||'').trim(),audioLike=/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)(\?|#|$)/i.test(direct)||/^\/api\/yaldosry-audio/.test(direct),trusted=['mp3quran','archive','quranicaudio','islamway','tvquran','assabile','everyayah','surahquran','qurancom','yaldosry'].includes(v?.provider);return{...rec,localAudioKey:v?.localAudioKey||'',audioUrl:isYoutube?'':((audioLike||trusted)?direct:''),youtubeId:videoId||'',start:0,end:0}}
 function localVariant(rec,excludeId=''){return(rec.variants||[]).find(v=>v.localAudioKey&&v.id!==excludeId)||null}
 function chooseVariant(rec,explicit=null){if(explicit)return explicit;if(navigator.onLine===false){const local=localVariant(rec);if(local)return local}return resolveVariant(rec)}
-function playableVariant(rec,explicit=null){const variant=chooseVariant(rec,explicit);if(!variant)return null;const playable=playbackTrack(rec,variant);return playable.localAudioKey||playable.audioUrl||playable.youtubeId?{variant,playable}:null}
+// The deployed app boots v2.js. YouTube is not a background-audio engine:
+// choose a genuine <audio> source before advancing while the page is hidden.
+const backgroundPlayback=()=>document.hidden||document.visibilityState==='hidden';
+const failedBackgroundVariants=new Set();
+const failureKey=(rec,variant)=>`${queueKey(rec)}:${variant?.id||variant?.audioUrl||variant?.sourceUrl||'unknown'}`;
+function playableVariant(rec,explicit=null,{audioOnly=false,avoidFailed=false}={}){
+  if(!rec)return null;
+  const ordered=explicit?[explicit]:[chooseVariant(rec),...(rec.variants||[])];
+  const visited=new Set();
+  for(const variant of ordered){
+    if(!variant||visited.has(variant))continue;
+    visited.add(variant);
+    if(avoidFailed&&failedBackgroundVariants.has(failureKey(rec,variant)))continue;
+    const playable=playbackTrack(rec,variant);
+    if(!playable.localAudioKey&&!playable.audioUrl&&!playable.youtubeId)continue;
+    if(audioOnly&&!playable.localAudioKey&&!playable.audioUrl)continue;
+    return{variant,playable};
+  }
+  return null;
+}
 async function updateLastListened(rec){const cover=await resolveCover(rec),action=isPersisted(rec)?{kind:'local',key:rec.id}:{kind:'catalog',key:catalogRefKey(rec.catalogRef)};state.lastListened={...action,title:rec.title||`سورة ${rec.surah}`,sub:recSubtitle(rec),cover,fallback:fallbackCover(rec),position:player.position||rec.lastPosition||0,at:Date.now()};setPref(PREF_LAST,state.lastListened).catch(()=>{});renderLastListened()}
 async function playRecitation(rec,variant=null,originEl=null,{resume=true,open=false,priorityPlayback=false}={}){
   if(!rec)return;applyCatalogState(rec);const resolved=playableVariant(rec,variant);if(!resolved){toast('لا يوجد مصدر قابل للتشغيل لهذا التسجيل.');return}variant=resolved.variant;const playable=resolved.playable;
@@ -205,8 +224,26 @@ function animateEnter(el){if(!el||matchMedia('(prefers-reduced-motion: reduce)')
 function openPlayer(){if(!state.current)return;$('playerPage').scrollTop=0;$('playerPage').classList.remove('hidden');document.body.style.overflow='hidden';animateEnter($('playerPage'))}
 function closePlayer(){$('playerPage').classList.add('hidden');document.body.style.overflow=''}
 $('miniOpen').onclick=openPlayer;$('playerClose').onclick=closePlayer;$('miniPlay').onclick=$('mainPlay').onclick=()=>player.toggle();$('back10').onclick=()=>player.nudge(-10);$('forward10').onclick=()=>player.nudge(10);
-function stepQueue(d,{wrap=true,priorityPlayback=false}={}){const len=state.queue.length;if(!len)return false;let cursor=state.queueIndex;for(let attempt=0;attempt<len;attempt++){const i=queueTargetIndex(cursor,len,d,{wrap});if(i<0)return false;const rec=state.queue[i],resolved=playableVariant(rec);if(resolved){state.queueIndex=i;playRecitation(rec,resolved.variant,null,{resume:false,open:false,priorityPlayback});return true}cursor=i;if(!wrap&&((d>0&&i>=len-1)||(d<0&&i<=0)))return false}return false}
-$('prev').onclick=()=>stepQueue(-1,{wrap:true});$('next').onclick=()=>stepQueue(1,{wrap:true});
+function stepQueue(d,{wrap=true,priorityPlayback=false,audioOnly=backgroundPlayback(),avoidFailed=false}={}){
+  const len=state.queue.length;
+  if(len<2)return false;
+  let cursor=state.queueIndex;
+  for(let attempt=0;attempt<len-1;attempt++){
+    const i=queueTargetIndex(cursor,len,d,{wrap});
+    if(i<0||i===state.queueIndex)return false;
+    const rec=state.queue[i];
+    const resolved=playableVariant(rec,null,{audioOnly,avoidFailed});
+    if(resolved){
+      state.queueIndex=i;
+      void playRecitation(rec,resolved.variant,null,{resume:false,open:false,priorityPlayback}).catch(err=>console.warn('queue playback failed',err));
+      return true;
+    }
+    cursor=i;
+  }
+  return false;
+}
+$('prev').onclick=()=>{failedBackgroundVariants.clear();stepQueue(-1,{wrap:true,priorityPlayback:true})};
+$('next').onclick=()=>{failedBackgroundVariants.clear();stepQueue(1,{wrap:true,priorityPlayback:true})};
 const speeds=[1,1.25,1.5,1.75,2,.75];$('speed').onclick=()=>{const i=speeds.indexOf(state.speed);state.speed=speeds[(i+1)%speeds.length];player.setRate(state.speed);$('speed').querySelector('[data-chip-value]').textContent=`${state.speed}×`;$('speed').setAttribute('aria-label',`سرعة التشغيل: ${state.speed}`)};$('repeat').onclick=()=>{state.repeat=!state.repeat;$('repeat').classList.toggle('on',state.repeat);$('repeat').setAttribute('aria-pressed',String(state.repeat));$('repeat').setAttribute('aria-label',state.repeat?'إلغاء تكرار السورة':'تكرار السورة');$('repeat').title=state.repeat?'إلغاء تكرار السورة':'تكرار السورة'};
 const sleepValues=[15,30,45,60,0];let sleepIndex=-1;function syncSleepButton(min=0){const button=$('sleep'),badge=button.querySelector('[data-chip-value]');button.classList.toggle('on',!!min);button.setAttribute('aria-pressed',String(!!min));button.setAttribute('aria-label',min?`إيقاف التشغيل بعد ${min} دقيقة`:'مؤقت النوم');button.title=min?`بعد ${min} دقيقة`:'مؤقت النوم';badge.hidden=!min;badge.textContent=min?`${min}د`:''}$('sleep').onclick=()=>{sleepIndex=(sleepIndex+1)%sleepValues.length;const min=sleepValues[sleepIndex];clearTimeout(state.sleepTimer);syncSleepButton(min);if(min)state.sleepTimer=setTimeout(()=>{player.pause();syncSleepButton(0);toast('انتهى مؤقت النوم.')},min*60000)};
 
@@ -224,10 +261,74 @@ async function persistProgress(force=false){
 function completeCurrentProgress(){const rec=state.current;if(!rec)return;const now=Date.now();rec.lastPosition=0;rec.lastPlayedAt=now;if(isPersisted(rec))putTrack(rec).catch(()=>{});else{state.catalogProgress[rec.id]={lastPosition:0,lastPlayedAt:now};setPref(PREF_PROGRESS,state.catalogProgress).catch(()=>{})}if(state.lastListened){state.lastListened.position=0;state.lastListened.at=now;setPref(PREF_LAST,state.lastListened).catch(()=>{})}}
 function repeatIsActive(){const button=$('repeat');return state.repeat===true&&button?.getAttribute('aria-pressed')==='true'&&button?.classList.contains('on')}
 function syncPlayerTime(){const d=player.duration||0,t=player.position||0;$('curTime').textContent=fmtTime(t);$('durTime').textContent=fmtTime(d);if(!state.seeking){const value=d?Math.round(t/d*1000):0;$('seek').value=value;$('miniSeek').value=value;$('miniSeek').style.setProperty('--mini-pct',`${value/10}%`)}persistProgress(false)}
-player.on('state',setPlayIcons);player.on('time',syncPlayerTime);player.on('duration',syncPlayerTime);player.on('source',info=>{$('ytPark').classList.toggle('active',info?.source==='youtube')});player.on('ended',()=>{completeCurrentProgress();if(repeatIsActive()&&state.current){playRecitation(state.current,state.currentVariant,null,{resume:false,open:false,priorityPlayback:true});return}if(!stepQueue(1,{wrap:false,priorityPlayback:true}))setPlayIcons()});
-player.on('error',err=>{console.warn(err);setPlayIcons();const current=state.current,local=current&&localVariant(current,state.currentVariant?.id),fallbackKey=current?`${current.id}:${state.currentVariant?.id||''}`:'';if(current&&local&&state.fallbackTriedFor!==fallbackKey){state.fallbackTriedFor=fallbackKey;current.lastPosition=player.position||current.lastPosition||0;toast('تعذر المصدر الحالي، شغّلنا النسخة المحفوظة على الجهاز.');playRecitation(current,local,null,{resume:true,open:false});return}toast('تعذر تشغيل هذا المصدر. جرّب نسخة أخرى من التلاوة أو افتح المصدر.',4200)});
+player.on('state',setPlayIcons);
+player.on('time',syncPlayerTime);
+player.on('duration',syncPlayerTime);
+player.on('source',info=>{$('ytPark').classList.toggle('active',info?.source==='youtube')});
+player.on('ended',()=>{
+  completeCurrentProgress();
+  // A completed recitation starts a new healthy queue cycle.
+  failedBackgroundVariants.clear();
+  const audioOnly=backgroundPlayback();
+  if(repeatIsActive()&&state.current){
+    const resolved=playableVariant(state.current,null,{audioOnly});
+    if(resolved){
+      void playRecitation(state.current,resolved.variant,null,{resume:false,open:false,priorityPlayback:true}).catch(err=>console.warn('repeat failed',err));
+      return;
+    }
+  }
+  if(!stepQueue(1,{wrap:false,priorityPlayback:true,audioOnly}))setPlayIcons();
+});
+player.on('error',err=>{
+  console.warn('Tilawat playback error',err);
+  setPlayIcons();
+  const rec=state.current;
+  if(!rec||player.track?.id!==rec.id)return; // Ignore errors from an obsolete load.
+  if(backgroundPlayback()){
+    // Do not let an unreachable stream (or a restricted YouTube iframe)
+    // strand playback. Try another audio variant, then skip that recitation.
+    failedBackgroundVariants.add(failureKey(rec,state.currentVariant));
+    const alternate=playableVariant(rec,null,{audioOnly:true,avoidFailed:true});
+    if(alternate){
+      void playRecitation(rec,alternate.variant,null,{resume:false,open:false,priorityPlayback:true}).catch(e=>console.warn('background fallback failed',e));
+      return;
+    }
+    if(!stepQueue(1,{wrap:false,priorityPlayback:true,audioOnly:true,avoidFailed:true})){
+      player.pause();
+      toast('لا توجد تلاوة أخرى قابلة للتشغيل في الخلفية.',4200);
+    }
+    return;
+  }
+  const local=localVariant(rec,state.currentVariant?.id),fallbackKey=`${rec.id}:${state.currentVariant?.id||''}`;
+  if(local&&state.fallbackTriedFor!==fallbackKey){
+    state.fallbackTriedFor=fallbackKey;
+    rec.lastPosition=player.position||rec.lastPosition||0;
+    toast('تعذر المصدر الحالي، شغّلنا النسخة المحفوظة على الجهاز.');
+    void playRecitation(rec,local,null,{resume:true,open:false});
+    return;
+  }
+  toast('تعذر تشغيل هذا المصدر. جرّب نسخة أخرى من التلاوة أو افتح المصدر.',4200);
+});
+document.addEventListener('visibilitychange',()=>{
+  if(!backgroundPlayback()){
+    failedBackgroundVariants.clear();
+    return;
+  }
+  // An active YouTube iframe can go silent as soon as Android locks.
+  // Migrate before the page may be suspended, not after a missing ended event.
+  if(!state.current||player.engine!=='youtube'||!player._wantPlay)return;
+  const rec=state.current;
+  const alternate=playableVariant(rec,null,{audioOnly:true,avoidFailed:true});
+  if(alternate){
+    rec.lastPosition=player.position||rec.lastPosition||0;
+    void playRecitation(rec,alternate.variant,null,{resume:true,open:false,priorityPlayback:true}).catch(e=>console.warn('background migration failed',e));
+  }else if(!stepQueue(1,{wrap:false,priorityPlayback:true,audioOnly:true,avoidFailed:true})){
+    player.pause();
+    toast('تحتاج تلاوة بصوت مباشر أو نسخة محفوظة للعمل عند قفل الشاشة.',4200);
+  }
+});
 addEventListener('tilawat:stop-playback',()=>{persistProgress(true);player.stop();state.current=null;state.currentVariant=null;state.queue=[];state.queueIndex=-1;state.fallbackTriedFor='';clearTimeout(state.sleepTimer);state.sleepTimer=null;$('miniPlayer').classList.add('hidden');$('app').classList.remove('has-mini');$('playerPage').classList.add('hidden');$('seek').value=0;$('miniSeek').value=0;$('miniSeek').style.setProperty('--mini-pct','0%');$('curTime').textContent='0:00';$('durTime').textContent='0:00';document.body.style.overflow='';document.documentElement.classList.remove('is-audio-playing');syncCurrentCards();renderLibrary()});
-bindMediaSession(player,{previous:()=>stepQueue(-1,{wrap:true,priorityPlayback:true}),next:()=>stepQueue(1,{wrap:true,priorityPlayback:true})},track=>coverSync(track));
+bindMediaSession(player,{previous:()=>{failedBackgroundVariants.clear();stepQueue(-1,{wrap:true,priorityPlayback:true})},next:()=>{failedBackgroundVariants.clear();stepQueue(1,{wrap:true,priorityPlayback:true})}},track=>coverSync(track));
 
 function variantBadges(v,bestId){const a=[];if(v.id===bestId)a.push('<span class="badge gold">أفضل جودة</span>');if(v.original)a.push('<span class="badge">أصلية</span>');if(v.restored||v.remastered)a.push('<span class="badge">منقحة</span>');if(v.corrected)a.push('<span class="badge">مصححة</span>');if(v.localAudioKey)a.push('<span class="badge gold">بلا نت</span>');if(v.rare)a.push('<span class="badge">نادرة</span>');return a.join('')}
 function renderVariants(){

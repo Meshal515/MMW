@@ -146,6 +146,15 @@ try{
 
   // No audio-capable next item: leave playback stopped, never load YouTube
   // or wrap a repeat-disabled queue back to the first recitation.
+  // Restart the browser context here too: an in-flight completion/position
+  // write from the four-track case must not repopulate the two-track fixture.
+  await context.close();
+  context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
+  page=await context.newPage();
+  errors.length=0;
+  page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
+  page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
+  await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
   await seedBackgroundQueue({youtubeOnly:true});
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelectorAll('#libraryGrid .library-row').length===2);

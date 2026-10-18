@@ -410,26 +410,48 @@ async function playTrack(track, explicitQueue = null) {
   await player.load(track, { autoplay: true, resume: true });
 }
 const currentIndex = () => state.queue.findIndex(t => t.id === state.currentId);
+let autoAdvanceGeneration = 0;
+const backgroundMode = () => document.visibilityState === 'hidden';
+function nextPlayableIndex(delta = 1, { auto = false, skipUnsupported = false } = {}) {
+  const queue = state.queue, length = queue.length;
+  if (!length) return -1;
+  const start = currentIndex();
+  const eligible = (item) => !skipUnsupported || backgroundReady(item);
+  if (state.shuffle && auto) {
+    const candidates = queue.map((item, index) => index)
+      .filter(index => index !== start && eligible(queue[index]));
+    return candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : -1;
+  }
+  const wrap = !auto || state.repeat === 'all';
+  for (let offset = 1; offset <= length; offset++) {
+    const raw = (start < 0 ? (delta > 0 ? -1 : 0) : start) + delta * offset;
+    if (!wrap && (raw < 0 || raw >= length)) break;
+    const index = ((raw % length) + length) % length;
+    if (auto && index === start) break;
+    if (eligible(queue[index])) return index;
+  }
+  return -1;
+}
 function step(delta, { auto = false } = {}) {
-  if (!state.queue.length) return;
-  const index = currentIndex();
-  if (state.shuffle && auto && state.queue.length > 1) {
-    let pick = index; while (pick === index) pick = Math.floor(Math.random() * state.queue.length);
-    playTrack(state.queue[pick], state.queue); return;
+  const next = nextPlayableIndex(delta, { auto, skipUnsupported: auto && backgroundMode() });
+  if (next < 0) {
+    if (auto) { player.pause(); toast('لا توجد تلاوة أخرى قابلة للتشغيل في الخلفية.'); }
+    return;
   }
-  let next = index + delta;
-  if (index < 0) next = 0;
-  if (next < 0) next = state.queue.length - 1;
-  if (next >= state.queue.length) {
-    if (auto && state.repeat !== 'all') { player.pause(); return; }
-    next = 0;
-  }
-  playTrack(state.queue[next], state.queue);
+  const generation = ++autoAdvanceGeneration;
+  const selected = state.queue[next];
+  // Keep the queue stable; loading an older asynchronous source must not
+  // trigger a second transition after a newer selection.
+  Promise.resolve(playTrack(selected, state.queue)).catch(err => {
+    if (generation === autoAdvanceGeneration) console.warn('next recitation failed', err);
+  });
 }
 player.on('ended', () => {
   const track = current(); if (track) { track.lastPosition = 0; putTrack(track); }
   if (state.sleep.mode === 'end') { clearSleep(); player.pause(); toast('انتهى المؤقت.'); return; }
-  if (state.repeat === 'one') { player.seek(0); player.play(); return; }
+  if (state.repeat === 'one' && (!backgroundMode() || backgroundReady(current()))) {
+    player.seek(0); player.play(); return;
+  }
   step(1, { auto: true });
 });
 player.on('error', err => {
@@ -439,6 +461,9 @@ player.on('error', err => {
   else if (code.startsWith('yt-')) toast('يوتيوب رفض تشغيل هذا المقطع.', 4500);
   else toast('تعذر تشغيل مصدر الصوت.', 4200);
   console.warn('playback error', err);
+  // In the background, a failed stream must not strand the entire queue.
+  if (backgroundMode() && player.track && state.currentId === player.track.id)
+    step(1, { auto: true });
 });
 player.on('meta', ({ title, author }) => {
   const track = current(); if (!track) return;

@@ -12,8 +12,8 @@ function silentWavBase64(seconds=.75,sampleRate=8000){
 }
 
 const browser=await chromium.launch({headless:true});
-const context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
-const page=await context.newPage();
+let context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
+let page=await context.newPage();
 const errors=[];
 page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
 page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
@@ -56,6 +56,44 @@ async function expectAutoAdvance(originSelector){
   assert.match(await page.locator('#playerTitle').textContent(),/الثانية/,'repeat-off must not replay the first track');
 }
 
+
+async function seedBackgroundQueue({youtubeOnly=false}={}){
+  const first=silentWavBase64(.85),last=silentWavBase64(3);
+  const variant=(id,details)=>({id,original:true,downloadable:true,...details});
+  const base=(id,title,index,variants)=>({
+    id,title,reciter:'قارئ الاختبار',surah:'الفاتحة',schemaVersion:4,
+    variants,tags:[],playlists:[],favorite:false,rare:false,
+    addedAt:1800000000000-index,lastPlayedAt:0,lastPosition:0,playCount:0
+  });
+  const entries=[
+    base('background-1','الأولى — تشغيل خلفي',1,[variant('a', {provider:'local',localAudioKey:'bg-a'})]),
+    base('background-2','الثانية — يوتيوب فقط',2,[variant('b', {provider:'youtube',sourceUrl:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',downloadable:false})])
+  ];
+  if(!youtubeOnly){
+    entries.push(base('background-3','الثالثة — مصدر تالف',3,[variant('c',{provider:'archive',audioUrl:BASE+'test-unplayable.mp3'})]));
+    const fourth=base('background-4','الرابعة — نسخة صوتية بديلة',4,[
+      variant('d-yt',{provider:'youtube',sourceUrl:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',downloadable:false}),
+      variant('d-local',{provider:'local',localAudioKey:'bg-d'})
+    ]);
+    fourth.preferredVariantId='d-yt';
+    fourth.lastPosition=2.9;
+    entries.push(fourth);
+  }
+  await page.evaluate(async ({entries,first,last})=>{
+    const blobOf=value=>new Blob([Uint8Array.from(atob(value),c=>c.charCodeAt(0))],{type:'audio/wav'});
+    const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('tilawat',2);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(['tracks','blobs','prefs'],'readwrite');
+      tx.objectStore('tracks').clear();tx.objectStore('blobs').clear();
+      for(const t of entries)tx.objectStore('tracks').put(t);
+      tx.objectStore('blobs').put(blobOf(first),'bg-a');
+      tx.objectStore('blobs').put(blobOf(last),'bg-d');
+      tx.objectStore('prefs').put(entries.map(t=>t.id),'tilawat-library-order-v2');
+      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+    });db.close();
+  },{entries,first,last});
+}
+
 try{
   await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
   await seed();
@@ -74,7 +112,65 @@ try{
   await expectAutoAdvance('#homeShelves .rail [data-play="continuity-1"]');
   await page.screenshot({path:`${OUT}/playback-continuity-home.png`,fullPage:false});
 
-  assert.deepEqual(errors,[],`browser errors:\n${errors.join('\n')}`);
+  assert.deepEqual(errors,[],`initial browser errors:\\n${errors.join('\\n')}`);
+  // Use a fresh origin storage context for this suite. The previous suite
+  // finishes asynchronously persisting its last track; reusing IndexedDB
+  // lets a delayed putTrack repopulate the newly cleared fixture.
+  await context.close();
+  context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
+  page=await context.newPage();
+  errors.length=0;
+  page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
+  page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
+  await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
+  // Real v2 runtime: hidden screen must ignore a YouTube-only queue entry,
+  // recover from a broken direct stream, and use local audio even if
+  // the user's preferred variant for the next recitation is YouTube.
+  await page.route('**/test-unplayable.mp3',route=>route.fulfill({status:200,contentType:'audio/mpeg',body:'intentionally invalid audio'}));
+  await seedBackgroundQueue();
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>document.querySelectorAll('#libraryGrid .library-row').length===4);
+  await page.click('.tabbar [data-tab="library"]');
+  await page.locator('#libraryGrid .library-row[data-play="background-1"] .library-row__play').click();
+  await page.waitForFunction(()=>document.querySelector('#playerTitle')?.textContent?.includes('الأولى'));
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForFunction(()=>document.querySelector('#playerTitle')?.textContent?.includes('الرابعة'),{timeout:12000});
+  await page.waitForFunction(()=>document.documentElement.classList.contains('is-audio-playing'),{timeout:4000});
+  assert.ok(Number(await page.locator('#miniSeek').inputValue())<850,'background audio must start fresh, not from a saved endpoint');
+  await page.waitForTimeout(350);
+  assert.match(await page.locator('#playerTitle').textContent(),/الرابعة/,'background queue should skip unplayable streams without looping');
+
+  // No audio-capable next item: leave playback stopped, never load YouTube
+  // or wrap a repeat-disabled queue back to the first recitation.
+  // Restart the browser context here too: an in-flight completion/position
+  // write from the four-track case must not repopulate the two-track fixture.
+  await context.close();
+  context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
+  page=await context.newPage();
+  errors.length=0;
+  page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
+  page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
+  await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
+  await seedBackgroundQueue({youtubeOnly:true});
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>document.querySelectorAll('#libraryGrid .library-row').length===2);
+  await page.click('.tabbar [data-tab="library"]');
+  await page.locator('#libraryGrid .library-row[data-play="background-1"] .library-row__play').click();
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForFunction(()=>!document.documentElement.classList.contains('is-audio-playing'),{timeout:7000});
+  assert.match(await page.locator('#playerTitle').textContent(),/الأولى/);
+  await page.waitForTimeout(350);
+  assert.match(await page.locator('#playerTitle').textContent(),/الأولى/,'a YouTube-only tail must not restart playback');
+  const expectedPlaybackFailure=errors.filter(e=>!/test-unplayable\.mp3|decode|DEMUXER_ERROR/i.test(e));
+  assert.deepEqual(expectedPlaybackFailure,[],`unexpected browser errors:\n${expectedPlaybackFailure.join('\n')}`);
   const report={ok:true,library:true,home:true,repeatOff:true,completedProgress:0,staleNextProgressIgnored:true};
   await writeFile(`${OUT}/playback-continuity-report.json`,JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));

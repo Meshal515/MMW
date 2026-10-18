@@ -12,8 +12,8 @@ function silentWavBase64(seconds=.75,sampleRate=8000){
 }
 
 const browser=await chromium.launch({headless:true});
-const context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
-const page=await context.newPage();
+let context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
+let page=await context.newPage();
 const errors=[];
 page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
 page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
@@ -113,6 +113,16 @@ try{
   await page.screenshot({path:`${OUT}/playback-continuity-home.png`,fullPage:false});
 
   assert.deepEqual(errors,[],`initial browser errors:\\n${errors.join('\\n')}`);
+  // Use a fresh origin storage context for this suite. The previous suite
+  // finishes asynchronously persisting its last track; reusing IndexedDB
+  // lets a delayed putTrack repopulate the newly cleared fixture.
+  await context.close();
+  context=await browser.newContext({viewport:{width:390,height:844},locale:'ar-SA',colorScheme:'dark'});
+  page=await context.newPage();
+  errors.length=0;
+  page.on('pageerror',error=>errors.push(`pageerror: ${error.message}`));
+  page.on('console',message=>{if(message.type()==='error')errors.push(`console: ${message.text()}`)});
+  await page.goto(BASE,{waitUntil:'domcontentloaded',timeout:30_000});
   // Real v2 runtime: hidden screen must ignore a YouTube-only queue entry,
   // recover from a broken direct stream, and use local audio even if
   // the user's preferred variant for the next recitation is YouTube.

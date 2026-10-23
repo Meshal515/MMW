@@ -89,21 +89,26 @@ async function renderCover(n){
   g.strokeStyle = pal.accent; g.globalAlpha = .55; g.lineWidth = 2;
   g.strokeRect(26, 26, S - 52, S - 52); g.globalAlpha = 1;
 
-  // Surah number seal.
-  g.fillStyle = inkA(.72); g.beginPath(); g.arc(S - 82, 82, 38, 0, Math.PI * 2); g.fill();
+  // Surah number seal, top-left: the app puts its badges (نادرة…) top-right.
+  g.fillStyle = inkA(.72); g.beginPath(); g.arc(82, 82, 38, 0, Math.PI * 2); g.fill();
   g.strokeStyle = pal.accent; g.lineWidth = 2; g.stroke();
   g.fillStyle = pal.accent; g.font = '600 30px Plex'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(AR_DIGITS(n), S - 82, 84);
+  g.fillText(AR_DIGITS(n), 82, 84);
 
   // Name block, right-aligned for Arabic.
   g.direction = 'rtl'; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
   const right = S - 62;
-  g.fillStyle = pal.accent; g.font = '600 26px Plex';
-  g.fillText('سورة', right, S - 236);
   let size = 132; g.font = `${size}px QuranName`;
   while (g.measureText(meta.name).width > S - 130 && size > 70){ size -= 6; g.font = `${size}px QuranName`; }
+  // «سورة» sits above the tallest mark of this name (the madda of آل, a hamza…),
+  // so it can never be covered by the name's own letters.
+  // The name's tail (ي، م…) also stays clear of the reciter line below it.
+  const m = g.measureText(meta.name), base = Math.min(S - 128, S - 82 - m.actualBoundingBoxDescent);
+  const nameTop = base - m.actualBoundingBoxAscent;
   g.fillStyle = `rgb(${pal.light.join(',')})`;
-  g.fillText(meta.name, right, S - 128);
+  g.fillText(meta.name, right, base);
+  g.fillStyle = pal.accent; g.font = '600 26px Plex';
+  g.fillText('سورة', right, Math.min(S - 236, nameTop - 14));
   g.globalAlpha = .78; g.font = '600 24px Plex';
   g.fillText(`ياسر الدوسري · ${pal.label} · ${AR_DIGITS(meta.count)} آية`, right, S - 50);
   g.globalAlpha = 1;

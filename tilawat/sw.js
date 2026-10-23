@@ -1,4 +1,4 @@
-const VERSION='tilawat-v31';
+const VERSION='tilawat-v32';
 const SHELL=`${VERSION}-shell`;
 const PRECACHE=[
   './','./index.html','./manifest.webmanifest',
@@ -11,7 +11,8 @@ const PRECACHE=[
   './vendor/gsap/gsap.min.js','./vendor/gsap/ScrollTrigger.min.js','./vendor/gsap/Flip.min.js',
   './assets/logo.svg','./assets/icon-192.png','./assets/icon-512.png',
   './assets/fonts/plex-ar-arabic-400.woff2','./assets/fonts/plex-ar-arabic-600.woff2','./assets/fonts/plex-ar-arabic-700.woff2',
-  './assets/fonts/amiri-quran.woff2','./data/quran/index.json',
+  './assets/fonts/amiri-quran.woff2','./assets/fonts/scheherazade-new.woff2','./assets/fonts/noto-naskh-arabic.woff2',
+  './data/quran/index.json','./data/quran/pages.json',
   './assets/covers/dossari-1.jpg','./assets/covers/dossari-2.jpg','./assets/covers/dossari-3.jpg',
   './assets/covers/dossari-4.jpg','./assets/covers/dossari-5.jpg',
   './assets/covers/fallback-1.jpg','./assets/covers/fallback-2.jpg','./assets/covers/fallback-3.jpg'

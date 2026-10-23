@@ -1,6 +1,7 @@
 """Builds tilawat/data/quran/ from the Tanzil Uthmani text and التفسير الميسر.
 
-Source: api.alquran.cloud (editions quran-uthmani and ar.muyassar).
+Source: api.alquran.cloud (editions quran-uthmani, ar.muyassar and
+quran-simple-clean for search).
 The Qur'an text is the Tanzil Project's Uthmani text, kept verbatim as its
 licence requires. Run from the repo root:  python3 tilawat/tools/build_quran_data.py
 """
@@ -24,8 +25,19 @@ def surah_names():
     return json.loads(line[line.index('['):line.index('];') + 1].replace("'", '"'))
 
 
+import re
+_MARKS = re.compile('[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640\ufeff]')
+
+
+def normalize(t):
+    t = _MARKS.sub('', t)
+    t = re.sub('[أإآٱ]', 'ا', t).replace('ى', 'ي').replace('ة', 'ه').replace('ؤ', 'و').replace('ئ', 'ي')
+    return re.sub('\\s+', ' ', t).strip()
+
+
 def main():
     text = load('quran-uthmani', os.environ.get('QURAN_TEXT_JSON'))
+    clean = load('quran-simple-clean', os.environ.get('QURAN_CLEAN_JSON'))
     tafsir = load('ar.muyassar', os.environ.get('QURAN_TAFSIR_JSON'))
     names = surah_names()
     # Al-Fatiha's first ayah is the bismillah exactly as the other surahs spell it.
@@ -59,6 +71,23 @@ def main():
             'tafsir': 'التفسير الميسر، مجمع الملك فهد لطباعة المصحف الشريف.',
         },
     }
+    # Madina mushaf pages: pages[p-1] = [[surah, first ayah, last ayah], ...]
+    pages = [[] for _ in range(604)]
+    for s in text['surahs']:
+        for a in s['ayahs']:
+            row = pages[a['page'] - 1]
+            if row and row[-1][0] == s['number']:
+                row[-1][2] = a['numberInSurah']
+            else:
+                row.append([s['number'], a['numberInSurah'], a['numberInSurah']])
+    assert all(pages), 'every page has ayahs'
+    with open(os.path.join(OUT, 'pages.json'), 'w', encoding='utf8') as fh:
+        json.dump(pages, fh, separators=(',', ':'))
+    # Search text: the plain spelling people type, normalised the same way the app
+    # normalises a query (see normalizeSearch in js/quran.js).
+    search = [[normalize(a['text']) for a in s['ayahs']] for s in clean['surahs']]
+    with open(os.path.join(OUT, 'search.json'), 'w', encoding='utf8') as fh:
+        json.dump(search, fh, ensure_ascii=False, separators=(',', ':'))
     with open(os.path.join(OUT, 'index.json'), 'w', encoding='utf8') as fh:
         json.dump(meta, fh, ensure_ascii=False, separators=(',', ':'))
     print('wrote', len(index), 'surahs,', sum(x['count'] for x in index), 'ayahs')

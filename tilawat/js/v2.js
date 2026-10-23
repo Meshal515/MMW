@@ -41,15 +41,19 @@ $('themeBtn').onclick=()=>{const next=document.documentElement.dataset.theme==='
 document.addEventListener('error',event=>{const img=event.target;if(!(img instanceof HTMLImageElement)||img.dataset.fallbackUsed==='1')return;img.dataset.fallbackUsed='1';img.src=img.dataset.fallback||QURAN_FALLBACK},true);
 
 function fallbackCover(rec){return imageFor({reciter:rec?.reciter,surah:rec?.surah,seed:rec?.id})||QURAN_FALLBACK}
+// Art the app ships (the owner's photos, fallbacks, per-surah covers) is never the
+// recording's own picture, so an old saved path to it is recomputed, not kept.
+const isBundledArt=url=>/(^|\/)assets\/covers\/(dossari|fallback|default|surah\/)/.test(String(url||''));
+const ownArt=url=>url&&!isBundledArt(url)?url:'';
 async function resolveCover(rec){
-  if(rec._coverResolved)return rec._coverResolved;
+  if(rec._coverResolved&&!isBundledArt(rec._coverResolved))return rec._coverResolved;
   if(rec.coverKey){try{const blob=await getBlob(rec.coverKey);if(blob){const u=URL.createObjectURL(blob);state.coverUrls.set(rec.id,u);rec._coverResolved=u;return u}}catch{}}
   if(rec.coverMode==='local'){rec._coverResolved=fallbackCover(rec);return rec._coverResolved}
   const thumb=rec.sourceThumbnail||(rec.variants||[]).find(v=>v.thumbnail)?.thumbnail||'';
   if(rec.coverMode==='youtube'&&thumb){rec._coverResolved=thumb;return thumb}
-  rec._coverResolved=rec.cover||thumb||fallbackCover(rec);return rec._coverResolved;
+  rec._coverResolved=ownArt(rec.cover)||thumb||fallbackCover(rec);return rec._coverResolved;
 }
-function coverSync(rec){if(rec?.coverMode==='local')return rec._coverResolved||fallbackCover(rec);return rec?._coverResolved||rec?.cover||rec?.sourceThumbnail||(rec?.variants||[]).find(v=>v.thumbnail)?.thumbnail||fallbackCover(rec)}
+function coverSync(rec){if(rec?.coverMode==='local')return fallbackCover(rec);return ownArt(rec?._coverResolved)||ownArt(rec?.cover)||rec?.sourceThumbnail||(rec?.variants||[]).find(v=>v.thumbnail)?.thumbnail||fallbackCover(rec)}
 function sourceLabel(v){return SOURCE_REGISTRY[v?.provider]?.label||v?.provider||'مصدر'}
 function recSubtitle(r){return[r.reciter,r.surah,r.year?`${r.year}هـ`:'',r.collection].filter(Boolean).join(' · ')}
 function isOffline(rec){return(rec.variants||[]).some(v=>v.localAudioKey)}
@@ -83,8 +87,9 @@ function featuredReciters(){return state.reciters.slice(0,12)}
 function renderLastListened(){
   const slot=$('lastListenedSlot');if(!slot)return;const d=state.lastListened;if(!d){slot.innerHTML='';return}
   const action=d.kind==='catalog'?`data-catalog-play="${esc(d.key)}"`:`data-play="${esc(d.key)}"`;
-  const fallback=esc(d.fallback||QURAN_FALLBACK);
-  slot.innerHTML=`<button class="last-listened-card" type="button" ${action}><span class="last-listened-card__art"><img src="${esc(d.cover||fallback)}" data-fallback="${fallback}" alt=""></span><span class="last-listened-card__text"><span class="last-listened-card__label">آخر سورة سمعتها</span><b>${esc(d.title||'آخر تلاوة')}</b><small>${esc(d.sub||'تابع من حيث توقفت')}</small></span><span class="last-listened-card__play" aria-hidden="true">${playSvg()}</span></button>`;
+  const rec=d.kind==='catalog'?catalogRecordFromAction(d.key):findRec(d.key),art=ownArt(d.cover)||(rec?coverSync(rec):'');
+  const fallback=esc(rec?fallbackCover(rec):(d.fallback||QURAN_FALLBACK));
+  slot.innerHTML=`<button class="last-listened-card" type="button" ${action}><span class="last-listened-card__art"><img src="${esc(art||fallback)}" data-fallback="${fallback}" alt=""></span><span class="last-listened-card__text"><span class="last-listened-card__label">آخر سورة سمعتها</span><b>${esc(d.title||'آخر تلاوة')}</b><small>${esc(d.sub||'تابع من حيث توقفت')}</small></span><span class="last-listened-card__play" aria-hidden="true">${playSvg()}</span></button>`;
 }
 function renderHome(){
   $('homeGreeting').textContent=greeting();renderLastListened();

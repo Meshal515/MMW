@@ -4,36 +4,19 @@
 import Phaser from 'phaser';
 import '@fontsource/cairo/700.css';
 import { Pix, C3 } from './art/px/dsl';
-import { VEHICLE } from './art/px/vehicles';
+import { MBT_PIVOT, VEHICLE, mbtTurret } from './art/px/vehicles';
 import { AIRBASE, BUILDINGS, airbaseGround } from './art/px/buildings';
 import { rotsprite } from './art/px/rotsprite';
 import { rotorPx } from './art/px/rotor';
 import { PAL } from './render/painter';
+import { CityBoard } from './cityboard';
 
-const W = 620, H = 360, COAST = 222;
+const W = 800, H = 360, COAST = 222;
 const BLUE: C3 = [61, 123, 255], RED: C3 = [220, 68, 58];
-const SH: C3 = [40, 24, 58];
 const DIRS = 32;
 
-// ---------- small helpers ----------
-const cv = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-const toCanvas = (img: ImageData) => { const c = cv(img.width, img.height); c.getContext('2d')!.putImageData(img, 0, 0); return c; };
-function silhouette(img: ImageData, a = 110) {
-  const o = new ImageData(img.width, img.height);
-  for (let k = 0; k < img.data.length; k += 4) if (img.data[k + 3] > 40) o.data.set([SH[0], SH[1], SH[2], a], k);
-  return o;
-}
-function hash(x: number, y: number, s = 0) {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(s, 1442695041);
-  h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-function noise(x: number, y: number, s: number) {
-  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-  const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-const fbm = (x: number, y: number, s: number) => (noise(x, y, s) + noise(x * 2.1, y * 2.1, s + 7) * 0.5 + noise(x * 4.3, y * 4.3, s + 13) * 0.25) / 1.75;
-const pick = (p: C3[], t: number) => p[Math.max(0, Math.min(p.length - 1, Math.floor(t * p.length)))];
+import { fbm, hash, pick, setupCamera, silhouette, toCanvas } from './showcase-common';
+
 const coastAt = (x: number) => COAST + Math.sin(x * 0.021) * 7 + (fbm(x * 0.05, 3, 4) - 0.5) * 12;
 const desert = (x: number, y: number) => x + (fbm(x * 0.04, y * 0.04, 9) - 0.5) * 30 > 470 && y < 128;
 
@@ -90,6 +73,10 @@ class Ground {
 // ---------- the scene ----------
 interface Mover { img: Phaser.GameObjects.Image; sh: Phaser.GameObjects.Image; flame: Phaser.GameObjects.Image; path: { x: number; y: number; alt: number; v: number }[]; seg: number; t: number; x: number; y: number; alt: number; slot: { x: number; y: number }; fired: boolean; target: Phaser.GameObjects.Image; delay: number; done: boolean }
 interface Label { t: Phaser.GameObjects.Text; x: number; y: number }
+interface Driver { name: string; x: number; y: number; wp: number; loop: { x: number; y: number }[]; dir: number; tdir: number; turnT: number; tturnT: number; dist: number; hull: Phaser.GameObjects.Image; sh: Phaser.GameObjects.Image; turret?: Phaser.GameObjects.Image; target: Phaser.GameObjects.Image; speed: number }
+const dirOf = (a: number) => ((Math.round(a / (Math.PI * 2) * DIRS) % DIRS) + DIRS) % DIRS;
+/** Odd output size for rotations, so the rotated sprite's centre is exactly one pixel. */
+const oddOut = (src: ImageData) => { const o = Math.ceil(Math.hypot(src.width, src.height)) + 2; return o % 2 ? o : o + 1; };
 
 class Showcase extends Phaser.Scene {
   labels: Label[] = [];
@@ -108,7 +95,7 @@ class Showcase extends Phaser.Scene {
   dirTex(name: string, dir: number, team = BLUE) {
     const key = `${name}_${team.join('')}_d${dir}`;
     if (!this.textures.exists(key)) {
-      const src = VEHICLE[name].draw().toImage(team), out = Math.ceil(Math.hypot(src.width, src.height)) + 2;
+      const src = VEHICLE[name].draw().toImage(team), out = oddOut(src);
       const img = rotsprite(src, dir / DIRS * Math.PI * 2, out);
       this.tex(key, img); this.tex(key + '_sh', silhouette(img));
     }
@@ -156,6 +143,7 @@ class Showcase extends Phaser.Scene {
     g.stamp(BUILDINGS.house_t.draw(), 394, 72); g.stamp(BUILDINGS.house_r.draw(), 410, 72); g.stamp(BUILDINGS.tree.draw(), 428, 74);
     // land-unit training strip
     for (let x = 6; x < 600; x++) for (let y = 186; y < 200; y++) { const c = g.get(x, y); if (hash(x, y, 31) < 0.5) g.set(x, y, [c[0] * 0.9 + 14, c[1] * 0.86 + 8, c[2] * 0.8]); }
+    this.paintTrack(g);
     this.tex('ground', g.img);
     this.add.image(0, 0, 'ground').setOrigin(0, 0).setDepth(0);
 
@@ -225,6 +213,7 @@ class Showcase extends Phaser.Scene {
     this.label('خلية خريطة = 16px', 568, 342);
 
     this.sortie(O);
+    this.provingGround(g);
     this.setupCamera();
   }
 
@@ -359,30 +348,74 @@ class Showcase extends Phaser.Scene {
     this.tweens.add({ targets: core, scale: 1.8, alpha: 0, duration: 300, onComplete: () => core.destroy() });
   }
 
-  // ---------- camera ----------
-  setupCamera() {
-    const cam = this.cameras.main;
-    cam.setBounds(-200, -200, W + 400, H + 400);
-    const fit = () => Math.min(cam.width / W, cam.height / H);
-    const setZoom = (z: number) => { cam.setZoom(z); };
-    setZoom(fit()); cam.centerOn(W / 2, H / 2);
-    let drag: { x: number; y: number; sx: number; sy: number } | null = null;
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { drag = { x: p.x, y: p.y, sx: cam.scrollX, sy: cam.scrollY }; });
-    this.input.on('pointerup', () => { drag = null; });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => { if (drag && p.isDown) { cam.scrollX = drag.sx - (p.x - drag.x) / cam.zoom; cam.scrollY = drag.sy - (p.y - drag.y) / cam.zoom; } });
-    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      const before = cam.getWorldPoint(p.x, p.y);
-      setZoom(Phaser.Math.Clamp(cam.zoom * (dy > 0 ? 0.85 : 1.18), 0.8, 10));
-      const after = cam.getWorldPoint(p.x, p.y); cam.scrollX += before.x - after.x; cam.scrollY += before.y - after.y;
+  setupCamera() { setupCamera(this, W, H); }
+
+  // ---------- proving ground: vehicles drive a loop without any pixel wobble ----------
+  drivers: Driver[] = [];
+  /** Rotated frame (32 headings, RotSprite) with an odd canvas so its centre is a whole pixel. */
+  rotFrame(key: string, make: () => Pix, dir: number, team = BLUE) {
+    const k = `${key}_d${dir}`;
+    if (!this.textures.exists(k)) {
+      const src = make().toImage(team), img = rotsprite(src, dir / DIRS * Math.PI * 2, oddOut(src));
+      this.tex(k, img); this.tex(k + '_sh', silhouette(img));
+    }
+    return k;
+  }
+  paintTrack(g: Ground) {
+    // dirt loop painted into the ground, a target in the middle for the turret to track
+    const x0 = 640, y0 = 28, x1 = 772, y1 = 196;
+    for (let y = y0 - 6; y <= y1 + 6; y++) for (let x = x0 - 6; x <= x1 + 6; x++) {
+      const onLoop = (Math.abs(y - y0) <= 5 || Math.abs(y - y1) <= 5) && x >= x0 - 5 && x <= x1 + 5 || (Math.abs(x - x0) <= 5 || Math.abs(x - x1) <= 5) && y >= y0 - 5 && y <= y1 + 5;
+      if (!onLoop) continue;
+      const r = hash(x, y, 41), rut = (Math.abs(y - y0) === 2 || Math.abs(y - y1) === 2 || Math.abs(x - x0) === 2 || Math.abs(x - x1) === 2);
+      g.set(x, y, rut ? PAL.sand[0] : r < 0.5 ? PAL.sand[1] : PAL.sand[2]);
+    }
+  }
+  provingGround(_g: Ground) {
+    const x0 = 640, y0 = 28, x1 = 772, y1 = 196;
+    const target = this.place('mbt', 706, 112, 0, RED);
+    this.label('ميدان الحركة: البرج يتتبع الهدف، الجنزير يتحرك مع المسافة', 706, 6, true);
+    this.label('هدف', 706, 120);
+    const loop = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    const order = ['mbt', 'ifv', 'mbt', 'aa', 'spg', 'apc', 'truck', 'humvee'];
+    const per = (x1 - x0) * 2 + (y1 - y0) * 2;
+    order.forEach((name, i) => {
+      // start spread along the loop
+      let s = per - i * 38, wp = 0, x = x0, y = y0;
+      for (let k = 0; k < 4 && s > 0; k++) { const a = loop[k], b = loop[(k + 1) % 4], len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y); if (s <= len) { x = a.x + Math.sign(b.x - a.x) * s; y = a.y + Math.sign(b.y - a.y) * s; wp = (k + 1) % 4; s = 0; } else s -= len; }
+      const hull = this.add.image(0, 0, '__DEFAULT').setOrigin(0, 0).setDepth(21);
+      const sh = this.add.image(0, 0, '__DEFAULT').setOrigin(0, 0).setDepth(20);
+      const turret = name === 'mbt' ? this.add.image(0, 0, '__DEFAULT').setOrigin(0, 0).setDepth(22) : undefined;
+      const d0 = dirOf(Math.atan2(loop[wp].y - y, loop[wp].x - x));
+      this.drivers.push({ name, x, y, wp, loop, dir: d0, tdir: d0, turnT: 0, tturnT: 0, dist: 0, hull, sh, turret, target, speed: name === 'humvee' || name === 'truck' ? 16 : 11 });
     });
-    const bar = document.getElementById('zoom')!;
-    bar.addEventListener('click', e => {
-      const b = (e.target as HTMLElement).closest('button'); if (!b) return;
-      const z = b.dataset.z!, mid = cam.midPoint.clone();
-      if (z === 'fit') { setZoom(fit()); cam.centerOn(W / 2, H / 2); } else { setZoom(Number(z)); cam.centerOn(mid.x, mid.y); }
-      if (b.dataset.cx) cam.centerOn(Number(b.dataset.cx), Number(b.dataset.cy));
-    });
-    (window as any).__sc = { cam, W, H, focus: (x: number, y: number, z: number) => { setZoom(z); cam.centerOn(x, y); } };
+  }
+  drive(d: Driver, dt: number) {
+    const v = VEHICLE[d.name], goal = d.loop[d.wp];
+    const want = dirOf(Math.atan2(goal.y - d.y, goal.x - d.x));
+    if (want !== d.dir) {
+      // pivot in place one heading at a time — nothing slides while the hull turns
+      d.turnT += dt;
+      if (d.turnT > 1 / 16) { d.turnT = 0; d.dir = (d.dir + (((want - d.dir + DIRS) % DIRS) < DIRS / 2 ? 1 : DIRS - 1)) % DIRS; if (v.frames) d.dist += 0.5; }
+    } else {
+      const len = Math.hypot(goal.x - d.x, goal.y - d.y), step = Math.min(len, d.speed * dt);
+      d.x += (goal.x - d.x) / (len || 1) * step; d.y += (goal.y - d.y) / (len || 1) * step; d.dist += step;
+      if (len - step < 0.01) { d.x = goal.x; d.y = goal.y; d.wp = (d.wp + 1) % d.loop.length; }
+    }
+    const frame = v.frames ? Math.floor(d.dist) % 2 : 0;
+    const key = this.rotFrame(`${d.name}_f${frame}`, v.frames ? () => v.frames!(frame) : v.draw, d.dir);
+    const tex = this.textures.get(key).getSourceImage() as HTMLCanvasElement, half = (tex.width - 1) / 2;
+    const px = Math.round(d.x), py = Math.round(d.y);
+    d.hull.setTexture(key).setPosition(px - half, py - half);
+    d.sh.setTexture(key + '_sh').setPosition(px - half + 1, py - half + 1);
+    if (d.turret) {
+      const tw = dirOf(Math.atan2(d.target.y - py, d.target.x - px));
+      d.tturnT += dt;
+      if (tw !== d.tdir && d.tturnT > 1 / 10) { d.tturnT = 0; d.tdir = (d.tdir + (((tw - d.tdir + DIRS) % DIRS) < DIRS / 2 ? 1 : DIRS - 1)) % DIRS; }
+      const tk = this.rotFrame('mbt_turret', mbtTurret, d.tdir), th = ((this.textures.get(tk).getSourceImage() as HTMLCanvasElement).width - 1) / 2;
+      const a = d.dir / DIRS * Math.PI * 2;
+      d.turret.setTexture(tk).setPosition(px + Math.round(Math.cos(a) * MBT_PIVOT) - th, py + Math.round(Math.sin(a) * MBT_PIVOT) - th);
+    }
   }
 
   update(_t: number, dms: number) {
@@ -390,16 +423,19 @@ class Showcase extends Phaser.Scene {
     this.clock += dt;
     for (const a of [...this.ticks]) a();
     this.stepSortie(dt);
+    for (const d of this.drivers) this.drive(d, dt);
     const z = this.cameras.main.zoom, s = Math.min(0.42, 0.55 / z);
     for (const l of this.labels) l.t.setScale(s).setPosition(l.x, l.y + 1).setVisible(z > 1.4);
   }
 }
 
+const board = new URLSearchParams(location.search).get('b') === 'city' ? CityBoard : Showcase;
+document.querySelectorAll<HTMLElement>('#tabs a').forEach(el => el.classList.toggle('on', (el.dataset.b === 'city') === (board === CityBoard)));
 document.fonts.load('700 20px Cairo').finally(() => {
   new Phaser.Game({
     type: Phaser.AUTO, parent: 'game', backgroundColor: '#1c2f72', pixelArt: true, roundPixels: true, banner: false,
     scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
-    scene: Showcase,
+    scene: board,
   });
   (window as any).__ready = true;
 });

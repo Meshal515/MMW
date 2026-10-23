@@ -1,5 +1,5 @@
 // HTML interface layered over the map: thin top bar, WorldBox-style bottom toolbar, one floating card at a time.
-import { AIR, BUILDABLE, BUILDINGS, BuildingType, Cost, LAND, SEA, Weapon, WEAPONS } from '../../sim/balance';
+import { AIR, BUILDABLE, BUILDINGS, BuildingType, Cost, LAND, levelCost, levelTime, SEA, Weapon, WEAPONS } from '../../sim/balance';
 import type { Game } from '../../sim/game';
 import { availableFor, estimateDefense, defenseMultiplier } from '../../sim/military';
 import { TERRAIN_NAMES } from '../../sim/map/terrain';
@@ -379,7 +379,7 @@ export class Hud {
       return { id: 'u:' + u, icon: modelIcon(m, col), name: def.name, cost: def.cost, err, sub: def.role ?? def.desc };
     };
     switch (this.tab) {
-      case 'cities': return [b('city'), { id: 'a:upcity', icon: cityIcon(3, false), name: 'تطوير مدينة', sub: 'اختر مدينة لترقيتها' }, b('hospital'), b('barracks')];
+      case 'cities': return [b('city'), { id: 'a:upcity', icon: cityIcon(3, false), name: 'تطوير مدينة', sub: 'اختر مدينة لترقيتها' }, b('hospital'), b('market'), b('bank'), b('power'), b('barracks')];
       case 'economy': return [b('farm'), b('lumber'), b('mine'), b('factory'), b('port')];
       case 'land': return [{ id: 'a:recruit', icon: modelIcon('soldier0', col), name: 'تجنيد 200', cost: { gold: 600, food: 200 }, err: g.nationBuildings(me, 'barracks').length ? null : 'يحتاج ثكنة' }, unit('tank', LAND.tank), unit('art', LAND.art), { id: 'a:reinforce', icon: modelIcon('truck', col), name: 'تعزيز الجبهة', sub: 'ربع الجيش لأضعف جبهة' }];
       case 'sea': return [b('port'), ...(Object.keys(SEA) as (keyof typeof SEA)[]).map(k => unit(k, SEA[k]))];
@@ -489,11 +489,11 @@ export class Hud {
       const img = b.type === 'capital' || b.type === 'city' ? iconURL('flag', hexColor(this.nat.color)) : iconURL(b.type);
       let status = b.level === 0 ? `قيد البناء` : `مستوى ${b.level}`;
       let prog = '';
-      if (b.build > 0) { const total = def.time[b.level] || 1; prog = `<div class="prog"><i style="width:${Math.round(100 * (1 - b.build / total))}%"></i></div>`; if (b.level > 0) status += ' • يتطور'; }
+      if (b.build > 0) { const total = levelTime(b.type, b.level) || 1; prog = `<div class="prog"><i style="width:${Math.round(100 * (1 - b.build / total))}%"></i></div>`; if (b.level > 0) status += ' • يتطور'; }
       if (b.queue.length) status += ` • ينتج ${b.queue.map(q => `${q.left}× ${(g.unitDef(q.unit as string) ?? (WEAPONS as any)[q.unit])?.name}`).join('، ')}`;
       const canUp = b.build <= 0 && b.level > 0 && b.level < def.maxLevel;
       h += `<div class="bitem"><img class="px bimg" src="${img}"><div class="grow"><div class="nm">${def.name}</div><div class="ds">${status}</div>${prog}</div>
-        ${canUp ? `<button class="btn sm" data-act="upgrade" data-v="${b.type}">${ic('up')}تطوير ${this.costHtml(def.cost[b.level])}</button>` : ''}</div>`;
+        ${canUp ? `<button class="btn sm" data-act="upgrade" data-v="${b.type}">${ic('up')}تطوير ${this.costHtml(levelCost(b.type, b.level))}</button>` : ''}</div>`;
       if (b.level > 0) h += this.productionButtons(r, b.type, b.level);
     }
     h += `<div class="btns" style="margin-top:6px"><button class="btn primary" data-act="open" data-v="build">${ic('build')}بناء هنا</button></div></div>`;

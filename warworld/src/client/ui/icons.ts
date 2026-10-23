@@ -44,7 +44,7 @@ export function modelIcon(name: string, color = 0x3d7bff, size = 40) {
 export function facilityIcon(type: string, color = 0x3d7bff, size = 40) {
   const key = `f${type}${color}${size}`;
   let u = cache.get(key); if (u) return u;
-  const m = FACILITIES[type]; if (!m) return '';
+  const m = FACILITIES[type] ?? FACILITIES.factory; if (!m) return '';
   const side = Math.max(m.w!, m.h!) + 6;
   const r = renderModel({ ...m, w: side, h: side, castShadow: false }, 0);
   u = fit(compose(r.base, r.team, color), size);

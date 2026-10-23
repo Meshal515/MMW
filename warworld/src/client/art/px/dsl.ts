@@ -92,12 +92,12 @@ export class Pix {
     return this;
   }
   /** One-pixel outline around the silhouette (grows the sprite by the outline). */
-  outline() {
+  outline(ch = 'k') {
     const src = this.g.map(r => [...r]);
     for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
       if (src[y][x] !== '.') continue;
       const n = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < this.w && yy < this.h && src[yy][xx] !== '.';
-      if (n(x - 1, y) || n(x + 1, y) || n(x, y - 1) || n(x, y + 1)) this.g[y][x] = 'k';
+      if (n(x - 1, y) || n(x + 1, y) || n(x, y - 1) || n(x, y + 1)) this.g[y][x] = ch;
     }
     return this;
   }

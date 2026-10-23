@@ -1,6 +1,6 @@
 // Causal economy: population needs housing and food, buildings need workers, output needs workers,
 // soldiers come out of the population and eat, hospitals return the wounded.
-import { AIR, BUILDINGS, ECON, LAND, SEA, WEAPONS } from './balance';
+import { AIR, BUILDINGS, CITY, ECON, LAND, SEA, WEAPONS } from './balance';
 import type { Game } from './game';
 import { T } from './map/terrain';
 import { airTotal, LandCounts } from './state';
@@ -10,6 +10,7 @@ export function economyTick(g: Game, dt: number) {
   const housing = new Float64Array(N), jobs = new Float64Array(N), cap = new Float64Array(N);
   const farm = new Float64Array(N), wood = new Float64Array(N), steel = new Float64Array(N), factory = new Float64Array(N);
   const port = new Float64Array(N), rural = new Float64Array(N), area = new Float64Array(N), count = new Float64Array(N);
+  const market = new Float64Array(N), bank = new Float64Array(N);
   const upkeep = new Float64Array(N), hosp = new Float64Array(N), sold = new Float64Array(N), tanks = new Float64Array(N), arts = new Float64Array(N);
   const recruitSpots: { r: number; rate: number }[][] = Array.from({ length: N }, () => []);
   const hospitalSpots: number[][] = Array.from({ length: N }, () => []);
@@ -29,6 +30,10 @@ export function economyTick(g: Game, dt: number) {
     const fertile = Rg.terrain === T.Desert || Rg.terrain === T.Snow || Rg.terrain === T.Mountain ? 0.3 : 1;
     rural[o] += ECON.regionFood * fertile * rad;
     sold[o] += g.inf[r]; tanks[o] += g.tank[r]; arts[o] += g.art[r];
+    // districts in a city's region grow with the city and with a power plant next to them
+    let cityL = 0, powerL = 0;
+    for (const b of g.buildings[r]) { if (b.type === 'city' || b.type === 'capital') cityL = b.level; if (b.type === 'power') powerL = b.level; }
+    const boost = (cityL ? CITY.synergy(cityL) : 1) * (1 + ECON.powerBoost * powerL);
     for (const b of g.buildings[r]) {
       const def = BUILDINGS[b.type];
       if (b.level > 0) {
@@ -36,16 +41,22 @@ export function economyTick(g: Game, dt: number) {
         jobs[o] += def.workers * lvl;
         upkeep[o] += def.upkeep * lvl;
         switch (b.type) {
-          case 'capital': housing[o] += ECON.housing.capital[lvl - 1]; cap[o] += ECON.capacity.capital * lvl; recruitSpots[o].push({ r, rate: ECON.passiveRecruit.capital * lvl }); break;
-          case 'city': housing[o] += ECON.housing.city[lvl - 1]; cap[o] += ECON.capacity.city * lvl; recruitSpots[o].push({ r, rate: ECON.passiveRecruit.city * lvl }); break;
-          case 'barracks': cap[o] += ECON.capacity.barracks * lvl; recruitSpots[o].push({ r, rate: ECON.passiveRecruit.barracks * lvl }); break;
+          case 'capital': case 'city': {
+            const c = b.type === 'capital';
+            housing[o] += CITY.housing(lvl, c); cap[o] += CITY.soldierCap(lvl, c);
+            recruitSpots[o].push({ r, rate: CITY.recruit(lvl, c) }); market[o] += CITY.gold(lvl) * rad;
+            break;
+          }
+          case 'barracks': cap[o] += ECON.capacity.barracks * lvl * boost; recruitSpots[o].push({ r, rate: ECON.passiveRecruit.barracks * lvl * boost }); break;
+          case 'market': market[o] += ECON.marketGold * lvl * rad * boost; break;
+          case 'bank': bank[o] += lvl * (cityL ? CITY.synergy(cityL) : 1); break;
           case 'farm': farm[o] += ECON.farmFood * lvl * rad * (Rg.flatShare > 0.5 ? 1.2 : 1); break;
           case 'lumber': wood[o] += ECON.lumberWood * lvl * rad * (0.6 + Rg.forestShare); break;
           case 'mine': steel[o] += ECON.mineSteel * lvl * rad * (0.6 + Rg.hillShare); break;
-          case 'factory': factory[o] += ECON.factoryGold * lvl * rad; break;
+          case 'factory': factory[o] += ECON.factoryGold * lvl * rad * boost; break;
           case 'port': {
             const blockaded = [...g.fleets.values()].some(f => f.owner !== o && g.atWar(o, f.owner) && Rg.seas.includes(f.sea) && f.ships.destroyer + f.ships.sub + f.ships.patrol + f.ships.carrier > 0);
-            if (!blockaded) port[o] += ECON.portGold * lvl * rad;
+            if (!blockaded) port[o] += ECON.portGold * lvl * rad * boost;
             break;
           }
           case 'hospital': hosp[o] += lvl; hospitalSpots[o].push(r); break;
@@ -55,7 +66,7 @@ export function economyTick(g: Game, dt: number) {
       if (b.build > 0) {
         b.build -= dt * (0.5 + 0.5 * g.nations[o].fill);
         if (b.build <= 0) {
-          b.build = 0; b.level++;
+          b.build = 0; b.level++; b.damage = 0;
           g.markDirty(r);
           if (g.nations[o].human) g.log('built', `اكتمل ${def.name} (مستوى ${b.level})`, o, -1, r);
         }
@@ -82,7 +93,7 @@ export function economyTick(g: Game, dt: number) {
     const fill = n.fill * (n.bankrupt ? 0.5 : 1);
     let allyPorts = 0;
     if (port[i] > 0) for (const o of g.nations) if (o.id !== i && o.alive && g.allied(i, o.id) && port[o.id] > 0) allyPorts++;
-    const goldIn = employed * ECON.taxEmployed + idle * ECON.taxIdle + count[i] * ECON.regionGold + factory[i] * fill + port[i] * fill + allyPorts * ECON.portAllyGold;
+    const goldIn = (employed * ECON.taxEmployed + idle * ECON.taxIdle + count[i] * ECON.regionGold + factory[i] * fill + port[i] * fill + market[i] * fill + allyPorts * ECON.portAllyGold) * (1 + Math.min(1.5, bank[i] * ECON.bankBoost));
     const goldOut = upkeep[i] + sold[i] * LAND.inf.upkeep + tanks[i] * LAND.tank.upkeep + arts[i] * LAND.art.upkeep;
     const foodIn = farm[i] * fill + rural[i];
     const foodOut = n.pop * ECON.foodPerPop + (sold[i] + tanks[i] * 2 + arts[i] * 2) * ECON.foodPerSoldier;
@@ -102,7 +113,7 @@ export function economyTick(g: Game, dt: number) {
     if (!n.starving) {
       const room = 1 - n.pop / Math.max(1, n.housing);
       if (room > 0) n.pop += ECON.growth * n.pop * room * (1 + Math.min(1.2, hosp[i] * 0.15)) * dt;
-      else n.pop += room * n.pop * 0.05 * dt;
+      else n.pop += Math.max(-0.05, room * 0.05) * n.pop * dt; // overcrowded: people leave, at most 5%/s
     }
     // passive recruitment from cities, capital and barracks
     const total = sold[i] + tanks[i] * 3 + arts[i] * 2;

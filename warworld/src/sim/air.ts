@@ -1,5 +1,5 @@
 // Air power (strikes, interception, rebasing to allies or carriers) and strategic missiles.
-import { AIR, AirUnit, RADIATION_SECONDS, Weapon, WEAPONS } from './balance';
+import { AIR, AirUnit, CITY, RADIATION_SECONDS, Weapon, WEAPONS } from './balance';
 import type { Game } from './game';
 import { AirCounts, AirGroup, AIR_UNITS, airTotal, CommandResult, emptyAir, Sortie, SEA_UNITS } from './state';
 import { addOpinion, declareWar } from './diplomacy';
@@ -165,8 +165,10 @@ export function damageBuildings(g: Game, r: number, dmg: number) {
   if (!list.length || dmg <= 0) return;
   const b = list[g.rng.int(list.length)];
   b.damage += dmg;
-  while (b.damage >= 70 * Math.max(1, b.level) && b.level > 0) {
-    b.damage -= 70 * Math.max(1, b.level);
+  // a city's durability grows with its level; bombing knocks it down one level at a time
+  const hp = () => b.type === 'city' || b.type === 'capital' ? CITY.hp(b.level) : 70 * Math.max(1, b.level);
+  while (b.damage >= hp() && b.level > 0) {
+    b.damage -= hp();
     b.level--;
     g.markDirty(r);
   }

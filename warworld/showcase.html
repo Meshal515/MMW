@@ -10,6 +10,9 @@
   #zoom { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 4px; background: rgba(20,16,30,.82); border: 1px solid #3a3350; border-radius: 8px; z-index: 5; }
   #zoom button { font: 700 13px Cairo, sans-serif; color: #e8e4f0; background: #2b2540; border: 1px solid #453c60; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
   #zoom button:hover { background: #3a3258; }
+  #tabs { display: flex; gap: 4px; }
+  #tabs a { font: 700 13px Cairo, sans-serif; color: #cfc8e0; text-decoration: none; padding: 4px 10px; border-radius: 6px; border: 1px solid #453c60; }
+  #tabs a.on { background: #ffe28a; color: #1d1626; border-color: #ffe28a; }
   #zoom .t { color: #ffe28a; font: 700 13px Cairo, sans-serif; padding: 4px 8px; }
 </style>
 </head>
@@ -17,8 +20,11 @@
 <div id="game"></div>
 <div id="zoom">
   <span class="t">لوحة الاستعراض — أحجام حقيقية</span>
+  <span id="tabs"><a data-b="units" href="?">الوحدات</a><a data-b="city" href="?b=city">المدن</a></span>
   <button data-z="fit">الكل</button>
+  <button data-z="1">1×</button>
   <button data-z="2">2×</button>
+  <button data-z="3">3×</button>
   <button data-z="4">4×</button>
   <button data-z="6">6×</button>
   <button data-z="8">8×</button>

@@ -1,6 +1,6 @@
 // Authoritative game simulation. Pure TypeScript with no DOM access, so the same engine runs
 // in the browser (single player) and later inside a Cloudflare Durable Object (online rooms).
-import { AIR, BUILDINGS, BuildingType, Cost, DT, ECON, FOUNDING_SECONDS, LAND, Res, SEA, TICK_RATE, UnitDef, VICTORY_SHARE, Weapon, WEAPONS } from './balance';
+import { AIR, BUILDINGS, BuildingType, Cost, DT, ECON, FOUNDING_SECONDS, LAND, levelCost, levelTime, Res, SEA, TICK_RATE, UnitDef, VICTORY_SHARE, Weapon, WEAPONS } from './balance';
 import { buildMap, MapData, regionDistance } from './map/regions';
 import { isLand } from './map/terrain';
 import { nationColors, nationNames } from './names';
@@ -372,7 +372,7 @@ export class Game {
 
   /** Founding a new city gets more expensive with every city the nation already has (up to 6×). */
   buildCost(n: number, type: BuildingType): Cost {
-    const base = BUILDINGS[type].cost[0];
+    const base = levelCost(type, 0);
     if (type !== 'city') return base;
     let cities = 0;
     for (let r = 0; r < this.owner.length; r++) if (this.owner[r] === n && this.building(r, 'city')) cities++;
@@ -386,7 +386,7 @@ export class Game {
     const cost = this.buildCost(n, type);
     if (!this.canAfford(nat, cost)) return { ok: false, error: 'الموارد لا تكفي' };
     this.pay(nat, cost);
-    this.buildings[region].push({ type, level: 0, build: def.time[0], damage: 0, queue: [] });
+    this.buildings[region].push({ type, level: 0, build: levelTime(type, 0), damage: 0, queue: [] });
     this.nbTick = -1;
     nat.stats.built++;
     this.markDirty(region);
@@ -400,11 +400,11 @@ export class Game {
     const def = BUILDINGS[type];
     if (b.build > 0) return { ok: false, error: 'قيد البناء' };
     if (b.level >= def.maxLevel) return { ok: false, error: 'أعلى مستوى' };
-    const cost = def.cost[b.level];
+    const cost = levelCost(type, b.level);
     const nat = this.nations[n];
     if (!this.canAfford(nat, cost)) return { ok: false, error: 'الموارد لا تكفي' };
     this.pay(nat, cost);
-    b.build = def.time[b.level];
+    b.build = levelTime(type, b.level);
     return { ok: true };
   }
 

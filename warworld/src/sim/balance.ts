@@ -11,7 +11,7 @@ export type Cost = Partial<Record<Res, number>>;
 
 export type BuildingType =
   | 'capital' | 'city' | 'farm' | 'lumber' | 'mine' | 'factory' | 'port' | 'barracks'
-  | 'hospital' | 'airbase' | 'silo' | 'nuclear' | 'airdefense';
+  | 'hospital' | 'market' | 'bank' | 'power' | 'airbase' | 'silo' | 'nuclear' | 'airdefense';
 
 export interface BuildingDef {
   name: string;
@@ -24,25 +24,58 @@ export interface BuildingDef {
   canBuild?: (r: { terrain: T; coastal: boolean; forestShare: number; hillShare: number }) => boolean;
   needs?: BuildingType;    // another building required in the same region
   hint?: string;           // shown when placement is not allowed
+  district?: boolean;      // drawn as a quarter of the city in its region
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
-  capital: { name: 'العاصمة', desc: 'مركز الدولة: سكن ودخل وجنود', cost: [{}, { gold: 800, wood: 300, steel: 100 }, { gold: 2000, wood: 700, steel: 300 }], time: [0, 25, 40], workers: 150, maxLevel: 3, upkeep: 0 },
-  city: { name: 'مدينة', desc: 'تسكن السكان وتزيد الدخل وإنتاج الجنود', cost: [{ gold: 260, wood: 160 }, { gold: 650, wood: 320, steel: 80 }, { gold: 1500, wood: 650, steel: 260 }], time: [12, 22, 34], workers: 80, maxLevel: 3, upkeep: 0.2, canBuild: r => r.terrain !== T.Mountain, hint: 'لا يمكن بناء مدينة على الجبال' },
+  capital: { name: 'العاصمة', desc: 'مركز الدولة: سكن ودخل وجنود — تكبر حتى المستوى 50', cost: [{}], time: [0], workers: 150, maxLevel: 50, upkeep: 0 },
+  city: { name: 'مدينة', desc: 'كل مستوى: سكان أكثر، جنود أكثر، متانة أعلى، ومساحة أكبر — حتى المستوى 50', cost: [{ gold: 260, wood: 160 }], time: [12], workers: 80, maxLevel: 50, upkeep: 0.2, canBuild: r => r.terrain !== T.Mountain, hint: 'لا يمكن بناء مدينة على الجبال' },
   farm: { name: 'مزرعة', desc: 'تنتج الغذاء — السكان والجنود يأكلون', cost: [{ gold: 110, wood: 60 }, { gold: 260, wood: 120 }, { gold: 520, wood: 240, steel: 40 }], time: [8, 14, 20], workers: 220, maxLevel: 3, upkeep: 0.1, canBuild: r => r.terrain !== T.Mountain && r.terrain !== T.Snow && r.terrain !== T.Desert, hint: 'تحتاج أرضًا خصبة (ليست صحراء/ثلج/جبال)' },
   lumber: { name: 'حطّابون', desc: 'معسكر قطع أشجار ينتج الخشب', cost: [{ gold: 90 }, { gold: 220, wood: 40 }, { gold: 480, wood: 90, steel: 30 }], time: [7, 12, 18], workers: 180, maxLevel: 3, upkeep: 0.1, canBuild: r => r.forestShare >= 0.2, hint: 'يحتاج منطقة فيها غابات' },
   mine: { name: 'منجم', desc: 'يستخرج الحديد وينتج الفولاذ', cost: [{ gold: 150, wood: 90 }, { gold: 340, wood: 160 }, { gold: 700, wood: 300, steel: 60 }], time: [10, 16, 24], workers: 240, maxLevel: 3, upkeep: 0.15, canBuild: r => r.hillShare >= 0.2, hint: 'يحتاج تلالًا أو جبالًا' },
-  factory: { name: 'مصنع', desc: 'يزيد الذهب ويصنع المدرعات والمدفعية', cost: [{ gold: 360, wood: 200, steel: 60 }, { gold: 800, wood: 300, steel: 200 }, { gold: 1700, wood: 500, steel: 450 }], time: [14, 22, 32], workers: 420, maxLevel: 3, upkeep: 0.3 },
-  port: { name: 'ميناء', desc: 'يبني السفن ويفتح التجارة البحرية', cost: [{ gold: 300, wood: 260 }, { gold: 700, wood: 420, steel: 120 }, { gold: 1500, wood: 700, steel: 350 }], time: [14, 22, 30], workers: 200, maxLevel: 3, upkeep: 0.25, canBuild: r => r.coastal, hint: 'الميناء يحتاج ساحلًا' },
-  barracks: { name: 'ثكنة', desc: 'تجنّد المشاة وتجهز التعزيزات', cost: [{ gold: 200, wood: 130 }, { gold: 480, wood: 220, steel: 60 }, { gold: 1000, wood: 400, steel: 160 }], time: [10, 16, 24], workers: 100, maxLevel: 3, upkeep: 0.2 },
-  hospital: { name: 'مستشفى', desc: 'يعالج الجرحى ويعيدهم للخدمة ويسرّع نمو السكان', cost: [{ gold: 260, wood: 120, steel: 40 }, { gold: 600, wood: 200, steel: 120 }, { gold: 1200, wood: 350, steel: 260 }], time: [12, 18, 26], workers: 160, maxLevel: 3, upkeep: 0.25, needs: 'city', hint: 'المستشفى يحتاج مدينة في المنطقة' },
+  factory: { name: 'مصنع', desc: 'يزيد الذهب ويصنع المدرعات والمدفعية', cost: [{ gold: 360, wood: 200, steel: 60 }, { gold: 800, wood: 300, steel: 200 }, { gold: 1700, wood: 500, steel: 450 }], time: [14, 22, 32], workers: 420, maxLevel: 3, upkeep: 0.3, district: true },
+  port: { name: 'ميناء', desc: 'يبني السفن ويفتح التجارة البحرية', cost: [{ gold: 300, wood: 260 }, { gold: 700, wood: 420, steel: 120 }, { gold: 1500, wood: 700, steel: 350 }], time: [14, 22, 30], workers: 200, maxLevel: 3, upkeep: 0.25, canBuild: r => r.coastal, hint: 'الميناء يحتاج ساحلًا', district: true },
+  barracks: { name: 'ثكنة', desc: 'تجنّد المشاة وتجهز التعزيزات', cost: [{ gold: 200, wood: 130 }, { gold: 480, wood: 220, steel: 60 }, { gold: 1000, wood: 400, steel: 160 }], time: [10, 16, 24], workers: 100, maxLevel: 3, upkeep: 0.2, district: true },
+  hospital: { name: 'مستشفى', desc: 'يعالج الجرحى ويعيدهم للخدمة ويسرّع نمو السكان', cost: [{ gold: 260, wood: 120, steel: 40 }, { gold: 600, wood: 200, steel: 120 }, { gold: 1200, wood: 350, steel: 260 }], time: [12, 18, 26], workers: 160, maxLevel: 3, upkeep: 0.25, needs: 'city', hint: 'المستشفى يحتاج مدينة في المنطقة', district: true },
+  market: { name: 'سوق تجاري', desc: 'يزيد دخل الذهب — يكبر مع مستوى المدينة', cost: [{ gold: 220, wood: 140 }, { gold: 520, wood: 260, steel: 40 }, { gold: 1100, wood: 420, steel: 140 }], time: [10, 16, 24], workers: 180, maxLevel: 3, upkeep: 0.15, needs: 'city', hint: 'السوق يحتاج مدينة في المنطقة', district: true },
+  bank: { name: 'بنك مركزي', desc: 'يسرّع كل دخل الذهب في دولتك بنسبة مئوية', cost: [{ gold: 600, wood: 120, steel: 120 }, { gold: 1400, wood: 240, steel: 300 }, { gold: 3000, wood: 400, steel: 650 }], time: [16, 26, 38], workers: 120, maxLevel: 3, upkeep: 0.3, needs: 'city', hint: 'البنك يحتاج مدينة في المنطقة', district: true },
+  power: { name: 'محطة كهرباء', desc: 'تزيد إنتاج المصانع والأسواق والموانئ في منطقتها', cost: [{ gold: 380, wood: 120, steel: 160 }, { gold: 850, wood: 220, steel: 360 }, { gold: 1800, wood: 380, steel: 760 }], time: [14, 22, 32], workers: 140, maxLevel: 3, upkeep: 0.25, district: true },
   airbase: { name: 'قاعدة جوية', desc: 'تصنع وتؤوي الطائرات والهليكوبترات', cost: [{ gold: 520, wood: 220, steel: 220 }, { gold: 1100, wood: 350, steel: 450 }, { gold: 2200, wood: 500, steel: 900 }], time: [18, 26, 36], workers: 300, maxLevel: 3, upkeep: 0.5, canBuild: r => r.terrain !== T.Mountain, hint: 'لا مدرج على الجبال' },
   silo: { name: 'منصة صواريخ', desc: 'تجهز وتطلق الأسلحة الاستراتيجية', cost: [{ gold: 900, wood: 200, steel: 450 }, { gold: 2200, wood: 400, steel: 1000 }], time: [24, 40], workers: 220, maxLevel: 2, upkeep: 0.8 },
   nuclear: { name: 'مفاعل نووي', desc: 'تخصيب يتيح القنابل الذرية ثم الهيدروجينية', cost: [{ gold: 1600, wood: 300, steel: 650 }, { gold: 3600, wood: 600, steel: 1400 }], time: [30, 50], workers: 420, maxLevel: 2, upkeep: 1.2 },
   airdefense: { name: 'دفاع جوي', desc: 'يعترض الصواريخ والطائرات المعادية', cost: [{ gold: 420, wood: 100, steel: 220 }, { gold: 900, wood: 200, steel: 450 }, { gold: 1800, wood: 300, steel: 900 }], time: [12, 18, 26], workers: 110, maxLevel: 3, upkeep: 0.4 },
 };
 
-export const BUILDABLE: BuildingType[] = ['city', 'farm', 'lumber', 'mine', 'factory', 'port', 'barracks', 'hospital', 'airbase', 'silo', 'nuclear', 'airdefense'];
+export const BUILDABLE: BuildingType[] = ['city', 'farm', 'lumber', 'mine', 'factory', 'port', 'barracks', 'hospital', 'market', 'bank', 'power', 'airbase', 'silo', 'nuclear', 'airdefense'];
+
+// ---------------- cities: levels 1..50 ----------------
+export const MAX_CITY_LEVEL = 50;
+const isCity = (t: BuildingType) => t === 'city' || t === 'capital';
+/** Everything a city of a given level gives. Population (people) and soldiers are separate numbers. */
+export const CITY = {
+  housing: (L: number, cap: boolean) => Math.round((cap ? 2600 : 1500) * L ** 1.35),
+  soldierCap: (L: number, cap: boolean) => Math.round((cap ? 520 : 300) * L ** 1.1),
+  recruit: (L: number, cap: boolean) => (cap ? 1.0 : 0.4) * L ** 0.8,
+  hp: (L: number) => Math.round(70 + 40 * L ** 1.15),
+  defense: (L: number, cap: boolean) => 0.22 * Math.sqrt(L) + (cap ? 0.35 : 0),
+  gold: (L: number) => 0.6 * L ** 1.1,
+  /** Footprint radius in world pixels (16 px = one map tile). */
+  radius: (L: number) => Math.round(20 + 17 * Math.sqrt(Math.max(0, L - 1))),
+  /** Districts get stronger in bigger cities. */
+  synergy: (L: number) => 1 + 0.03 * (L - 1),
+};
+/** Cost to start (level 0) or to upgrade from `level` to `level + 1`. */
+export function levelCost(type: BuildingType, level: number): Cost {
+  if (!isCity(type)) return BUILDINGS[type].cost[level] ?? {};
+  if (level === 0) return BUILDINGS[type].cost[0];
+  const L = level;
+  return { gold: Math.round(240 * L ** 1.55), wood: Math.round(130 * L ** 1.25), ...(L >= 2 ? { steel: Math.round(35 * L ** 1.45) } : {}) };
+}
+/** Seconds to build (level 0) or upgrade from `level`. */
+export function levelTime(type: BuildingType, level: number): number {
+  if (!isCity(type)) return BUILDINGS[type].time[level] ?? 0;
+  return level === 0 ? BUILDINGS[type].time[0] : Math.round(10 + 2.4 * level);
+}
 
 export type LandUnit = 'inf' | 'tank' | 'art';
 export type SeaUnit = 'transport' | 'patrol' | 'destroyer' | 'sub' | 'carrier';
@@ -96,15 +129,15 @@ export const WEAPONS: Record<Weapon, WeaponDef> = {
 
 export const ECON = {
   startGold: 700, startFood: 400, startWood: 300, startSteel: 120, startPop: 3200, startInf: 450,
-  housing: { capital: [4500, 9000, 16000], city: [1800, 4500, 9500], rural: 70 },
+  housing: { rural: 70 },
   growth: 0.007,              // logistic growth per second
   laborShare: 0.55,           // share of population that can work
   taxEmployed: 0.0045, taxIdle: 0.0012,
-  farmFood: 7, lumberWood: 4.5, mineSteel: 3.2, factoryGold: 9, portGold: 3.5, portAllyGold: 1.2,
+  farmFood: 7, lumberWood: 4.5, mineSteel: 3.2, factoryGold: 9, portGold: 3.5, portAllyGold: 1.2, marketGold: 5, bankBoost: 0.08, powerBoost: 0.2,
   regionFood: 0.18, regionGold: 0.05,
   foodPerPop: 0.001, foodPerSoldier: 0.0022,
-  passiveRecruit: { capital: 1.2, city: 0.45, barracks: 0.9 }, // soldiers/s per level
-  capacity: { capital: 800, city: 400, barracks: 500, region: 25 },
+  passiveRecruit: { barracks: 0.9 }, // soldiers/s per level (cities use CITY.recruit)
+  capacity: { barracks: 500, region: 25 },
   woundedShare: 0.35, healRate: 0.6, hospitalBeds: 400,
   lootShare: 0.3,
 };
@@ -114,8 +147,6 @@ export const COMBAT = {
   artilleryBoost: 0.5,      // attack multiplier per artillery share
   airSupportBoost: 0.35,
   neutralPerTile: 1.6,      // neutral militia per tile
-  cityDefense: 0.15,        // per city level
-  capitalDefense: 0.35,
   expandGarrisonPerTile: 0.4,
 };
 

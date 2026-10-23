@@ -1,5 +1,5 @@
 // Land armies, operations (gather → stage → strike), battles, conquest, fleets and naval landings.
-import { COMBAT, ECON, LAND, SEA, SeaUnit } from './balance';
+import { CITY, COMBAT, ECON, LAND, SEA, SeaUnit } from './balance';
 import type { Game } from './game';
 import { Army, ArmyKind, CommandResult, Fleet, LandCounts, Operation, emptyAir, SEA_UNITS, shipTotal, REL } from './state';
 import { declareWar } from './diplomacy';
@@ -32,7 +32,8 @@ function applyLosses(c: LandCounts, dmg: number): LandCounts {
 
 export function defenseMultiplier(g: Game, r: number) {
   const R = g.map.regions[r];
-  const city = g.level(r, 'city') * COMBAT.cityDefense + (g.level(r, 'capital') ? COMBAT.capitalDefense + g.level(r, 'capital') * 0.1 : 0);
+  const cl = g.level(r, 'city'), kl = g.level(r, 'capital');
+  const city = (cl ? CITY.defense(cl, false) : 0) + (kl ? CITY.defense(kl, true) : 0);
   return R.defense * (1 + city) * (g.radiation[r] > 0 ? 0.7 : 1);
 }
 

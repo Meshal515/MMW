@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/sim/game';
-import { FOUNDING_SECONDS, TICK_RATE } from '../src/sim/balance';
+import { CITY, FOUNDING_SECONDS, levelCost, levelTime, MAX_CITY_LEVEL, TICK_RATE } from '../src/sim/balance';
 import { regionDistance } from '../src/sim/map/regions';
 import { REL } from '../src/sim/state';
 import type { GameConfig } from '../src/sim/state';
@@ -163,6 +163,40 @@ describe('economy', () => {
     expect(g.command(0, { c: 'upgrade', region: r, type: 'city' }).ok).toBe(true);
     run(g, 35);
     expect(g.level(r, 'city')).toBe(2);
+  });
+
+  it('grows cities up to level 50: more people, soldiers, durability and size each level; districts scale with the city', () => {
+    for (let L = 2; L <= MAX_CITY_LEVEL; L++) {
+      expect(CITY.housing(L, false)).toBeGreaterThan(CITY.housing(L - 1, false));
+      expect(CITY.soldierCap(L, false)).toBeGreaterThan(CITY.soldierCap(L - 1, false));
+      expect(CITY.hp(L)).toBeGreaterThan(CITY.hp(L - 1));
+      expect(CITY.radius(L)).toBeGreaterThanOrEqual(CITY.radius(L - 1));
+      expect(levelCost('city', L).gold!).toBeGreaterThan(levelCost('city', L - 1).gold ?? 0);
+    }
+    // people and soldiers are different numbers: a city houses far more people than it can field
+    expect(CITY.housing(50, false)).toBeGreaterThan(CITY.soldierCap(50, false) * 5);
+    const g = new Game(cfg());
+    g.command(0, { c: 'found', region: site(g, 0, 230, 45) });
+    toWar(g);
+    const n = g.nations[0], cap = g.building(n.capital, 'capital')!;
+    n.gold = 1e7; n.wood = 1e7; n.steel = 1e7;
+    for (let i = 0; i < 6; i++) { expect(g.command(0, { c: 'upgrade', region: n.capital, type: 'capital' }).ok).toBe(true); run(g, levelTime('capital', cap.level) + 2); }
+    expect(cap.level).toBe(7);
+    cap.level = MAX_CITY_LEVEL;
+    expect(g.command(0, { c: 'upgrade', region: n.capital, type: 'capital' }).ok).toBe(false);
+    run(g, 2);
+    expect(n.housing).toBeGreaterThan(CITY.housing(MAX_CITY_LEVEL, true));
+    // a market next to a big city earns more than the same market in a small one (full employment)
+    const income = (level: number, withMarket: boolean) => {
+      cap.level = level;
+      g.buildings[n.capital] = g.buildings[n.capital].filter(b => b.type !== 'market');
+      if (withMarket) g.buildings[n.capital].push({ type: 'market', level: 1, build: 0, damage: 0, queue: [] });
+      n.pop = 4e4; n.food = 1e7; run(g, 0.6);
+      return n.income.gold;
+    };
+    const withBig = income(50, true) - income(50, false);
+    const withSmall = income(1, true) - income(1, false);
+    expect(withBig).toBeGreaterThan(withSmall);
   });
 
   it('enforces the production chain: tanks need a factory, missiles need a launcher and reactor', () => {

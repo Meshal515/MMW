@@ -1,7 +1,7 @@
 // Every vehicle, hand-placed pixel by pixel at its final in-game size (facing east, light top-left).
 import { Pix } from './dsl';
 
-export interface Vehicle { name: string; label: string; group: 'air' | 'heli' | 'sea' | 'land'; draw: () => Pix; rotor?: { x: number; r: number; blades: number }[] }
+export interface Vehicle { name: string; label: string; group: 'air' | 'heli' | 'sea' | 'land'; draw: () => Pix; rotor?: { x: number; r: number; blades: number }[]; frames?: (f: number) => Pix }
 
 // ---------------- jets ----------------
 function f16() {
@@ -272,24 +272,39 @@ function supply() {
 }
 
 // ---------------- land ----------------
-function tracks(p: Pix, x0: number, x1: number, c: number, half: number) {
+/** Track pair: the outer row carries the link pattern; `ph` shifts it one pixel (2-frame tread loop). */
+function tracks(p: Pix, x0: number, x1: number, c: number, half: number, ph = 0) {
   p.rect(x0, c - half, x1, c - half + 1, 'K');
-  for (let x = x0; x <= x1; x += 2) p.px(x, c - half, '2');
+  for (let x = x0; x <= x1; x++) if ((x + ph) % 2 === 0) p.px(x, c - half, '2');
 }
-function mbt() {
-  const p = new Pix(20, 12), c = 6;
-  tracks(p, 1, 14, c, 6);
+/** Main battle tank. Odd canvas (21×13) so the hull centre and the turret pivot land on whole pixels. */
+function mbt(frame = 0, part: 'all' | 'hull' = 'all') {
+  const p = new Pix(21, 13), c = 6;
+  tracks(p, 1, 14, c, 6, frame);
   p.mirror(c);
   p.rect(2, c - 4, 14, c + 4, 'c').rect(15, c - 3, 15, c + 3, 'b');
   p.hl(c - 4, 2, 14, 'd').rect(2, c - 2, 3, c + 2, 'b');
-  p.ell(7.5, c + 0.5, 3.6, 3.1, 'd').hl(c - 2, 6, 9, 'e');
-  p.hl(c, 10, 19, '1').px(19, c, '2');
-  p.px(6, c - 1, 'T').px(7, c - 1, 'T').px(6, c + 1, 'U');
+  if (part === 'all') {
+    p.ell(7.5, c + 0.5, 3.6, 3.1, 'd').hl(c - 2, 6, 9, 'e');
+    p.hl(c, 10, 19, '1').px(19, c, '2');
+    p.px(6, c - 1, 'T').px(7, c - 1, 'T').px(6, c + 1, 'U');
+  } else p.rect(5, c - 2, 10, c + 2, 'b');
   return p.finish();
 }
-function ifv() {
-  const p = new Pix(17, 12), c = 6;
-  tracks(p, 1, 14, c, 6);
+/** The same turret on its own canvas, pivot at the centre pixel (13,13), barrel pointing east. */
+export function mbtTurret() {
+  const p = new Pix(27, 27), c = 13, o = 6;
+  p.ell(7.5 + o, c + 0.5, 3.6, 3.1, 'd').hl(c - 2, 6 + o, 9 + o, 'e');
+  p.hl(c, 10 + o, 19 + o, '1').px(19 + o, c, '2');
+  p.px(6 + o, c - 1, 'T').px(7 + o, c - 1, 'T').px(6 + o, c + 1, 'U');
+  // dark-olive rim instead of the black outline: reads on the hull, keeps the barrel solid when rotated
+  return p.bevel().outline('a');
+}
+/** Turret pivot relative to the hull centre, in pixels along the hull heading. */
+export const MBT_PIVOT = -3;
+function ifv(frame = 0) {
+  const p = new Pix(19, 13), c = 6;
+  tracks(p, 1, 14, c, 6, frame);
   p.mirror(c);
   p.rect(2, c - 4, 14, c + 4, 'o').poly([[14, c - 4], [16, c - 2], [16, c + 3], [14, c + 5]], 'o');
   p.hl(c - 4, 2, 14, 'p');
@@ -307,9 +322,9 @@ function apc() {
   p.rect(3, c - 1, 4, c + 1, 'T');
   return p.finish();
 }
-function spg() {
-  const p = new Pix(22, 12), c = 6;
-  tracks(p, 1, 14, c, 6);
+function spg(frame = 0) {
+  const p = new Pix(23, 13), c = 6;
+  tracks(p, 1, 14, c, 6, frame);
   p.mirror(c);
   p.rect(2, c - 4, 14, c + 4, 'c').hl(c - 4, 2, 14, 'd');
   p.rect(3, c - 3, 9, c + 3, 'b').hl(c - 3, 3, 9, 'd');
@@ -328,9 +343,9 @@ function mlrs() {
   p.px(13, c, 'T');
   return p.finish();
 }
-function aa() {
-  const p = new Pix(16, 12), c = 6;
-  tracks(p, 1, 13, c, 6);
+function aa(frame = 0) {
+  const p = new Pix(17, 13), c = 6;
+  tracks(p, 1, 13, c, 6, frame);
   p.mirror(c);
   p.rect(2, c - 4, 13, c + 4, 'c').hl(c - 4, 2, 13, 'd');
   p.rect(6, c - 3, 11, c + 3, 'b');
@@ -392,12 +407,12 @@ export const VEHICLES: Vehicle[] = [
   { name: 'amphib', label: 'حاملة هجوم برمائي', group: 'sea', draw: amphib },
   { name: 'carrier', label: 'حاملة طائرات', group: 'sea', draw: carrier },
   { name: 'supply', label: 'سفينة إمداد', group: 'sea', draw: supply },
-  { name: 'mbt', label: 'دبابة قتال', group: 'land', draw: mbt },
-  { name: 'ifv', label: 'عربة قتال مشاة', group: 'land', draw: ifv },
+  { name: 'mbt', label: 'دبابة قتال', group: 'land', draw: () => mbt(), frames: f => mbt(f, 'hull') },
+  { name: 'ifv', label: 'عربة قتال مشاة', group: 'land', draw: () => ifv(), frames: f => ifv(f) },
   { name: 'apc', label: 'ناقلة جند 8×8', group: 'land', draw: apc },
-  { name: 'spg', label: 'مدفعية ذاتية', group: 'land', draw: spg },
+  { name: 'spg', label: 'مدفعية ذاتية', group: 'land', draw: () => spg(), frames: f => spg(f) },
   { name: 'mlrs', label: 'راجمة صواريخ', group: 'land', draw: mlrs },
-  { name: 'aa', label: 'دفاع جوي متحرك', group: 'land', draw: aa },
+  { name: 'aa', label: 'دفاع جوي متحرك', group: 'land', draw: () => aa(), frames: f => aa(f) },
   { name: 'humvee', label: 'همفي استطلاع', group: 'land', draw: humvee },
   { name: 'truck', label: 'شاحنة إمداد', group: 'land', draw: truck },
   { name: 'soldier0', label: 'جندي', group: 'land', draw: () => soldier(0) },

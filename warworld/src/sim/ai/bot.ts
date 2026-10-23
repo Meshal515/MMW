@@ -147,7 +147,7 @@ export class Bot {
     }
     // upgrades of existing buildings
     const cap = me.capital;
-    if (cap >= 0 && crowd > 0.75) { const b = g.building(cap, 'capital'); if (b && b.level < 3 && b.build <= 0) want.push({ type: 'capital', score: 2.4, upgrade: cap }); }
+    if (cap >= 0 && crowd > 0.75) { const b = g.building(cap, 'capital'); if (b && b.level < BUILDINGS.capital.maxLevel && b.build <= 0) want.push({ type: 'capital', score: 2.4, upgrade: cap }); }
     for (const r of v.own) for (const b of g.buildings[r]) {
       if (b.build > 0 || b.level >= BUILDINGS[b.type].maxLevel || b.type === 'capital') continue;
       let s = 0;

@@ -81,7 +81,7 @@ export class Registry {
   facility(type: string, dir8: number): { key: string; team: string | null } {
     const key = `fac_${type}_${dir8}`;
     if (this.made.has(key)) return { key, team: this.textures(key + '_t') ? key + '_t' : null };
-    const m = FACILITIES[type];
+    const m = FACILITIES[type] ?? FACILITIES.factory;
     const k = 0.42, side = Math.ceil(Math.max(m.w!, m.h!) * k) + 6;
     const r = renderModel({ ...m, w: side, h: side, scale: k }, (dir8 / 8) * Math.PI * 2);
     const cv = document.createElement('canvas'); cv.width = r.w; cv.height = r.h; cv.getContext('2d')!.putImageData(r.base, 0, 0);

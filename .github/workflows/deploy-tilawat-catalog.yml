@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "worker/**"
+      - "tilawat/worker/**"
       - ".github/workflows/deploy-tilawat-catalog.yml"
 
 concurrency:
@@ -22,7 +22,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     defaults:
       run:
-        working-directory: worker
+        working-directory: tilawat/worker
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

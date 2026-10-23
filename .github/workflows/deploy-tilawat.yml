@@ -1,12 +1,17 @@
-name: Deploy to Cloudflare Pages
+name: Deploy Tilawat to Cloudflare Pages
 
 on:
   push:
     branches: [main]
+    paths:
+      - "tilawat/**"
+      - "!tilawat/worker/**"
+      - "!tilawat/tests/**"
+      - ".github/workflows/deploy-tilawat.yml"
   workflow_dispatch:
 
 concurrency:
-  group: cloudflare-pages-production
+  group: tilawat-pages-production
   cancel-in-progress: true
 
 jobs:
@@ -50,9 +55,7 @@ jobs:
             cp -R tilawat/functions ./functions
             rm -rf dist-tilawat/functions
           fi
-
-          mkdir -p dist-tilawat/assets/fonts
-          cp -R assets/fonts/. dist-tilawat/assets/fonts/
+          rm -rf dist-tilawat/worker dist-tilawat/tests dist-tilawat/tools dist-tilawat/package.json dist-tilawat/CODEX-HANDOFF.md dist-tilawat/README.md
 
           jq '.id = "/" | .start_url = "./" | .scope = "./"' \
             dist-tilawat/manifest.webmanifest > dist-tilawat/manifest.tmp
@@ -165,98 +168,4 @@ jobs:
             sleep 6
           done
           echo "Tilawat production URL or resolver did not become ready: ${URL}"
-          exit 1
-
-      - name: Build Local app only
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf functions dist
-          mkdir -p dist
-          cp index.html runner.html app.js styles.css sw.js manifest.webmanifest _headers dist/
-          cp -R assets js styles dist/
-
-          cat > dist/_redirects <<EOF
-          /tilawat https://${TILAWAT_HOST}/ 302
-          /tilawat/* https://${TILAWAT_HOST}/:splat 302
-          EOF
-
-      - name: Ensure Local Cloudflare Pages project exists
-        shell: bash
-        run: |
-          set -euo pipefail
-          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
-          LIST="$(mktemp)"
-          curl --retry 3 --retry-all-errors -fsS \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            "$API" > "$LIST"
-
-          EXISTING="$(jq -r '.result[]? | select(.name == "mmw" or .name == "mmw-meshal515" or .name == "mmw-1367603013") | .name' "$LIST" | head -n1)"
-          if [ -n "$EXISTING" ]; then
-            PROJECT_NAME="$EXISTING"
-          else
-            PROJECT_NAME=""
-            for CANDIDATE in mmw mmw-meshal515 mmw-1367603013; do
-              BODY="$(mktemp)"
-              CODE="$(curl --retry 2 --retry-all-errors -sS -o "$BODY" -w "%{http_code}" \
-                -X POST \
-                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-                -H "Content-Type: application/json" \
-                --data "{\"name\":\"${CANDIDATE}\",\"production_branch\":\"main\"}" \
-                "$API")"
-              if [ "$CODE" = "200" ] && jq -e '.success == true' "$BODY" >/dev/null; then
-                PROJECT_NAME="$CANDIDATE"
-                break
-              fi
-              sleep 2
-            done
-          fi
-
-          if [ -z "$PROJECT_NAME" ]; then
-            echo "Could not resolve the Local Pages project."
-            exit 1
-          fi
-          echo "CF_PAGES_PROJECT=${PROJECT_NAME}" >> "$GITHUB_ENV"
-
-      - name: Deploy Local to Cloudflare Pages
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes wrangler@latest pages deploy dist \
-            --project-name="${CF_PAGES_PROJECT}" \
-            --branch=main \
-            --commit-dirty=true | tee /tmp/pages-deploy.log
-
-      - name: Verify Local production deployment
-        shell: bash
-        run: |
-          set -euo pipefail
-          PROJECT_JSON="$(mktemp)"
-          for i in 1 2 3 4 5 6; do
-            if curl -fsS \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CF_PAGES_PROJECT}" > "$PROJECT_JSON" \
-              && jq -e '.success == true and .result.latest_deployment != null' "$PROJECT_JSON" >/dev/null; then
-              break
-            fi
-            sleep 5
-          done
-
-          jq -e '.success == true and .result.latest_deployment != null' "$PROJECT_JSON" >/dev/null
-          HOST="$(jq -r '.result.subdomain // empty' "$PROJECT_JSON")"
-          if [ -z "$HOST" ]; then HOST="${CF_PAGES_PROJECT}.pages.dev"; fi
-          SITE_URL="https://${HOST}"
-
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            PAGE="$(mktemp)"
-            if curl -fsS --max-time 20 -o "$PAGE" "$SITE_URL/" && grep -q '<title>Local</title>' "$PAGE"; then
-              echo "SITE_URL=${SITE_URL}" >> "$GITHUB_ENV"
-              echo "Local published and verified: ${SITE_URL}"
-              echo "Tilawat standalone: ${TILAWAT_URL}"
-              exit 0
-            fi
-            sleep 6
-          done
-
-          echo "Local production URL did not return the expected site: ${SITE_URL}"
           exit 1

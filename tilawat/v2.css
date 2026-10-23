@@ -1,6 +1,6 @@
-@font-face{font-family:PlexArabic;src:url('../assets/fonts/plex-ar-arabic-400.woff2') format('woff2');font-weight:400;font-display:swap}
-@font-face{font-family:PlexArabic;src:url('../assets/fonts/plex-ar-arabic-600.woff2') format('woff2');font-weight:600;font-display:swap}
-@font-face{font-family:PlexArabic;src:url('../assets/fonts/plex-ar-arabic-700.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:PlexArabic;src:url('./assets/fonts/plex-ar-arabic-400.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:PlexArabic;src:url('./assets/fonts/plex-ar-arabic-600.woff2') format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:PlexArabic;src:url('./assets/fonts/plex-ar-arabic-700.woff2') format('woff2');font-weight:700;font-display:swap}
 :root{
   --bg:#121212;--bg-elev:#181818;--surface:#202020;--surface2:#282828;--surface3:#333;
   --ink:#fff;--muted:#b3b3b3;--faint:#777;--line:rgba(255,255,255,.1);

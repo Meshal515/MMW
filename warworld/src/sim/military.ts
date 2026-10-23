@@ -32,7 +32,7 @@ function applyLosses(c: LandCounts, dmg: number): LandCounts {
 
 export function defenseMultiplier(g: Game, r: number) {
   const R = g.map.regions[r];
-  const city = g.level(r, 'city') * COMBAT.cityDefense + (g.level(r, 'capital') ? COMBAT.capitalDefense + g.level(r, 'capital') * 0.15 : 0);
+  const city = g.level(r, 'city') * COMBAT.cityDefense + (g.level(r, 'capital') ? COMBAT.capitalDefense + g.level(r, 'capital') * 0.1 : 0);
   return R.defense * (1 + city) * (g.radiation[r] > 0 ? 0.7 : 1);
 }
 
@@ -412,7 +412,7 @@ export function transferRegion(g: Game, r: number, to: number) {
       }
       g.log('capital', `سقطت عاصمة ${old.name}${to >= 0 ? ' بيد ' + g.nations[to].name : ''}!`, to, from, r, true);
       // a small nation that loses its capital surrenders: its land goes to the conqueror
-      if (to >= 0 && old.regionCount <= 5 + Math.floor(old.stats.peakArea / 400)) {
+      if (to >= 0 && (old.regionCount <= 8 + Math.floor(old.stats.peakArea / 250) || old.area < old.stats.peakArea * 0.5)) {
         g.log('surrender', `${old.name} استسلمت لـ${g.nations[to].name}`, to, from, r, true);
         for (let x = 0; x < g.owner.length; x++) if (g.owner[x] === from) {
           g.inf[x] *= 0.5; g.tank[x] *= 0.5; g.art[x] *= 0.5;
@@ -631,9 +631,9 @@ function seaCombat(g: Game, dt: number) {
       const enemies = fleets.filter(e => e.owner !== f.owner && g.atWar(f.owner, e.owner));
       if (!enemies.length) continue;
       const detect = fleets.some(e => e.owner !== f.owner && g.atWar(f.owner, e.owner) && (e.ships.patrol > 0.05 || e.ships.destroyer > 0.05))
-        || [...g.sorties.values()].some(s => s.owner !== f.owner && s.planes.scout > 0 && s.targetSea === f.sea);
+        || [...g.sorties.values()].some(s => s.owner !== f.owner && s.planes.drone > 0 && s.targetSea === f.sea);
       let incoming = 0;
-      for (const e of enemies) for (const k of SEA_UNITS) incoming += e.ships[k] * SEA[k].atk + (k === 'carrier' ? e.ships[k] * (e.planes.fighter * 2 + e.planes.heli * 2 + e.planes.bomber * 3) / Math.max(1, e.ships.carrier) * 0.5 : 0);
+      for (const e of enemies) for (const k of SEA_UNITS) incoming += e.ships[k] * SEA[k].atk + (k === 'carrier' ? e.ships[k] * (e.planes.f16 * 2 + e.planes.f35 * 3 + e.planes.su57 * 2 + e.planes.apache * 2 + e.planes.b52 * 3) / Math.max(1, e.ships.carrier) * 0.5 : 0);
       if (incoming <= 0) continue;
       const dmg = incoming * 0.18 * dt;
       let hp = 0;

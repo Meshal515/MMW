@@ -139,18 +139,27 @@ describe('economy', () => {
     expect(n.jobs).toBeGreaterThan(0);
   });
 
-  it('builds and upgrades a city, which raises housing', () => {
+  it('builds and upgrades a city (spaced apart, rising cost), which raises housing', () => {
     const g = new Game(cfg());
     g.command(0, { c: 'found', region: site(g, 0, 230, 45) });
     toWar(g);
     const n = g.nations[0];
     n.gold = 5000; n.wood = 3000; n.steel = 1000;
-    const r = [...g.owner.keys()].find(x => g.owner[x] === 0 && x !== n.capital && !g.buildError(0, x, 'city'))!;
+    // cities must be at least three regions from the capital: claim one that far away
+    const hops = new Map([[n.capital, 0]]), q = [n.capital];
+    for (let i = 0; i < q.length; i++) for (const m of g.map.regions[q[i]].neighbors) if (!hops.has(m)) { hops.set(m, hops.get(q[i])! + 1); q.push(m); }
+    const r = [...hops.entries()].find(([x, h]) => h === 3 && g.map.regions[x].terrain !== 5)![0];
+    g.transferRegion(r, 0);
+    const near = g.map.regions[n.capital].neighbors[0];
+    g.transferRegion(near, 0);
+    expect(g.buildError(0, near, 'city')).toContain('قريبة');
+    const cost1 = g.buildCost(0, 'city').gold!;
     const housing0 = n.housing;
     expect(g.command(0, { c: 'build', region: r, type: 'city' }).ok).toBe(true);
     run(g, 20);
     expect(g.level(r, 'city')).toBe(1);
     expect(n.housing).toBeGreaterThan(housing0);
+    expect(g.buildCost(0, 'city').gold!).toBeGreaterThan(cost1);
     expect(g.command(0, { c: 'upgrade', region: r, type: 'city' }).ok).toBe(true);
     run(g, 35);
     expect(g.level(r, 'city')).toBe(2);

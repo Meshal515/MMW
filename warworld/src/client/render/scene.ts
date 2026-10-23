@@ -1,11 +1,15 @@
-// Phaser scene: draws the world from the simulation state and turns pointer input into taps.
+// Phaser scene: draws the living world from the simulation state and turns pointer input into taps.
+// Rendering tiers: far (political map), mid (cities, fleets, armies), near (full pixel-art detail,
+// traffic, smoke, rotors, wakes). All units come from the sprite forge at 32 headings.
 import Phaser from 'phaser';
 import type { Game } from '../../sim/game';
-import { WEAPONS } from '../../sim/balance';
-import { AIR_UNITS, airTotal, Army, Fleet, SEA_UNITS } from '../../sim/state';
+import { AIR_UNITS, Army, Fleet, SEA_UNITS } from '../../sim/state';
 import { buildAtlas } from '../art/sprites';
 import { canvasOf } from '../art/pixel';
-import { Overlay, OV, regionOutline, renderTerrain, TILE } from './terrain';
+import { ROTORS } from '../art/models';
+import { Ground, TILE } from './ground';
+import { CITY_SIZE } from '../art/city';
+import { DIRS, dirIndex, Registry, UNIT_SCALE } from './registry';
 
 export type Lod = 'far' | 'mid' | 'near';
 export interface TapInfo { region: number; sea: number; x: number; y: number }
@@ -27,10 +31,12 @@ export function fmt(n: number) {
 }
 
 const W2 = (v: number) => (v + 0.5) * TILE;
+const FIGHTERS = ['f16', 'f35', 'su57'], BOMBERS = ['b52', 'b2', 'ac130'], ESCORTS = ['destroyer', 'frigate', 'corvette', 'cruiser'];
 
-interface ArmyVis { body: Phaser.GameObjects.Image[]; team: Phaser.GameObjects.Image[]; label: Phaser.GameObjects.BitmapText }
-interface FleetVis { ships: Phaser.GameObjects.Image[]; team: Phaser.GameObjects.Image[]; label: Phaser.GameObjects.BitmapText; heading: number; lx: number; ly: number }
-interface PlaneVis { img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; rotor: Phaser.GameObjects.Image | null; shadow: Phaser.GameObjects.Image }
+interface Vis { parts: { img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; model: string }[]; label: Phaser.GameObjects.BitmapText | null; heading: number; lx: number; ly: number }
+interface PlaneVis { img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; shadow: Phaser.GameObjects.Image; rotors: Phaser.GameObjects.Image[]; model: string; heading: number; lx: number; ly: number; flame: Phaser.GameObjects.Image | null }
+interface CityVis { key: string; img: Phaser.GameObjects.Image; roads: [number, number, number][]; size: number; x: number; y: number; flag: Phaser.GameObjects.Image | null; flagT: Phaser.GameObjects.Image | null }
+interface FacVis { key: string; img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; type: string; x: number; y: number; dir: number }
 
 export class WorldScene extends Phaser.Scene {
   sim!: Game;
@@ -40,33 +46,33 @@ export class WorldScene extends Phaser.Scene {
   onTap: (t: TapInfo) => void = () => {};
   onFrame: () => void = () => {};
   lod: Lod = 'far';
+  ground!: Ground;
+  reg!: Registry;
 
-  private overlay!: Overlay;
-  private overlayTex!: Phaser.Textures.CanvasTexture;
-  private overlayImg!: Phaser.GameObjects.Image;
-  private overlayDirty = new Set<number>();
-  private lastOverlay = 0;
   private acc = 0;
-  private slots: { x: number; y: number }[][] = [];
-  private bVis = new Map<string, { img: Phaser.GameObjects.Image; team?: Phaser.GameObjects.Image; key: string }>();
-  private armyVis = new Map<number, ArmyVis>();
-  private fleetVis = new Map<number, FleetVis>();
+  private cities = new Map<number, CityVis>();
+  private facs = new Map<string, FacVis>();
+  private armyVis = new Map<number, Vis>();
+  private fleetVis = new Map<number, Vis>();
   private planeVis = new Map<string, PlaneVis>();
   private missileVis = new Map<number, { img: Phaser.GameObjects.Image; trail: number }>();
   private troopText: Phaser.GameObjects.BitmapText[] = [];
-  private garrisonIcons: Phaser.GameObjects.Image[] = [];
+  private textPool: Phaser.GameObjects.BitmapText[] = [];
   private labels = new Map<number, Phaser.GameObjects.Text>();
+  private capMarks = new Map<number, Phaser.GameObjects.Image>();
   private selImg: Phaser.GameObjects.Image | null = null;
   private selTween: Phaser.Tweens.Tween | null = null;
   private targetGfx!: Phaser.GameObjects.Graphics;
   private rangeCircles: { x: number; y: number; r: number }[] = [];
-  private ambient: { img: Phaser.GameObjects.Image; vx: number; vy: number; life: number; kind: string }[] = [];
-  private smokeT = 0;
-  private flagFrame = 0;
+  private ambient: { img: Phaser.GameObjects.Image; team?: Phaser.GameObjects.Image; vx: number; vy: number; life: number; max: number; kind: string }[] = [];
+  private ambT = 0;
   private lastLabels = -10;
-  private drag = { down: false, x: 0, y: 0, sx: 0, sy: 0, moved: false, t: 0 };
+  private dirtyBuild = new Set<number>();
+  private drag = { down: false, x: 0, y: 0, sx: 0, sy: 0, moved: false };
   private pinch: { d: number; z: number } | null = null;
   private keys: Record<string, Phaser.Input.Keyboard.Key> = {};
+  private walkFrame = 0;
+  private sortiePhase = new Map<number, string>();
   worldW = 0; worldH = 0;
 
   constructor() { super('world'); }
@@ -76,34 +82,33 @@ export class WorldScene extends Phaser.Scene {
   create() {
     const g = this.sim;
     this.worldW = g.map.w * TILE; this.worldH = g.map.h * TILE;
-    // textures
     const atlas = buildAtlas();
     const at = this.textures.addCanvas('atlas', atlas.canvas)!;
     for (const [k, f] of Object.entries(atlas.frames)) at.add(k, 0, f.x, f.y, f.w, f.h);
-    this.textures.addCanvas('terrain', renderTerrain(g.map));
-    this.overlay = new Overlay(g);
-    this.overlayTex = this.textures.addCanvas('overlay', this.overlay.canvas)!;
     this.makeDigitFont();
-
-    this.add.image(0, 0, 'terrain').setOrigin(0).setDepth(0);
-    this.overlayImg = this.add.image(0, 0, 'overlay').setOrigin(0).setScale(TILE / OV).setDepth(1);
-    this.targetGfx = this.add.graphics().setDepth(40);
-    this.computeSlots();
-
+    this.reg = new Registry(this);
+    this.ground = new Ground(this, g);
+    this.targetGfx = this.add.graphics().setDepth(60);
     const cam = this.cameras.main;
-    cam.setBackgroundColor('#162670');
+    cam.setBackgroundColor('#1c2f72');
+    cam.setRoundPixels(true);
     this.fitWorld();
     this.scale.on('resize', () => this.clampCamera());
-
     this.input.addPointer(1);
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.pointerMove(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.pointerUp(p));
-    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => this.zoomAt(p.x, p.y, dy > 0 ? 0.87 : 1.15));
+    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => this.zoomAt(p.x, p.y, dy > 0 ? 0.85 : 1.18));
     const kb = this.input.keyboard;
-    if (kb) for (const k of ['LEFT', 'RIGHT', 'UP', 'DOWN', 'W', 'A', 'S', 'D', 'PLUS', 'MINUS', 'NUMPAD_ADD', 'NUMPAD_SUBTRACT'])
-      this.keys[k] = kb.addKey(k, false);
-    for (let r = 0; r < g.owner.length; r++) this.overlayDirty.add(r);
+    if (kb) for (const k of ['LEFT', 'RIGHT', 'UP', 'DOWN', 'W', 'A', 'S', 'D', 'PLUS', 'MINUS', 'NUMPAD_ADD', 'NUMPAD_SUBTRACT']) this.keys[k] = kb.addKey(k, false);
+    for (let r = 0; r < g.owner.length; r++) if (g.buildings[r].length) this.dirtyBuild.add(r);
+  }
+
+  /** Paints the world base texture; resolves when the map is ready to show. */
+  async prepare(onProgress?: (f: number) => void) {
+    await this.ground.init(onProgress);
+    // warm up the most common unit sprites so the first battles don't hitch
+    for (const m of ['soldier0', 'soldier1', 'mbt', 'spg', 'apc', 'transport', 'destroyer', 'f16', 'apache']) this.reg.model(m);
   }
 
   private makeDigitFont() {
@@ -116,69 +121,27 @@ export class WorldScene extends Phaser.Scene {
       for (let y = -1; y <= 5; y++) for (let x = -1; x <= 3; x++) {
         const k = ((y + 1) * c.width + i * cw + x + 1) * 4;
         if (on(x, y)) { img.data[k] = 255; img.data[k + 1] = 255; img.data[k + 2] = 255; img.data[k + 3] = 255; }
-        else if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1) || on(x - 1, y - 1) || on(x + 1, y + 1) || on(x - 1, y + 1) || on(x + 1, y - 1)) { img.data[k + 3] = 230; }
+        else if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1) || on(x - 1, y - 1) || on(x + 1, y + 1) || on(x - 1, y + 1) || on(x + 1, y - 1)) { img.data[k] = 20; img.data[k + 1] = 16; img.data[k + 2] = 28; img.data[k + 3] = 235; }
       }
     });
     ctx.putImageData(img, 0, 0);
     this.textures.addCanvas('digitsImg', c);
-    const data = Phaser.GameObjects.RetroFont.Parse(this, {
-      image: 'digitsImg', width: cw, height: ch, chars: DIGITS, charsPerRow: DIGITS.length,
-      'offset.x': 0, 'offset.y': 0, 'spacing.x': 0, 'spacing.y': 0, lineSpacing: 0,
-    } as any);
+    const data = Phaser.GameObjects.RetroFont.Parse(this, { image: 'digitsImg', width: cw, height: ch, chars: DIGITS, charsPerRow: DIGITS.length, 'offset.x': 0, 'offset.y': 0, 'spacing.x': 0, 'spacing.y': 0, lineSpacing: 0 } as any);
     this.cache.bitmapFont.add('digits', data as any);
-  }
-
-  /** Building slots per region: anchor first, then spaced tiles; ports prefer the coast. */
-  private computeSlots() {
-    const map = this.sim.map;
-    for (const R of map.regions) {
-      const ax = R.anchor % map.w, ay = (R.anchor / map.w) | 0;
-      const tiles = [...R.tiles].sort((a, b) => {
-        const da = (a % map.w - ax) ** 2 + (((a / map.w) | 0) - ay) ** 2, db = (b % map.w - ax) ** 2 + (((b / map.w) | 0) - ay) ** 2;
-        return da - db;
-      });
-      const out: { x: number; y: number }[] = [];
-      for (const t of tiles) {
-        const x = t % map.w, y = (t / map.w) | 0;
-        if (out.every(o => Math.abs(o.x - x) + Math.abs(o.y - y) >= 3)) out.push({ x, y });
-        if (out.length >= 6) break;
-      }
-      while (out.length < 6) out.push({ x: ax + (out.length % 2 ? 1 : -1), y: ay + (out.length > 3 ? 1 : 0) });
-      this.slots.push(out);
-    }
-  }
-
-  private coastSlot(r: number) {
-    const map = this.sim.map, R = map.regions[r];
-    let best = R.anchor, bd = Infinity;
-    const ax = R.anchor % map.w, ay = (R.anchor / map.w) | 0;
-    for (const t of R.tiles) {
-      const x = t % map.w, y = (t / map.w) | 0;
-      const coast = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < map.w && ny < map.h && map.regionOf[ny * map.w + nx] < 0; });
-      if (!coast) continue;
-      const d = (x - ax) ** 2 + (y - ay) ** 2;
-      if (d < bd) { bd = d; best = t; }
-    }
-    return { x: best % map.w, y: (best / map.w) | 0 };
   }
 
   // ---------------- camera ----------------
   minZoom() { const cam = this.cameras.main; return Math.min(cam.width / this.worldW, cam.height / this.worldH) * 0.98; }
-  fitWorld() {
-    const cam = this.cameras.main;
-    cam.setZoom(this.minZoom());
-    cam.centerOn(this.worldW / 2, this.worldH / 2);
-    this.updateLod();
-  }
+  fitWorld() { const cam = this.cameras.main; cam.setZoom(this.minZoom()); cam.centerOn(this.worldW / 2, this.worldH / 2); this.updateLod(); }
   flyTo(x: number, y: number, zoom?: number) {
     const cam = this.cameras.main;
-    if (zoom) cam.zoomTo(Math.max(this.minZoom(), Math.min(7, zoom)), 450, 'Sine.easeInOut');
+    if (zoom) cam.zoomTo(Math.max(this.minZoom(), Math.min(8, zoom)), 450, 'Sine.easeInOut');
     cam.pan(W2(x), W2(y), 450, 'Sine.easeInOut');
   }
   zoomAt(sx: number, sy: number, f: number) {
     const cam = this.cameras.main;
     const before = cam.getWorldPoint(sx, sy);
-    cam.setZoom(Phaser.Math.Clamp(cam.zoom * f, this.minZoom(), 7));
+    cam.setZoom(Phaser.Math.Clamp(cam.zoom * f, this.minZoom(), 8));
     cam.preRender();
     const after = cam.getWorldPoint(sx, sy);
     cam.scrollX += before.x - after.x; cam.scrollY += before.y - after.y;
@@ -186,50 +149,34 @@ export class WorldScene extends Phaser.Scene {
   }
   private clampCamera() {
     const cam = this.cameras.main;
+    if (cam.zoom < this.minZoom()) cam.setZoom(this.minZoom());
     const vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
     const cx = cam.scrollX + cam.width / 2, cy = cam.scrollY + cam.height / 2;
-    const mx = Math.max(vw / 2, this.worldW - vw / 2), my = Math.max(vh / 2, this.worldH - vh / 2);
-    const tx = vw >= this.worldW ? this.worldW / 2 : Phaser.Math.Clamp(cx - cam.width / 2 + cam.width / 2, vw / 2, mx);
-    const ty = vh >= this.worldH ? this.worldH / 2 : Phaser.Math.Clamp(cy, vh / 2, my);
+    const tx = vw >= this.worldW ? this.worldW / 2 : Phaser.Math.Clamp(cx, vw / 2, this.worldW - vw / 2);
+    const ty = vh >= this.worldH ? this.worldH / 2 : Phaser.Math.Clamp(cy, vh / 2, this.worldH - vh / 2);
     cam.scrollX = tx - cam.width / 2; cam.scrollY = ty - cam.height / 2;
-    if (cam.zoom < this.minZoom()) cam.setZoom(this.minZoom());
     this.updateLod();
   }
-  private updateLod() {
-    const z = this.cameras.main.zoom;
-    this.lod = z < 0.55 ? 'far' : z < 1.7 ? 'mid' : 'near';
-    // let the terrain art show through when zoomed in
-    this.overlayImg?.setAlpha(z < 0.55 ? 1 : z < 1.7 ? 0.9 : Math.max(0.5, 0.9 - (z - 1.7) * 0.15));
-  }
+  private updateLod() { const z = this.cameras.main.zoom; this.lod = z < 0.5 ? 'far' : z < 1.5 ? 'mid' : 'near'; }
 
   // ---------------- input ----------------
   private pointerDown(p: Phaser.Input.Pointer) {
     const ps = this.input.manager.pointers.filter(q => q.isDown);
-    if (ps.length >= 2) {
-      const [a, b] = ps;
-      this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.cameras.main.zoom };
-      this.drag.moved = true;
-      return;
-    }
-    this.drag = { down: true, x: p.x, y: p.y, sx: this.cameras.main.scrollX, sy: this.cameras.main.scrollY, moved: false, t: this.time.now };
+    if (ps.length >= 2) { const [a, b] = ps; this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.cameras.main.zoom }; this.drag.moved = true; return; }
+    this.drag = { down: true, x: p.x, y: p.y, sx: this.cameras.main.scrollX, sy: this.cameras.main.scrollY, moved: false };
   }
   private pointerMove(p: Phaser.Input.Pointer) {
     const ps = this.input.manager.pointers.filter(q => q.isDown);
     if (this.pinch && ps.length >= 2) {
       const [a, b] = ps;
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
-      const target = Phaser.Math.Clamp(this.pinch.z * d / Math.max(10, this.pinch.d), this.minZoom(), 7);
+      const target = Phaser.Math.Clamp(this.pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(10, this.pinch.d), this.minZoom(), 8);
       this.zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, target / this.cameras.main.zoom);
       return;
     }
     if (!this.drag.down || !p.isDown) return;
     const dx = p.x - this.drag.x, dy = p.y - this.drag.y;
     if (Math.abs(dx) + Math.abs(dy) > 7) this.drag.moved = true;
-    if (this.drag.moved) {
-      const cam = this.cameras.main;
-      cam.scrollX = this.drag.sx - dx / cam.zoom; cam.scrollY = this.drag.sy - dy / cam.zoom;
-      this.clampCamera();
-    }
+    if (this.drag.moved) { const cam = this.cameras.main; cam.scrollX = this.drag.sx - dx / cam.zoom; cam.scrollY = this.drag.sy - dy / cam.zoom; this.clampCamera(); }
   }
   private pointerUp(p: Phaser.Input.Pointer) {
     const stillDown = this.input.manager.pointers.filter(q => q.isDown).length;
@@ -238,296 +185,451 @@ export class WorldScene extends Phaser.Scene {
     this.drag.down = false;
     if (this.drag.moved) return;
     const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-    const tx = Math.floor(wp.x / TILE), ty = Math.floor(wp.y / TILE);
     const map = this.sim.map;
+    const tx = Math.floor(wp.x / TILE), ty = Math.floor(wp.y / TILE);
     if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return;
-    const i = ty * map.w + tx;
-    this.onTap({ region: map.regionOf[i], sea: map.seaOf[i], x: wp.x / TILE - 0.5, y: wp.y / TILE - 0.5 });
+    // use the painted (warped) coastline so taps match what the player sees
+    const painted = this.ground.regionAtPixel(wp.x, wp.y);
+    const region = painted >= 0 ? painted : -1;
+    const sea = region < 0 ? (map.seaOf[ty * map.w + tx] >= 0 ? map.seaOf[ty * map.w + tx] : this.nearestSea(tx, ty)) : -1;
+    this.onTap({ region, sea, x: wp.x / TILE - 0.5, y: wp.y / TILE - 0.5 });
+  }
+  private nearestSea(tx: number, ty: number) {
+    const map = this.sim.map;
+    for (let r = 1; r < 4; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      const x = tx + dx, y = ty + dy; if (x < 0 || y < 0 || x >= map.w || y >= map.h) continue;
+      const s = map.seaOf[y * map.w + x]; if (s >= 0) return s;
+    }
+    return -1;
   }
 
   // ---------------- selection & targeting ----------------
   select(r: number, color = '#ffffff') {
     this.selTween?.stop(); this.selImg?.destroy(); this.selImg = null;
     if (r < 0) return;
-    const o = regionOutline(this.sim.map, r, color);
-    const key = 'sel' + Date.now();
+    const o = this.ground.outline(r, color);
+    if (!o) return;
     if (this.textures.exists('sel')) this.textures.remove('sel');
-    this.textures.addCanvas(key, o.canvas);
-    this.selImg = this.add.image(o.x * (TILE / OV), o.y * (TILE / OV), key).setOrigin(0).setScale(TILE / OV).setDepth(2);
-    this.selTween = this.tweens.add({ targets: this.selImg, alpha: { from: 1, to: 0.45 }, duration: 500, yoyo: true, repeat: -1 });
+    this.textures.addCanvas('sel', o.canvas);
+    this.selImg = this.add.image(o.x, o.y, 'sel').setOrigin(0).setScale(o.scale).setDepth(4);
+    this.selTween = this.tweens.add({ targets: this.selImg, alpha: { from: 1, to: 0.4 }, duration: 520, yoyo: true, repeat: -1 });
   }
   setRanges(circles: { x: number; y: number; r: number }[]) { this.rangeCircles = circles; }
-
-  markOverlay(regions: Iterable<number>) { for (const r of regions) this.overlayDirty.add(r); }
+  markOverlay(regions: Iterable<number>) { for (const r of regions) this.ground.markDirty(r); }
 
   // ---------------- main loop ----------------
   update(_t: number, delta: number) {
     const g = this.sim;
+    if (!this.ground.ready) return;
     if (!this.paused && g.phase !== 'over') {
       this.acc += Math.min(delta, 250) * this.speed;
       let steps = 0;
       while (this.acc >= 100 && steps < 12) { g.step(); this.acc -= 100; steps++; }
     }
     this.keyboardPan(delta);
-    for (const r of g.dirtyRegions) this.overlayDirty.add(r);
-    const changed = [...g.dirtyRegions];
+    for (const r of g.dirtyRegions) { this.ground.markDirty(r); this.dirtyBuild.add(r); }
     g.dirtyRegions.clear();
     const now = this.time.now;
-    if (this.overlayDirty.size && now - this.lastOverlay > 120) {
-      if (this.overlayDirty.size > 400) this.overlay.redrawAll(); else this.overlay.redrawRegions(this.overlayDirty);
-      this.overlayDirty.clear();
-      this.overlayTex.refresh();
-      this.lastOverlay = now;
-    }
-    for (const r of changed) this.syncBuildings(r);
-    if (this.bVis.size === 0 && g.phase !== 'founding') for (let r = 0; r < g.owner.length; r++) if (g.buildings[r].length) this.syncBuildings(r);
     this.updateLod();
-    const view = this.viewRect(40);
+    const view = this.viewRect(80);
+    this.ground.update(view, this.cameras.main.zoom, now);
+    this.walkFrame = Math.floor(now / 180) % 2;
+    this.syncBuildings(view);
     this.syncArmies(view);
     this.syncFleets(view, delta);
-    this.syncAir(view, delta);
+    this.syncAir(view, delta, now);
     this.syncMissiles(delta);
     this.handleFx();
     this.syncGarrisons(view);
     this.syncLabels(now);
     this.ambientLife(view, delta);
     this.drawTargeting();
-    this.flagFrame = Math.floor(now / 380) % 2;
-    for (const v of this.bVis.values()) if (v.team && v.key.startsWith('flag')) v.team.setFrame('flag' + this.flagFrame + '_t');
     this.onFrame();
   }
 
   private keyboardPan(delta: number) {
     const k = this.keys, cam = this.cameras.main;
     if (!k.LEFT) return;
-    const s = delta * 0.6 / cam.zoom;
+    const s = delta * 0.7 / cam.zoom;
     let moved = false;
     if (k.LEFT.isDown || k.A.isDown) { cam.scrollX -= s; moved = true; }
     if (k.RIGHT.isDown || k.D.isDown) { cam.scrollX += s; moved = true; }
     if (k.UP.isDown || k.W.isDown) { cam.scrollY -= s; moved = true; }
     if (k.DOWN.isDown || k.S.isDown) { cam.scrollY += s; moved = true; }
-    if (k.PLUS.isDown || k.NUMPAD_ADD.isDown) { this.zoomAt(cam.width / 2, cam.height / 2, 1 + delta * 0.002); }
-    if (k.MINUS.isDown || k.NUMPAD_SUBTRACT.isDown) { this.zoomAt(cam.width / 2, cam.height / 2, 1 - delta * 0.002); }
+    if (k.PLUS.isDown || k.NUMPAD_ADD.isDown) this.zoomAt(cam.width / 2, cam.height / 2, 1 + delta * 0.002);
+    if (k.MINUS.isDown || k.NUMPAD_SUBTRACT.isDown) this.zoomAt(cam.width / 2, cam.height / 2, 1 - delta * 0.002);
     if (moved) this.clampCamera();
   }
 
   viewRect(marginPx = 0) {
-    const cam = this.cameras.main;
-    const m = marginPx / cam.zoom;
+    const cam = this.cameras.main, m = marginPx / cam.zoom;
     return { x0: cam.worldView.x - m, y0: cam.worldView.y - m, x1: cam.worldView.right + m, y1: cam.worldView.bottom + m };
   }
-  private inView(v: { x0: number; y0: number; x1: number; y1: number }, x: number, y: number) { return x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1; }
+  private inView(v: { x0: number; y0: number; x1: number; y1: number }, x: number, y: number, pad = 0) { return x >= v.x0 - pad && x <= v.x1 + pad && y >= v.y0 - pad && y <= v.y1 + pad; }
 
-  // ---------------- buildings ----------------
-  private syncBuildings(r: number) {
-    const g = this.sim;
-    const prefix = r + ':';
-    const live = new Set<string>();
-    const owner = g.owner[r];
-    const slotList = this.slots[r];
-    let si = 1;
-    for (const b of g.buildings[r]) {
-      const key = prefix + b.type;
-      live.add(key);
-      let slot = slotList[0];
-      if (b.type === 'port') slot = this.coastSlot(r);
-      else if (b.type !== 'capital' && b.type !== 'city') slot = slotList[Math.min(si++, slotList.length - 1)];
-      const lvl = Math.max(1, b.level);
-      const frame = b.type === 'capital' ? `capital${lvl}_${r % 3}` : b.type === 'city' ? `city${lvl}_${r % 3}` : 'b_' + b.type;
-      let v = this.bVis.get(key);
-      if (!v) {
-        const img = this.add.image(W2(slot.x), W2(slot.y), 'atlas', frame).setDepth(5 + slot.y * 0.001);
-        v = { img, key: frame };
-        this.bVis.set(key, v);
-      }
-      if (v.key !== frame && !v.key.startsWith('flag')) { v.img.setFrame(frame); v.key = frame; }
-      v.img.setPosition(W2(slot.x), W2(slot.y));
-      v.img.setAlpha(b.level === 0 ? 0.5 : 1);
-      if (b.level === 0) v.img.setTint(0x9a9a9a); else v.img.clearTint();
-      // team flag over capitals and barracks
-      if ((b.type === 'capital' || b.type === 'barracks') && owner >= 0) {
-        const fk = key + ':flag';
-        live.add(fk);
-        let f = this.bVis.get(fk);
-        const fx = W2(slot.x) + (b.type === 'capital' ? 2 : -3), fy = W2(slot.y) - (b.type === 'capital' ? 16 + lvl * 3 : 9);
-        if (!f) {
-          const base = this.add.image(fx, fy, 'atlas', 'flag0').setDepth(6);
-          const team = this.add.image(fx, fy, 'atlas', 'flag0_t').setDepth(6.01);
-          f = { img: base, team, key: 'flag' };
-          this.bVis.set(fk, f);
-        }
-        f.img.setPosition(fx, fy); f.team!.setPosition(fx, fy).setTint(g.nations[owner].color);
-      }
+  // ---------------- cities & facilities ----------------
+  private anchorPx(r: number) { const R = this.sim.map.regions[r]; return { x: W2(R.cx), y: W2(R.cy) }; }
+
+  private syncBuildings(view: ReturnType<WorldScene['viewRect']>) {
+    const g = this.sim, show = this.lod !== 'far';
+    // rebuild changed regions (a few per frame to stay smooth)
+    let budget = 3;
+    for (const r of [...this.dirtyBuild]) {
+      const a = this.anchorPx(r);
+      if (!this.inView(view, a.x, a.y, 200) && this.lod !== 'far') { continue; }
+      if (budget-- <= 0) break;
+      this.dirtyBuild.delete(r);
+      this.rebuildRegion(r);
     }
-    for (const [k, v] of this.bVis) if (k.startsWith(prefix) && !live.has(k)) { v.img.destroy(); v.team?.destroy(); this.bVis.delete(k); }
+    for (const c of this.cities.values()) c.img.setVisible(show && this.inView(view, c.x, c.y, c.size));
+    for (const f of this.facs.values()) { const v = show && this.inView(view, f.x, f.y, 60); f.img.setVisible(v); f.team?.setVisible(v); }
+    // capitals as gold markers when zoomed out
+    for (const n of g.nations) {
+      let m = this.capMarks.get(n.id);
+      if (!n.alive || n.capital < 0) { m?.setVisible(false); continue; }
+      const a = this.anchorPx(n.capital);
+      if (!m) { m = this.add.image(a.x, a.y, 'atlas', 'flag0_t').setDepth(48); this.capMarks.set(n.id, m); }
+      m.setPosition(a.x + 6 / this.cameras.main.zoom, a.y - 8 / this.cameras.main.zoom).setScale(1.6 / this.cameras.main.zoom).setTint(n.color).setVisible(this.lod === 'far');
+    }
   }
 
-  private lodBuildings() {
-    // far zoom: hide clutter except capitals
-    const far = this.lod === 'far';
-    for (const [k, v] of this.bVis) {
-      const capital = v.key.startsWith('capital') || k.includes('capital');
-      v.img.setVisible(!far || capital);
-      v.team?.setVisible(!far || capital);
-      if (far && capital && !k.endsWith(':flag')) v.img.setScale(1.6); else if (!k.endsWith(':flag')) v.img.setScale(1);
+  private rebuildRegion(r: number) {
+    const g = this.sim, owner = g.owner[r];
+    const a = this.anchorPx(r);
+    const bl = g.buildings[r];
+    const cityB = bl.find(b => b.type === 'city' || b.type === 'capital');
+    // city
+    const cur = this.cities.get(r);
+    const cap = cityB?.type === 'capital';
+    // capitals always get a palace plaza, so they start from the level-2 layout
+    const lvl = cityB ? Math.max(cap ? 2 : 1, cityB.level) : 0;
+    const key = cityB ? `city_${r}_${lvl}_${cap ? 1 : 0}_${owner}` : '';
+    if (cur && cur.key !== key) { cur.img.destroy(); cur.flag?.destroy(); cur.flagT?.destroy(); this.cities.delete(r); }
+    if (cityB && (!cur || cur.key !== key)) {
+      const art = this.reg.city(key, {
+        seed: r * 31 + 7, level: lvl, capital: cap,
+        buildable: (px, py) => {
+          const S = CITY_SIZE[lvl] + (cap ? 16 : 0);
+          const wx = a.x - S / 2 + px, wy = a.y - S / 2 + py;
+          const rr = this.ground.regionAtPixel(wx, wy);
+          return rr >= 0 && (rr === r || (owner >= 0 && g.owner[rr] === owner));
+        },
+      });
+      const img = this.add.image(a.x, a.y, art.key).setDepth(5 + a.y * 1e-5);
+      let flag: Phaser.GameObjects.Image | null = null, flagT: Phaser.GameObjects.Image | null = null;
+      if (cap && art.capitalAt && owner >= 0) {
+        const fx = a.x - art.size / 2 + art.capitalAt[0] + 4, fy = a.y - art.size / 2 + art.capitalAt[1] - 12;
+        flag = this.add.image(fx, fy, 'atlas', 'flag0').setDepth(6);
+        flagT = this.add.image(fx, fy, 'atlas', 'flag0_t').setDepth(6.01).setTint(g.nations[owner].color);
+      }
+      this.cities.set(r, { key, img, roads: art.roads, size: art.size, x: a.x, y: a.y, flag, flagT });
     }
+    const city = this.cities.get(r);
+    if (city) city.img.setAlpha(cityB && cityB.level === 0 ? 0.55 : 1);
+    // facilities placed in a ring around the city, on this region's land
+    const keep = new Set<string>();
+    let slot = 0;
+    for (const b of bl) {
+      if (b.type === 'city' || b.type === 'capital') continue;
+      const fk = `${r}:${b.type}`;
+      keep.add(fk);
+      const existing = this.facs.get(fk);
+      let pos: { x: number; y: number; dir: number };
+      if (existing) pos = existing;
+      else pos = this.placeFacility(r, b.type, slot, city ? city.size / 2 : 0);
+      slot++;
+      const { key: tk, team } = this.reg.facility(b.type, pos.dir);
+      let v = existing;
+      if (!v) {
+        const img = this.add.image(pos.x, pos.y, tk).setDepth(5 + pos.y * 1e-5);
+        const t = team ? this.add.image(pos.x, pos.y, team).setDepth(5.001 + pos.y * 1e-5) : null;
+        v = { key: tk, img, team: t, type: b.type, x: pos.x, y: pos.y, dir: pos.dir };
+        this.facs.set(fk, v);
+      }
+      v.img.setAlpha(b.level === 0 ? 0.5 : 1);
+      if (b.level === 0) v.img.setTint(0xb0b0b0); else v.img.clearTint();
+      if (v.team && owner >= 0) v.team.setTint(g.nations[owner].color);
+    }
+    for (const [k, v] of this.facs) if (k.startsWith(r + ':') && !keep.has(k)) { v.img.destroy(); v.team?.destroy(); this.facs.delete(k); }
+  }
+
+  /** Picks a spot for a facility: ports on the coast facing the sea, others around the city. */
+  private placeFacility(r: number, type: string, slot: number, cityR: number) {
+    const g = this.sim, map = g.map, R = map.regions[r], a = this.anchorPx(r);
+    if (type === 'port') {
+      let best = { x: a.x, y: a.y, dir: 0, d: Infinity };
+      for (const t of R.tiles) {
+        const x = t % map.w, y = (t / map.w) | 0;
+        for (const [dx, dy, dir] of [[1, 0, 0], [0, 1, 2], [-1, 0, 4], [0, -1, 6]] as const) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h || map.regionOf[ny * map.w + nx] >= 0) continue;
+          const px = W2(x) + dx * 6, py = W2(y) + dy * 6, d = Math.hypot(px - a.x, py - a.y);
+          if (d < best.d) best = { x: px, y: py, dir, d };
+        }
+      }
+      return best;
+    }
+    const want = cityR + 18;
+    for (let k = 0; k < 24; k++) {
+      const ang = (slot * 2.399 + k * 0.52) % (Math.PI * 2), rad = want * (0.75 + (k % 4) * 0.12);
+      const x = a.x + Math.cos(ang) * rad, y = a.y + Math.sin(ang) * rad;
+      const rr = this.ground.regionAtPixel(x, y);
+      if (rr === r || (rr >= 0 && g.owner[rr] === g.owner[r] && g.owner[r] >= 0)) return { x, y, dir: 0 };
+    }
+    return { x: a.x + (slot % 2 ? 24 : -24), y: a.y + 22, dir: 0 };
   }
 
   // ---------------- armies ----------------
-  private textPool: Phaser.GameObjects.BitmapText[] = [];
-  private takeText() { return this.textPool.pop() ?? this.add.bitmapText(0, 0, 'digits', '').setDepth(30).setOrigin(0.5, 1); }
+  private takeText() { return this.textPool.pop() ?? this.add.bitmapText(0, 0, 'digits', '').setDepth(55).setOrigin(0.5, 1); }
   private dropText(t: Phaser.GameObjects.BitmapText) { t.setVisible(false); this.textPool.push(t); }
+  private dropVis(v: Vis) { for (const p of v.parts) { p.img.destroy(); p.team?.destroy(); } if (v.label) this.dropText(v.label); }
+
+  private armyModels(a: Army): string[] {
+    const out: string[] = [];
+    const tanks = Math.min(3, Math.ceil(a.tank / 15)), arts = Math.min(2, Math.ceil(a.art / 15));
+    for (let i = 0; i < tanks; i++) out.push('mbt');
+    if (a.inf > 150) out.push(a.id % 2 ? 'apc' : 'ifv');
+    if (a.inf > 600) out.push('truck');
+    for (let i = 0; i < arts; i++) out.push('spg');
+    const soldiers = Math.max(2, Math.min(8, Math.round(Math.log2(a.inf + 1))));
+    for (let i = 0; i < soldiers; i++) out.push('soldier');
+    return out;
+  }
 
   private syncArmies(view: ReturnType<WorldScene['viewRect']>) {
     const g = this.sim, z = this.cameras.main.zoom;
     const seen = new Set<number>();
-    const ts = Math.max(0.3, 1.6 / z);
+    const far = this.lod === 'far';
     for (const a of g.armies.values()) {
       if (a.state === 'embarked' || a.state === 'stationed') continue;
+      // zoomed out, only the player's own armies are drawn — the map stays readable
+      if (far && a.owner !== this.human) continue;
       const x = W2(a.x), y = W2(a.y);
       if (!this.inView(view, x, y)) continue;
       seen.add(a.id);
       let v = this.armyVis.get(a.id);
-      const size = a.inf + a.tank * 4 + a.art * 3;
-      const n = Math.max(1, Math.min(5, Math.round(Math.log2(size + 1) - 2)));
-      if (!v) { v = { body: [], team: [], label: this.takeText() }; this.armyVis.set(a.id, v); }
-      const kinds: string[] = [];
-      if (a.tank >= 1) kinds.push('u_tank');
-      if (a.art >= 1) kinds.push('u_art');
-      while (kinds.length < n) kinds.push('u_soldier');
-      while (v.body.length < kinds.length) { v.body.push(this.add.image(0, 0, 'atlas', 'u_soldier').setDepth(20)); v.team.push(this.add.image(0, 0, 'atlas', 'u_soldier_t').setDepth(20.01)); }
-      while (v.body.length > kinds.length) { v.body.pop()!.destroy(); v.team.pop()!.destroy(); }
-      const next = a.path[Math.min(a.idx + 1, a.path.length - 1)];
-      const dir = g.map.regions[next].cx >= a.x ? 1 : -1;
+      if (!v) { v = { parts: [], label: this.takeText(), heading: 0, lx: x, ly: y }; this.armyVis.set(a.id, v); }
+      const nxt = a.path[Math.min(a.idx + 1, a.path.length - 1)];
+      const T = g.map.regions[nxt];
+      if (a.state === 'march' || a.state === 'fight') v.heading = Math.atan2(W2(T.cy) - y, W2(T.cx) - x);
+      const models = far ? ['mbt'] : this.armyModels(a);
+      while (v.parts.length > models.length) { const p = v.parts.pop()!; p.img.destroy(); p.team?.destroy(); }
       const col = g.nations[a.owner].color;
-      const sc = this.lod === 'far' ? 2.2 / Math.max(z, 0.2) * 0.35 : 1;
-      kinds.forEach((k, i) => {
-        const ox = ((i % 3) - 1) * 5 * sc, oy = (Math.floor(i / 3) * 5 - 2) * sc;
-        v!.body[i].setFrame(k).setPosition(x + ox, y + oy).setFlipX(dir < 0).setScale(sc).setVisible(true);
-        const tk = k + '_t';
-        v!.team[i].setFrame(tk).setPosition(x + ox, y + oy).setFlipX(dir < 0).setScale(sc).setTint(col).setVisible(true);
+      const dir = dirIndex(v.heading);
+      const fx = Math.cos(v.heading), fy = Math.sin(v.heading);
+      let vi = 0, si = 0;
+      models.forEach((m, i) => {
+        const model = m === 'soldier' ? 'soldier' + ((this.walkFrame + i) % 2) : m;
+        const key = this.reg.model(model);
+        let p = v!.parts[i];
+        if (!p) { p = { img: this.add.image(0, 0, key, '0').setDepth(20), team: this.add.image(0, 0, key, '0_t').setDepth(20.01), model }; v!.parts.push(p); }
+        if (p.model !== model) { p.img.setTexture(key, '0'); p.team!.setTexture(key, '0_t'); p.model = model; }
+        // formation: vehicles in a column, infantry fanned out behind
+        let ox: number, oy: number;
+        if (m === 'soldier') { const row = Math.floor(si / 3), col3 = (si % 3) - 1; ox = -fx * (6 + row * 3.5) - fy * col3 * 3; oy = -fy * (6 + row * 3.5) + fx * col3 * 3; si++; }
+        else { ox = -fx * vi * 11 + (vi % 2 ? -fy * 4 : 0); oy = -fy * vi * 11 + (vi % 2 ? fx * 4 : 0); vi++; }
+        const sc = far ? Math.max(1, 0.9 / z) : 1;
+        p.img.setFrame(String(dir)).setPosition(Math.round(x + ox * sc), Math.round(y + oy * sc)).setScale(sc).setVisible(true);
+        p.team!.setFrame(dir + '_t').setPosition(Math.round(x + ox * sc), Math.round(y + oy * sc)).setScale(sc).setTint(col).setVisible(true);
       });
-      const fighting = a.state === 'fight';
-      v.label.setText(fmt(a.inf + a.tank + a.art)).setPosition(x, y - 6 * sc).setScale(ts).setTint(fighting ? 0xff8080 : a.owner === this.human ? 0xbfe0ff : 0xffffff).setVisible(this.lod !== 'far' || a.owner === this.human);
+      // muzzle flashes while fighting
+      if (a.state === 'fight' && !far && Math.random() < 0.25) this.spark(x + fx * 10 + (Math.random() - 0.5) * 12, y + fy * 10 + (Math.random() - 0.5) * 12, 0xffd860);
+      const showLabel = !far || a.owner === this.human;
+      v.label!.setText(fmt(a.inf + a.tank + a.art)).setPosition(x, y - 14 / Math.max(z, 0.6)).setScale(Math.max(0.35, 1.4 / z))
+        .setTint(a.state === 'fight' ? 0xff9080 : a.owner === this.human ? 0xbfe0ff : 0xffffff).setVisible(showLabel);
     }
-    for (const [id, v] of this.armyVis) if (!seen.has(id)) { v.body.forEach(b => b.destroy()); v.team.forEach(b => b.destroy()); this.dropText(v.label); this.armyVis.delete(id); }
+    for (const [id, v] of this.armyVis) if (!seen.has(id)) { this.dropVis(v); this.armyVis.delete(id); }
   }
 
-  /** Troop counts on regions (and a small soldier marker) at mid/near zoom. */
+  /** Troop numbers: own and frontline regions at mid zoom, everything in view up close. */
   private syncGarrisons(view: ReturnType<WorldScene['viewRect']>) {
     const g = this.sim, z = this.cameras.main.zoom;
-    let used = 0, icons = 0;
+    let used = 0;
     if (this.lod !== 'far') {
-      const ts = Math.max(0.3, 1.5 / z);
-      const map = g.map;
-      for (const R of map.regions) {
+      const ts = this.lod === 'near' ? Math.max(0.75, 1.6 / z) : Math.max(0.3, 1.3 / z);
+      for (const R of g.map.regions) {
         const x = W2(R.cx), y = W2(R.cy);
         if (!this.inView(view, x, y)) continue;
         const o = g.owner[R.id];
+        if (this.lod === 'mid' && o !== this.human && !R.neighbors.some(n => g.owner[n] === this.human)) continue;
         const troops = o >= 0 ? g.inf[R.id] + g.tank[R.id] + g.art[R.id] : g.neutral[R.id];
-        if (troops < 1 || used > 420) continue;
-        const sl = this.slots[R.id][g.buildings[R.id].length ? Math.min(g.buildings[R.id].length, 5) : 0];
-        const tx = W2(sl.x), ty = W2(sl.y) + 7;
+        if (troops < 1 || used > 300) continue;
+        const city = this.cities.get(R.id);
+        const ty = y + (city ? city.size / 2 + 6 : 10);
         let t = this.troopText[used];
-        if (!t) { t = this.add.bitmapText(0, 0, 'digits', '').setDepth(25).setOrigin(0.5, 0.5); this.troopText.push(t); }
-        t.setText(fmt(troops)).setPosition(tx, ty).setScale(ts).setVisible(true).setTint(o < 0 ? 0xd8d8d8 : o === this.human ? 0xbfe0ff : 0xffffff).setAlpha(o < 0 ? 0.7 : 1);
+        if (!t) { t = this.add.bitmapText(0, 0, 'digits', '').setDepth(54).setOrigin(0.5, 0.5); this.troopText.push(t); }
+        t.setText(fmt(troops)).setPosition(Math.round(x), Math.round(ty)).setScale(ts).setVisible(true)
+          .setTint(o < 0 ? 0xcfcfcf : o === this.human ? 0xbfe0ff : 0xffffff).setAlpha(o < 0 ? 0.75 : 1);
         used++;
-        if (o >= 0 && this.lod === 'near' && icons < 200) {
-          let ic = this.garrisonIcons[icons * 2];
-          if (!ic) { ic = this.add.image(0, 0, 'atlas', 'u_soldier').setDepth(19); this.garrisonIcons.push(ic, this.add.image(0, 0, 'atlas', 'u_soldier_t').setDepth(19.01)); }
-          const it = this.garrisonIcons[icons * 2 + 1];
-          const k = g.tank[R.id] >= 1 ? 'u_tank' : 'u_soldier';
-          ic.setFrame(k).setPosition(tx - 7, ty - 5).setVisible(true);
-          it.setFrame(k + '_t').setPosition(tx - 7, ty - 5).setTint(g.nations[o].color).setVisible(true);
-          icons++;
-        }
       }
     }
     for (let i = used; i < this.troopText.length; i++) this.troopText[i].setVisible(false);
-    for (let i = icons * 2; i < this.garrisonIcons.length; i++) this.garrisonIcons[i].setVisible(false);
-    this.lodBuildings();
   }
 
   // ---------------- fleets ----------------
+  private fleetModels(f: Fleet) {
+    const out: string[] = [];
+    if (f.ships.carrier >= 0.5) out.push('carrier');
+    const esc = ESCORTS[f.id % ESCORTS.length];
+    for (let i = 0; i < Math.min(3, Math.ceil(f.ships.destroyer - 0.05)); i++) out.push(i === 0 ? 'destroyer' : esc);
+    if (f.ships.sub >= 0.5) out.push('sub');
+    for (let i = 0; i < Math.min(3, Math.ceil(f.ships.transport - 0.05)); i++) out.push(i === 2 ? 'landing' : 'transport');
+    for (let i = 0; i < Math.min(2, Math.ceil(f.ships.patrol - 0.05)); i++) out.push(i ? 'corvette' : 'patrol');
+    return out.slice(0, 6).length ? out.slice(0, 6) : ['patrol'];
+  }
+
   private syncFleets(view: ReturnType<WorldScene['viewRect']>, delta: number) {
     const g = this.sim, z = this.cameras.main.zoom;
     const seen = new Set<number>();
     for (const f of g.fleets.values()) {
+      if (this.lod === 'far' && f.owner !== this.human) continue;
       const x = W2(f.x), y = W2(f.y);
-      if (!this.inView(view, x, y)) continue;
+      if (!this.inView(view, x, y, 80)) continue;
       seen.add(f.id);
       let v = this.fleetVis.get(f.id);
-      if (!v) { v = { ships: [], team: [], label: this.takeText(), heading: 0, lx: x, ly: y }; this.fleetVis.set(f.id, v); }
-      const kinds = this.fleetKinds(f);
-      while (v.ships.length < kinds.length) { v.ships.push(this.add.image(0, 0, 'atlas', 'u_patrol').setDepth(15)); v.team.push(this.add.image(0, 0, 'atlas', 'u_patrol_t').setDepth(15.01)); }
-      while (v.ships.length > kinds.length) { v.ships.pop()!.destroy(); v.team.pop()!.destroy(); }
+      if (!v) { v = { parts: [], label: this.takeText(), heading: 0, lx: x, ly: y }; this.fleetVis.set(f.id, v); }
       const dx = x - v.lx, dy = y - v.ly;
       if (Math.abs(dx) + Math.abs(dy) > 0.05) v.heading = Math.atan2(dy, dx);
       v.lx = x; v.ly = y;
-      const sc = this.lod === 'far' ? 0.5 / Math.max(z, 0.2) : 1;
-      kinds.forEach((k, i) => {
-        const off = i === 0 ? { x: 0, y: 0 } : { x: -Math.cos(v!.heading) * 9 * i + Math.sin(v!.heading) * (i % 2 ? 6 : -6), y: -Math.sin(v!.heading) * 9 * i - Math.cos(v!.heading) * (i % 2 ? 6 : -6) };
-        v!.ships[i].setFrame(k).setPosition(x + off.x * sc, y + off.y * sc).setRotation(v!.heading).setScale(sc).setAlpha(k === 'u_sub' ? 0.75 : 1);
-        v!.team[i].setFrame(this.textures.get('atlas').has(k + '_t') ? k + '_t' : k).setPosition(x + off.x * sc, y + off.y * sc).setRotation(v!.heading).setScale(sc).setTint(g.nations[f.owner].color);
+      const models = this.fleetModels(f);
+      while (v.parts.length > models.length) { const p = v.parts.pop()!; p.img.destroy(); p.team?.destroy(); }
+      const dir = dirIndex(v.heading), fx = Math.cos(v.heading), fy = Math.sin(v.heading);
+      const sc = this.lod === 'far' ? Math.max(1, 0.7 / z) : 1;
+      let back = 0;
+      models.forEach((m, i) => {
+        const key = this.reg.model(m);
+        let p = v!.parts[i];
+        if (!p) { p = { img: this.add.image(0, 0, key, '0').setDepth(15), team: this.add.image(0, 0, key, '0_t').setDepth(15.01), model: m }; v!.parts.push(p); }
+        if (p.model !== m) { p.img.setTexture(key, '0'); p.team!.setTexture(key, '0_t'); p.model = m; }
+        const len = this.reg.modelSize(m);
+        if (i > 0) back += len * 0.55 + 5;
+        const side = i === 0 ? 0 : (i % 2 ? 1 : -1) * 9;
+        const ox = -fx * back - fy * side, oy = -fy * back + fx * side;
+        p.img.setFrame(String(dir)).setPosition(Math.round(x + ox * sc), Math.round(y + oy * sc)).setScale(sc).setAlpha(m === 'sub' ? 0.82 : 1).setVisible(true);
+        p.team!.setFrame(dir + '_t').setPosition(Math.round(x + ox * sc), Math.round(y + oy * sc)).setScale(sc).setTint(g.nations[f.owner].color).setVisible(true);
+        // wake behind moving ships
+        if (this.lod === 'near' && f.path.length && Math.random() < delta / 90) this.spawnAmbient('u_wake', x + ox - fx * len * 0.5, y + oy - fy * len * 0.5, -fx * 3, -fy * 3, 1100, 'wake');
       });
+      if (f.combat < 1 && this.lod !== 'far' && Math.random() < 0.2) this.spark(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 20, 0xfff0a0);
       const total = SEA_UNITS.reduce((s, k) => s + Math.ceil(f.ships[k] - 0.05), 0);
-      v.label.setText(String(total)).setPosition(x, y - 8 * sc).setScale(Math.max(0.3, 1.5 / z)).setTint(f.combat < 1 ? 0xff8080 : 0xd0f0ff).setVisible(this.lod !== 'far');
-      // wake sparkles while moving at close zoom
-      if (this.lod === 'near' && f.path.length && Math.random() < delta / 120) this.spawnAmbient('u_wake', x - Math.cos(v.heading) * 10, y - Math.sin(v.heading) * 10, 0, 0, 900, 'wake');
+      v.label!.setText(String(total)).setPosition(x, y - 16).setScale(Math.max(0.35, 1.4 / z)).setTint(f.combat < 1 ? 0xff9080 : 0xd0f0ff).setVisible(this.lod !== 'far');
     }
-    for (const [id, v] of this.fleetVis) if (!seen.has(id)) { v.ships.forEach(s => s.destroy()); v.team.forEach(s => s.destroy()); this.dropText(v.label); this.fleetVis.delete(id); }
-  }
-  private fleetKinds(f: Fleet) {
-    const order = ['carrier', 'destroyer', 'sub', 'transport', 'patrol'] as const;
-    const out: string[] = [];
-    for (const k of order) if (f.ships[k] >= 0.5) out.push('u_' + k);
-    return out.slice(0, 3).length ? out.slice(0, 3) : ['u_patrol'];
+    for (const [id, v] of this.fleetVis) if (!seen.has(id)) { this.dropVis(v); this.fleetVis.delete(id); }
   }
 
   // ---------------- aircraft ----------------
-  private syncAir(view: ReturnType<WorldScene['viewRect']>, delta: number) {
+  private planeModel(kind: string, _owner: number) {
+    return kind === 'drone' ? 'reaper' : kind;
+  }
+
+  private syncAir(view: ReturnType<WorldScene['viewRect']>, delta: number, now: number) {
     const g = this.sim, z = this.cameras.main.zoom;
     const seen = new Set<string>();
-    const place = (key: string, kind: string, x: number, y: number, rot: number, owner: number, flying: boolean) => {
+    const place = (key: string, model: string, x: number, y: number, heading: number, owner: number, alt: number, parkScale = 1) => {
       seen.add(key);
       let v = this.planeVis.get(key);
+      const tex = this.reg.model(model);
       if (!v) {
-        const shadow = this.add.image(0, 0, 'atlas', kind).setTint(0x000000).setAlpha(0.25).setDepth(21);
-        const img = this.add.image(0, 0, 'atlas', kind).setDepth(32);
-        const team = this.textures.get('atlas').has(kind + '_t') ? this.add.image(0, 0, 'atlas', kind + '_t').setDepth(32.01) : null;
-        const rotor = kind === 'u_heli' || kind === 'u_scout' ? this.add.image(0, 0, 'atlas', 'rotor').setDepth(32.02) : null;
-        v = { img, team, rotor, shadow };
+        const shadow = this.add.image(0, 0, tex, '0').setTint(0x2a1838).setAlpha(0.38).setDepth(30);
+        const img = this.add.image(0, 0, tex, '0').setDepth(40);
+        const team = this.add.image(0, 0, tex, '0_t').setDepth(40.01);
+        const rotors = (ROTORS[model] ?? []).map((_, i) => this.add.image(0, 0, this.reg.rotor(model, i, model === 'chinook' ? 1.2 : 1.3), '0').setDepth(40.02));
+        const flame = FIGHTERS.includes(model) || BOMBERS.includes(model) ? this.add.image(0, 0, 'atlas', 'px').setDepth(39.9).setTint(0xffb040) : null;
+        v = { img, team, shadow, rotors, model, heading: heading, lx: x, ly: y, flame };
         this.planeVis.set(key, v);
       }
-      const sc = this.lod === 'far' ? 0.6 / Math.max(z, 0.2) : 1;
-      const alt = flying ? 6 * sc : 0;
-      v.shadow.setPosition(x + alt * 0.6, y + alt).setRotation(rot).setScale(sc).setVisible(flying);
-      v.img.setPosition(x, y).setRotation(rot).setScale(sc);
-      v.team?.setPosition(x, y).setRotation(rot).setScale(sc).setTint(g.nations[owner].color);
-      if (v.rotor) v.rotor.setPosition(x + Math.cos(rot) * 2 * sc, y + Math.sin(rot) * 2 * sc).setScale(sc).setRotation((v.rotor.rotation + delta * 0.045) % (Math.PI * 2));
+      // smooth banking turn towards the travel heading
+      let dh = heading - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+      v.heading += dh * Math.min(1, delta / 220);
+      const dir = dirIndex(v.heading);
+      const sc = (this.lod === 'far' ? Math.max(1, 0.6 / z) : 1) * parkScale;
+      const px = Math.round(x), py = Math.round(y - alt * 0.6);
+      v.shadow.setFrame(String(dir)).setPosition(Math.round(x + alt * 0.8), Math.round(y + alt * 0.5)).setScale(sc).setVisible(alt > 0.5);
+      v.img.setFrame(String(dir)).setPosition(px, py).setScale(sc);
+      v.team?.setFrame(dir + '_t').setPosition(px, py).setScale(sc).setTint(g.nations[owner].color);
+      const k = (model === 'chinook' ? 1.2 : 1.3) * (UNIT_SCALE[model] ?? 1);
+      (ROTORS[model] ?? []).forEach((r, i) => {
+        const rot = v!.rotors[i];
+        rot.setFrame(String(Math.floor(now / 45 + i * 3) % 6)).setPosition(Math.round(px + Math.cos(v!.heading) * r.x * k * sc), Math.round(py + Math.sin(v!.heading) * r.x * k * sc)).setScale(sc);
+      });
+      if (v.flame) {
+        const back = this.reg.modelSize(model) * 0.42;
+        const on = alt > 0.5 && this.lod !== 'far';
+        v.flame.setVisible(on).setPosition(px - Math.cos(v.heading) * back, py - Math.sin(v.heading) * back).setScale(1 + Math.random() * 0.8).setTint(Math.random() < 0.5 ? 0xffd060 : 0xff7a30);
+      }
     };
+    // a sortie flipping from 'out' to 'back' has just delivered its weapons: animate them
+    for (const s of g.sorties.values()) {
+      const prev = this.sortiePhase.get(s.id);
+      if (prev === 'out' && s.phase === 'back' && this.lod !== 'far') this.strikeFx(s);
+      this.sortiePhase.set(s.id, s.phase);
+    }
+    for (const id of [...this.sortiePhase.keys()]) if (!g.sorties.has(id)) this.sortiePhase.delete(id);
     for (const s of g.sorties.values()) {
       const x = W2(s.x), y = W2(s.y);
-      if (!this.inView(view, x, y)) continue;
-      const rot = Math.atan2(s.ty - s.y, s.tx - s.x);
+      if (!this.inView(view, x, y, 60)) continue;
+      const heading = Math.atan2(s.ty - s.y, s.tx - s.x);
+      const travelled = Math.hypot(s.x - s.fromX, s.y - s.fromY);
+      const alt = Math.min(10, 3 + travelled * 2);   // climb after take-off
       let i = 0;
       for (const k of AIR_UNITS) {
         const n = Math.min(3, Math.ceil(s.planes[k] - 0.05));
-        for (let j = 0; j < n; j++, i++) place(`s${s.id}:${i}`, 'u_' + k, x - Math.cos(rot) * 8 * i + Math.sin(rot) * (i % 2 ? 6 : -6) * (i ? 1 : 0), y - Math.sin(rot) * 8 * i, rot, s.owner, true);
+        for (let j = 0; j < n; j++, i++) {
+          const fx = Math.cos(heading), fy = Math.sin(heading), side = i === 0 ? 0 : (i % 2 ? 1 : -1) * 9 * Math.ceil(i / 2);
+          place(`s${s.id}:${i}`, this.planeModel(k, s.owner), x - fx * 8 * Math.ceil(i / 2) - fy * side, y - fy * 8 * Math.ceil(i / 2) + fx * side, heading, s.owner, k === 'apache' || k === 'blackhawk' || k === 'drone' ? alt * 0.6 : alt);
+        }
       }
     }
-    if (this.lod === 'near') for (const a of g.airGroups.values()) {
-      const p = a.carrier >= 0 ? g.fleets.get(a.carrier) : g.center(a.base);
-      if (!p) continue;
-      const x = W2(p.x), y = W2(p.y);
-      if (!this.inView(view, x, y)) continue;
+    if (z >= 2.4) for (const a of g.airGroups.values()) {
+      const p = a.carrier >= 0 ? g.fleets.get(a.carrier) : null;
+      const fac = a.carrier < 0 ? this.facs.get(a.base + ':airbase') : null;
+      const bx = p ? W2(p.x) : fac ? fac.x : W2(g.map.regions[a.base].cx), by = p ? W2(p.y) : fac ? fac.y : W2(g.map.regions[a.base].cy);
+      if (!this.inView(view, bx, by)) continue;
+      const hv = p ? this.fleetVis.get(p.id)?.heading ?? 0 : 0;
+      // parked aircraft: a neat row on the apron / along the carrier deck, at reduced scale
       let i = 0;
-      for (const k of AIR_UNITS) for (let j = 0; j < Math.min(3, Math.floor(a.planes[k])); j++, i++) {
-        place(`g${a.id}:${i}`, 'u_' + k, x - 10 + (i % 4) * 7, y + (a.carrier >= 0 ? -1 : 6) + Math.floor(i / 4) * 7, 0, a.owner, false);
+      for (const k of AIR_UNITS) for (let j = 0; j < Math.min(2, Math.floor(a.planes[k])) && i < (p ? 4 : 3); j++, i++) {
+        const along = p ? 14 - i * 9 : (i - 1) * 13, across = p ? -2 : 10;
+        const x = bx + Math.cos(hv) * along - Math.sin(hv) * across, y = by + Math.sin(hv) * along + Math.cos(hv) * across;
+        place(`g${a.id}:${i}`, this.planeModel(k, a.owner), x, y, hv + (p ? Math.PI : -Math.PI / 2), a.owner, 0, 0.7);
       }
     }
-    for (const [k, v] of this.planeVis) if (!seen.has(k)) { v.img.destroy(); v.team?.destroy(); v.rotor?.destroy(); v.shadow.destroy(); this.planeVis.delete(k); }
-    void airTotal;
+    for (const [k, v] of this.planeVis) if (!seen.has(k)) { v.img.destroy(); v.team?.destroy(); v.shadow.destroy(); v.rotors.forEach(r => r.destroy()); v.flame?.destroy(); this.planeVis.delete(k); }
+  }
+
+  /** Weapon effects for one strike, by aircraft type: missiles, rocket salvos, gun tracers, carpet bombing. */
+  private strikeFx(s: { id: number; planes: Record<string, number>; x: number; y: number; tx: number; ty: number; fromX: number; fromY: number }) {
+    const tx = W2(s.tx), ty = W2(s.ty);
+    if (!this.inView(this.viewRect(200), tx, ty)) return;
+    const hx = Math.cos(Math.atan2(s.ty - s.fromY, s.tx - s.fromX)), hy = Math.sin(Math.atan2(s.ty - s.fromY, s.tx - s.fromX));
+    const at = (back: number, side = 0) => ({ x: tx - hx * back - hy * side, y: ty - hy * back + hx * side });
+    let delay = 0;
+    const missile = (from: { x: number; y: number }, to: { x: number; y: number }, d: number, frame = 'u_missile') => this.time.delayedCall(d, () => {
+      const m = this.add.image(from.x, from.y, 'atlas', frame).setDepth(45).setRotation(Math.atan2(to.y - from.y, to.x - from.x));
+      const dur = 280 + Math.hypot(to.x - from.x, to.y - from.y) * 2;
+      const trail = this.time.addEvent({ delay: 40, loop: true, callback: () => this.spawnAmbient('u_smoke', m.x, m.y, 0, -2, 700, 'trail') });
+      this.tweens.add({ targets: m, x: to.x, y: to.y, duration: dur, ease: 'Quad.easeIn', onComplete: () => { trail.remove(); m.destroy(); this.boom(to.x, to.y, 0.8); } });
+    });
+    const tracers = (from: { x: number; y: number }, n: number, d: number, spread: number, color = 0xffe070) => {
+      for (let i = 0; i < n; i++) this.time.delayedCall(d + i * 55, () => {
+        const to = { x: tx + (Math.random() - 0.5) * spread, y: ty + (Math.random() - 0.5) * spread };
+        const t = this.add.image(from.x, from.y, 'atlas', 'px').setDepth(44).setTint(color).setScale(1.6, 0.5).setRotation(Math.atan2(to.y - from.y, to.x - from.x));
+        this.tweens.add({ targets: t, x: to.x, y: to.y, duration: 120, onComplete: () => { t.destroy(); this.spark(to.x, to.y, 0xffc040); if (Math.random() < 0.25) this.spawnAmbient('u_smoke', to.x, to.y, 0, -3, 600, 'smoke'); } });
+      });
+    };
+    const p = s.planes;
+    if (p.f16 + p.f35 + p.su57 + p.drone >= 0.5) for (let i = 0; i < Math.min(4, Math.ceil(p.f16 + p.f35 + p.su57 + p.drone)); i++) missile(at(46, (i - 1.5) * 6), { x: tx + (Math.random() - 0.5) * 10, y: ty + (Math.random() - 0.5) * 10 }, delay + i * 140);
+    if (p.apache >= 0.5) { for (let i = 0; i < 6; i++) missile(at(34, (i % 2 ? 4 : -4)), { x: tx + (Math.random() - 0.5) * 14, y: ty + (Math.random() - 0.5) * 14 }, 120 + i * 90); tracers(at(30), 14, 300, 16); }
+    if (p.blackhawk >= 0.5) { tracers(at(26, 6), 10, 100, 18, 0xfff0a0); tracers(at(26, -6), 10, 160, 18, 0xfff0a0); }
+    if (p.ac130 >= 0.5) { tracers(at(10, 34), 26, 0, 22, 0xffd050); for (let i = 0; i < 3; i++) this.time.delayedCall(400 + i * 450, () => this.boom(tx + (Math.random() - 0.5) * 18, ty + (Math.random() - 0.5) * 18, 1)); }
+    if (p.b52 + p.b2 >= 0.5) {
+      // carpet bombing along the flight path
+      for (let i = 0; i < 9; i++) this.time.delayedCall(i * 110, () => {
+        const q = at(28 - i * 7, (Math.random() - 0.5) * 10);
+        const b = this.add.image(q.x - hx * 6, q.y - hy * 6 - 10, 'atlas', 'u_warhead').setDepth(44).setScale(0.8).setRotation(Math.PI / 2);
+        this.tweens.add({ targets: b, y: q.y, x: q.x, scale: 0.5, duration: 260, ease: 'Quad.easeIn', onComplete: () => { b.destroy(); this.boom(q.x, q.y, 1.3); this.spawnAmbient('u_smoke', q.x, q.y, 1, -4, 1800, 'smoke'); } });
+      });
+    }
   }
 
   // ---------------- missiles & effects ----------------
@@ -537,19 +639,18 @@ export class WorldScene extends Phaser.Scene {
     for (const m of g.missiles.values()) {
       seen.add(m.id);
       let v = this.missileVis.get(m.id);
-      if (!v) { v = { img: this.add.image(0, 0, 'atlas', m.weapon === 'mirv' ? 'u_warhead' : 'u_missile').setDepth(45), trail: 0 }; this.missileVis.set(m.id, v); }
+      if (!v) { v = { img: this.add.image(0, 0, 'atlas', m.weapon === 'mirv' ? 'u_warhead' : 'u_missile').setDepth(58), trail: 0 }; this.missileVis.set(m.id, v); }
       const k = Math.min(1, m.t / m.dur);
       const dist = Math.hypot(m.tx - m.sx, m.ty - m.sy) * TILE;
-      const h = Math.sin(Math.PI * k) * Math.min(220, dist * 0.3);
-      const x = W2(m.x), y = W2(m.y) - h;
+      const arc = (t: number) => Math.sin(Math.PI * t) * Math.min(420, dist * 0.3);
+      const x = W2(m.x), y = W2(m.y) - arc(k);
       const k2 = Math.min(1, k + 0.01);
-      const nx = W2(m.sx + (m.tx - m.sx) * k2), ny = W2(m.sy + (m.ty - m.sy) * k2) - Math.sin(Math.PI * k2) * Math.min(220, dist * 0.3);
-      v.img.setPosition(x, y).setRotation(Math.atan2(ny - y, nx - x)).setScale(Math.max(1, 1 / this.cameras.main.zoom));
+      const nx = W2(m.sx + (m.tx - m.sx) * k2), ny = W2(m.sy + (m.ty - m.sy) * k2) - arc(k2);
+      v.img.setPosition(x, y).setRotation(Math.atan2(ny - y, nx - x)).setScale(Math.max(1.5, 1.6 / this.cameras.main.zoom));
       v.trail += delta;
-      if (v.trail > 40) { v.trail = 0; this.spawnAmbient('u_smoke', x, y, 0, 0, 1400, 'trail'); }
+      if (v.trail > 35) { v.trail = 0; this.spawnAmbient('u_smoke', x, y, 0, 0, 1500, 'trail'); }
     }
     for (const [id, v] of this.missileVis) if (!seen.has(id)) { v.img.destroy(); this.missileVis.delete(id); }
-    void WEAPONS;
   }
 
   private handleFx() {
@@ -560,105 +661,124 @@ export class WorldScene extends Phaser.Scene {
       if (f.k === 'explosion') {
         const x = W2(f.x), y = W2(f.y);
         if (f.nuke) this.nukeFx(x, y, f.r);
-        else if (this.inView(view, x, y)) this.boom(x, y, Math.min(2.5, 0.7 + f.r * 0.4));
+        else if (this.inView(view, x, y)) { this.boom(x, y, Math.min(3, 1 + f.r * 0.5)); for (let i = 0; i < 4; i++) this.spawnAmbient('u_smoke', x + (Math.random() - 0.5) * 16, y + (Math.random() - 0.5) * 16, (Math.random() - 0.3) * 4, -6, 1800, 'smoke'); }
       } else if (f.k === 'shot') {
         const x = W2(f.x), y = W2(f.y), tx = W2(f.tx), ty = W2(f.ty);
         if (!this.inView(view, tx, ty) || this.lod === 'far') continue;
-        const tr = this.add.image(x, y, 'atlas', 'px').setDepth(31).setTint(f.sea ? 0xfff1a0 : 0xffe066).setScale(0.8);
-        this.tweens.add({ targets: tr, x: tx, y: ty, duration: 260, onComplete: () => { tr.destroy(); this.boom(tx, ty, f.sea ? 0.45 : 0.35); } });
+        const tr = this.add.image(x, y, 'atlas', 'px').setDepth(41).setTint(f.sea ? 0xfff1a0 : 0xffe066).setScale(1.2, 0.6).setRotation(Math.atan2(ty - y, tx - x));
+        this.tweens.add({ targets: tr, x: tx, y: ty, duration: 240, onComplete: () => { tr.destroy(); this.boom(tx, ty, f.sea ? 0.7 : 0.55); } });
       } else if (f.k === 'intercept') {
-        const x = W2(f.x), y = W2(f.y) - 40;
-        if (this.inView(view, x, y)) this.boom(x, y, 0.8);
+        const x = W2(f.x), y = W2(f.y) - 60;
+        if (this.inView(view, x, y)) this.boom(x, y, 1.3);
       } else if (f.k === 'capture') {
         if (this.lod === 'far') continue;
-        const R = g.map.regions[f.region];
-        const x = W2(R.cx), y = W2(R.cy);
-        if (!this.inView(view, x, y)) continue;
-        const fl = this.add.image(x, y - 4, 'atlas', 'flag0_t').setTint(g.nations[f.owner].color).setDepth(34).setScale(0.6);
-        this.tweens.add({ targets: fl, y: y - 14, scale: 1.2, alpha: 0, duration: 900, onComplete: () => fl.destroy() });
+        const a = this.anchorPx(f.region);
+        if (!this.inView(view, a.x, a.y)) continue;
+        const fl = this.add.image(a.x, a.y - 6, 'atlas', 'flag0_t').setTint(g.nations[f.owner].color).setDepth(56).setScale(1);
+        this.tweens.add({ targets: fl, y: a.y - 26, scale: 2, alpha: 0, duration: 1000, onComplete: () => fl.destroy() });
       }
     }
     g.fx.length = 0;
   }
 
+  private spark(x: number, y: number, color: number) {
+    const s = this.add.image(Math.round(x), Math.round(y), 'atlas', 'px').setDepth(42).setTint(color).setScale(1.5);
+    this.tweens.add({ targets: s, alpha: 0, scale: 0.5, duration: 160, onComplete: () => s.destroy() });
+  }
+
   boom(x: number, y: number, scale = 1) {
-    const img = this.add.image(x, y, 'atlas', 'boom0').setDepth(33).setScale(scale);
+    const img = this.add.image(Math.round(x), Math.round(y), 'atlas', 'boom0').setDepth(43).setScale(scale);
     let f = 0;
     const ev = this.time.addEvent({ delay: 60, repeat: 7, callback: () => { f++; if (f >= 8) { img.destroy(); ev.remove(); } else img.setFrame('boom' + f); } });
   }
 
   private nukeFx(x: number, y: number, radius: number) {
     const scale = radius * TILE / 30;
-    const flash = this.add.image(x, y, 'atlas', 'nukeflash0').setDepth(46).setScale(scale * 1.6);
+    const flash = this.add.image(x, y, 'atlas', 'nukeflash0').setDepth(59).setScale(scale * 1.6);
     let f = 0;
     const ev = this.time.addEvent({ delay: 80, repeat: 10, callback: () => { f++; if (f >= 10) { flash.destroy(); ev.remove(); } else flash.setFrame('nukeflash' + f); } });
-    const ring = this.add.image(x, y, 'atlas', 'ring8').setDepth(46).setScale(0.5).setTint(0xfff4c0);
-    this.tweens.add({ targets: ring, scale: radius * TILE / 8 * 1.3, alpha: 0, duration: 1100, onComplete: () => ring.destroy() });
-    const mush = this.add.image(x, y + 4, 'atlas', 'mushroom0').setOrigin(0.5, 0.92).setDepth(47).setScale(scale * 0.9);
+    const ring = this.add.image(x, y, 'atlas', 'ring8').setDepth(59).setScale(0.5).setTint(0xfff4c0);
+    this.tweens.add({ targets: ring, scale: radius * TILE / 8 * 1.3, alpha: 0, duration: 1200, onComplete: () => ring.destroy() });
+    const mush = this.add.image(x, y + 4, 'atlas', 'mushroom0').setOrigin(0.5, 0.92).setDepth(59.5).setScale(scale * 0.9);
     let m = 0;
     const ev2 = this.time.addEvent({ delay: 170, repeat: 12, callback: () => { m++; if (m >= 12) { this.tweens.add({ targets: mush, alpha: 0, duration: 1500, onComplete: () => mush.destroy() }); ev2.remove(); } else mush.setFrame('mushroom' + m); } });
-    const view = this.viewRect(0);
-    if (this.inView(view, x, y)) this.cameras.main.shake(600, 0.012);
+    if (this.inView(this.viewRect(0), x, y)) this.cameras.main.shake(600, 0.01);
   }
 
   // ---------------- ambient life ----------------
-  private spawnAmbient(frame: string, x: number, y: number, vx: number, vy: number, life: number, kind: string) {
-    if (this.ambient.length > 260) return;
-    const img = this.add.image(x, y, 'atlas', frame).setDepth(kind === 'trail' ? 44 : kind === 'smoke' ? 18 : 7);
-    if (kind === 'person') img.setTint([0x3b6fb6, 0xc04040, 0x40a040, 0xe0c040, 0x8040a0][Math.floor(Math.random() * 5)]);
-    this.ambient.push({ img, vx, vy, life, kind });
+  private spawnAmbient(frame: string, x: number, y: number, vx: number, vy: number, life: number, kind: string, tex = 'atlas', team?: number) {
+    if (this.ambient.length > 320) return;
+    const img = this.add.image(Math.round(x), Math.round(y), tex, frame).setDepth(kind === 'trail' ? 57 : kind === 'smoke' ? 18 : kind === 'wake' || kind === 'sparkle' ? 2 : 7);
+    let t: Phaser.GameObjects.Image | undefined;
+    if (team !== undefined) t = this.add.image(img.x, img.y, tex, frame + '_t').setDepth(img.depth + 0.01).setTint(team);
+    if (kind === 'person') img.setTint([0x3b6fb6, 0xc04040, 0x40a040, 0xe0c040, 0x8040a0, 0xe0e0e0][Math.floor(Math.random() * 6)]);
+    this.ambient.push({ img, team: t, vx, vy, life, max: life, kind });
   }
 
   private ambientLife(view: ReturnType<WorldScene['viewRect']>, delta: number) {
-    const g = this.sim;
     for (let i = this.ambient.length - 1; i >= 0; i--) {
       const a = this.ambient[i];
       a.life -= delta;
       a.img.x += a.vx * delta / 1000; a.img.y += a.vy * delta / 1000;
-      if (a.kind === 'smoke' || a.kind === 'trail') { a.img.setAlpha(Math.max(0, a.life / 1600)); a.img.setScale(a.img.scale + delta * 0.0006); }
-      if (a.kind === 'wake' || a.kind === 'sparkle') a.img.setAlpha(Math.max(0, Math.sin(Math.PI * Math.max(0, a.life) / 900)));
-      if (a.life <= 0) { a.img.destroy(); this.ambient.splice(i, 1); }
+      if (a.team) { a.team.x = a.img.x; a.team.y = a.img.y; }
+      const t = Math.max(0, a.life / a.max);
+      if (a.kind === 'smoke' || a.kind === 'trail') { a.img.setAlpha(t * 0.85); a.img.setScale(1 + (1 - t) * 1.6); }
+      else if (a.kind === 'wake' || a.kind === 'sparkle') a.img.setAlpha(Math.sin(Math.PI * t));
+      else if (a.kind === 'car' || a.kind === 'person') a.img.setAlpha(Math.min(1, t * 4, (1 - t) * 6));
+      if (a.life <= 0) { a.img.destroy(); a.team?.destroy(); this.ambient.splice(i, 1); }
     }
     if (this.lod !== 'near') return;
-    this.smokeT += delta;
-    const spawnTick = this.smokeT > 140;
-    if (spawnTick) this.smokeT = 0;
-    if (!spawnTick) return;
-    let people = 0, cars = 0;
-    for (const a of this.ambient) { if (a.kind === 'person') people++; else if (a.kind === 'car') cars++; }
-    for (const [k, v] of this.bVis) {
-      if (!this.inView(view, v.img.x, v.img.y)) continue;
-      if (k.endsWith(':factory') && Math.random() < 0.6) {
-        this.spawnAmbient('u_smoke', v.img.x - 6 + (Math.random() < 0.5 ? 0 : 6), v.img.y - 9, (Math.random() - 0.3) * 4, -9, 1600, 'smoke');
+    this.ambT += delta;
+    if (this.ambT < 120) return;
+    this.ambT = 0;
+    let cars = 0, people = 0;
+    for (const a of this.ambient) { if (a.kind === 'car') cars++; else if (a.kind === 'person') people++; }
+    for (const c of this.cities.values()) {
+      if (!c.img.visible || !c.roads.length) continue;
+      if (cars < 90 && Math.random() < 0.7) {
+        const [rx, ry, horiz] = c.roads[Math.floor(Math.random() * c.roads.length)];
+        const dir = Math.random() < 0.5 ? 1 : -1, sp = 12 + Math.random() * 8;
+        // drive only until the edge of the street grid
+        const along = horiz ? rx : ry, room = dir > 0 ? c.size - 6 - along : along - 6;
+        if (room < 10) continue;
+        const name = ['car_r', 'car_b', 'car_w', 'car_y', 'car_g'][Math.floor(Math.random() * 5)];
+        const key = this.reg.model(name);
+        const ang = horiz ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+        const lane = dir > 0 ? 1 : -1;
+        const x = c.x - c.size / 2 + rx + (horiz ? 0 : lane), y = c.y - c.size / 2 + ry + (horiz ? lane : 0);
+        const img = this.add.image(x, y, key, String(dirIndex(ang))).setDepth(5.5);
+        const life = Math.min(4000, room / sp * 1000);
+        this.ambient.push({ img, vx: horiz ? dir * sp : 0, vy: horiz ? 0 : dir * sp, life, max: life, kind: 'car' });
       }
-      if ((v.key.startsWith('city') || v.key.startsWith('capital')) && !k.endsWith(':flag')) {
-        const half = v.img.width / 2 - 2;
-        if (people < 120 && Math.random() < 0.5) {
-          const horiz = Math.random() < 0.5;
-          const off = (Math.random() - 0.5) * half * 1.6;
-          const sp = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 3);
-          this.spawnAmbient('u_person', v.img.x + (horiz ? -sp * 1.5 : off), v.img.y + (horiz ? 1 : off), horiz ? sp : 0, horiz ? 0 : sp, 2200, 'person');
-        }
-        if (cars < 50 && Math.random() < 0.25) {
-          const horiz = Math.random() < 0.5, dir = Math.random() < 0.5 ? -1 : 1;
-          const frame = Math.random() < 0.5 ? 'u_car' : 'u_car2';
-          this.spawnAmbient(frame, v.img.x - (horiz ? dir * half : 0), v.img.y - (horiz ? 0 : dir * half), horiz ? dir * 14 : 0, horiz ? 0 : dir * 14, half * 2 / 14 * 1000, 'car');
-        }
+      if (people < 140 && Math.random() < 0.8) {
+        const [rx, ry, horiz] = c.roads[Math.floor(Math.random() * c.roads.length)];
+        const off = (Math.random() < 0.5 ? 3 : -3);
+        const x = c.x - c.size / 2 + rx + (horiz ? 0 : off), y = c.y - c.size / 2 + ry + (horiz ? off : 0);
+        const sp = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 3);
+        this.spawnAmbient('px', x, y, horiz ? sp : 0, horiz ? 0 : sp, 2400, 'person');
       }
     }
-    // shimmer on open water in view
-    for (let i = 0; i < 3; i++) {
+    for (const f of this.facs.values()) {
+      if (!f.img.visible) continue;
+      if (f.type === 'factory') for (const [cx, cy] of [[7, -4], [10, -4]]) if (Math.random() < 0.55) this.spawnAmbient('u_smoke', f.x + cx, f.y + cy - 6, 2 + Math.random() * 3, -10, 2200, 'smoke');
+      if (f.type === 'nuclear' && Math.random() < 0.4) this.spawnAmbient('u_smoke', f.x - 7, f.y - 6, 2, -7, 2600, 'smoke');
+      if (f.type === 'hospital' && Math.random() < 0.06) {
+        const key = this.reg.model('ambulance');
+        const img = this.add.image(f.x - 30, f.y + 10, key, '0').setDepth(5.5);
+        this.ambient.push({ img, vx: 14, vy: 0, life: 2000, max: 2000, kind: 'car' });
+      }
+    }
+    // sparkle on open water in view
+    for (let i = 0; i < 4; i++) {
       const x = view.x0 + Math.random() * (view.x1 - view.x0), y = view.y0 + Math.random() * (view.y1 - view.y0);
-      const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
-      if (tx < 0 || ty < 0 || tx >= g.map.w || ty >= g.map.h) continue;
-      if (g.map.seaOf[ty * g.map.w + tx] >= 0) this.spawnAmbient('u_wake', x, y, 0, 0, 900, 'sparkle');
+      if (this.ground.regionAtPixel(x, y) < 0) this.spawnAmbient('u_wake', x, y, 0, 0, 1000, 'sparkle');
     }
   }
 
   // ---------------- labels ----------------
   private syncLabels(now: number) {
     const g = this.sim, z = this.cameras.main.zoom;
-    const show = this.lod !== 'near';
+    const show = this.lod === 'far';
     if (now - this.lastLabels > 1500) {
       this.lastLabels = now;
       for (const n of g.nations) {
@@ -672,7 +792,7 @@ export class WorldScene extends Phaser.Scene {
         for (let r = 0; r < g.owner.length; r++) if (g.owner[r] === n.id) { const R = g.map.regions[r]; const d = (R.cx - sx) ** 2 + (R.cy - sy) ** 2; if (d < bd) { bd = d; best = r; } }
         const R = g.map.regions[best];
         if (!lbl) {
-          lbl = this.add.text(0, 0, n.name, { fontFamily: 'Cairo, Tahoma, sans-serif', fontSize: '30px', color: '#ffffff', stroke: '#101418', strokeThickness: 6, rtl: true, fontStyle: '700' }).setOrigin(0.5).setDepth(50);
+          lbl = this.add.text(0, 0, n.name, { fontFamily: 'Cairo, Tahoma, sans-serif', fontSize: '30px', color: '#ffffff', stroke: '#14101c', strokeThickness: 6, rtl: true, fontStyle: '700' }).setOrigin(0.5).setDepth(61);
           this.labels.set(n.id, lbl);
         }
         lbl.setData('size', Math.max(0.5, Math.min(3.2, Math.sqrt(n.area) / 12)));
@@ -681,9 +801,8 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const lbl of this.labels.values()) {
       const s = (lbl.getData('size') as number) ?? 1;
-      const screen = Math.max(9, Math.min(26, s * 9 * z * 2.2));
-      lbl.setScale(screen / 30 / z).setVisible(show && lbl.visible !== false).setAlpha(this.lod === 'mid' ? 0.55 : 0.92);
-      if (!show) lbl.setVisible(false); else lbl.setVisible(true);
+      const screen = Math.max(9, Math.min(26, s * 9 * z * 4.4));
+      lbl.setScale(screen / 30 / z).setVisible(show).setAlpha(0.92);
     }
   }
 
@@ -704,4 +823,4 @@ export class WorldScene extends Phaser.Scene {
   }
 }
 
-export type { Army };
+export { DIRS };

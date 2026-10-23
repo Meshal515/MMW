@@ -21,8 +21,8 @@ export function nationColors(rng: Rng, n: number): number[] {
   const off = rng.next();
   for (let i = 1; i < n; i++) {
     const h = (off + i * 0.61803398875) % 1;
-    const s = 0.55 + ((i * 7) % 5) * 0.08;
-    const l = 0.42 + ((i * 3) % 4) * 0.07;
+    const s = 0.68 + ((i * 7) % 5) * 0.06;
+    const l = 0.46 + ((i * 3) % 4) * 0.05;
     out.push(hsl(h, s, l));
   }
   return out;

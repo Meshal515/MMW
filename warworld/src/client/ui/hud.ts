@@ -150,15 +150,15 @@ export class Hud {
       const mine = e.a === this.me || e.b === this.me;
       const friend = (e.a >= 0 && e.a !== this.me && g.allied(this.me, e.a)) || (e.b >= 0 && e.b !== this.me && g.allied(this.me, e.b));
       const global = ['nuke', 'win', 'start'].includes(e.kind) || (e.kind === 'elim' && g.time > 300);
-      if (!(mine || global || (friend && e.important))) continue;
+      if (!(mine || global || (friend && e.important)) || e.kind === 'request') continue;
       const bad = mine && (e.b === this.me && ['war', 'nuke', 'capital'].includes(e.kind));
       this.toast(e.text, bad ? 'bad' : e.kind === 'nuke' || e.kind === 'win' ? 'big' : '');
     }
     if (g.events.length < this.lastEvent) this.lastEvent = g.events.length;
-    for (const q of g.requests) if (q.to === this.me && !this.seenRequests.has(q.id)) {
-      this.seenRequests.add(q.id);
-      this.toast(`${g.nations[q.from].name}: طلب ${{ alliance: 'تحالف', nap: 'عدم اعتداء', transit: 'عبور', help: 'مساعدة' }[q.type]} — افتح التحالفات`, 'big');
-    }
+    // diplomatic requests are summarised in one toast instead of one per request
+    const fresh = g.requests.filter(q => q.to === this.me && !this.seenRequests.has(q.id));
+    for (const q of fresh) this.seenRequests.add(q.id);
+    if (fresh.length) this.toast(fresh.length === 1 ? `${g.nations[fresh[0].from].name} تطلب ${{ alliance: 'تحالفًا', nap: 'عدم اعتداء', transit: 'عبورًا', help: 'مساعدة' }[fresh[0].type]} — التحالفات` : `${fresh.length} طلبات دبلوماسية جديدة — التحالفات`, 'big');
   }
 
   toast(text: string, cls = '') {
@@ -504,8 +504,9 @@ export class Hud {
     for (const t of BUILDABLE) {
       const def = BUILDINGS[t];
       const err = g.buildError(this.me, r, t);
-      const afford = g.canAfford(this.nat, def.cost[0]);
-      h += `<div class="bitem"><img class="px bimg" src="${iconURL(t === 'city' ? 'flag' : t, hexColor(this.nat.color))}"><div class="grow"><div class="nm">${def.name}</div><div class="ds">${def.desc} • ${def.workers} عامل</div>${this.costHtml(def.cost[0])}${err ? `<div class="err">${err}</div>` : ''}</div>
+      const cost = g.buildCost(this.me, t);
+      const afford = g.canAfford(this.nat, cost);
+      h += `<div class="bitem"><img class="px bimg" src="${iconURL(t === 'city' ? 'flag' : t, hexColor(this.nat.color))}"><div class="grow"><div class="nm">${def.name}</div><div class="ds">${def.desc} • ${def.workers} عامل</div>${this.costHtml(cost)}${err ? `<div class="err">${err}</div>` : ''}</div>
         <button class="btn sm ${err || !afford ? 'off' : 'primary'}" ${err || !afford ? 'disabled' : ''} data-act="build" data-v="${t}">بناء</button></div>`;
     }
     return h;

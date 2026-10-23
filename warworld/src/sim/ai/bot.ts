@@ -242,8 +242,10 @@ export class Bot {
     if (bases.length && spend > 150 && g.rng.chance(0.35 + p.air * 0.6)) {
       const lvl2 = bases.filter(r => g.level(r, 'airbase') >= 2);
       const roll = g.rng.next();
-      if (lvl2.length) pay(roll < 0.35 ? 'fighter' : roll < 0.7 ? 'bomber' : 'heli', lvl2, 4);
-      else pay(roll < 0.85 ? 'heli' : 'scout', bases, 4);
+      const lvl3 = bases.filter(r => g.level(r, 'airbase') >= 3);
+      if (lvl3.length && me.gold > 3000) pay(roll < 0.3 ? 'f35' : roll < 0.55 ? 'su57' : roll < 0.75 ? 'b2' : 'ac130', lvl3, 3);
+      else if (lvl2.length) pay(roll < 0.4 ? 'f16' : roll < 0.65 ? 'b52' : roll < 0.8 ? 'ac130' : 'apache', lvl2, 4);
+      else pay(roll < 0.6 ? 'apache' : roll < 0.85 ? 'blackhawk' : 'drone', bases, 4);
     }
     const silos = g.nationBuildings(this.id, 'silo');
     if (silos.length && me.gold > 2200 && g.rng.chance(0.3 + p.nukes * this.skill)) {
@@ -326,7 +328,7 @@ export class Bot {
         // allies call for joint attacks
         if (g.nations.some(x => x.id !== this.id && g.allied(this.id, x.id) && g.jointTarget[x.id] === o)) s += 0.7 * p.loyalty;
         // gang up on the runaway leader
-        if (g.share(o) > 0.25) s += (g.share(o) - 0.2) * 4;
+        if (g.share(o) > 0.35) s += (g.share(o) - 0.3) * 3;
         if (o === g.nations.find(x => x.human)?.id) s += this.g.cfg.difficulty === 'easy' ? -0.4 : 0.1;
         if (g.time < 120 / (0.4 + p.aggression)) s -= 1.2;
         s += this.noise(1);
@@ -349,7 +351,8 @@ export class Bot {
       if (!g.canAttack(this.id, r)) continue;
       const est = estimateDefense(g, r);
       const R = g.map.regions[r];
-      const value = R.area + g.cityLevel(r) * 40 + (g.nations[o].capital === r ? 150 : 0) + g.buildings[r].length * 15;
+      // decapitation strikes end wars: capitals are worth far more than border land
+      const value = R.area + g.cityLevel(r) * 40 + (g.nations[o].capital === r ? 400 + 300 * this.skill : 0) + g.buildings[r].length * 15;
       cands.push({ r, est, s: value / (est + 10) + this.noise(1.5) });
     }
     cands.sort((a, b) => b.s - a.s);

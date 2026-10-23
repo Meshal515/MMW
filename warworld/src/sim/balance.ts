@@ -46,7 +46,7 @@ export const BUILDABLE: BuildingType[] = ['city', 'farm', 'lumber', 'mine', 'fac
 
 export type LandUnit = 'inf' | 'tank' | 'art';
 export type SeaUnit = 'transport' | 'patrol' | 'destroyer' | 'sub' | 'carrier';
-export type AirUnit = 'scout' | 'heli' | 'fighter' | 'bomber';
+export type AirUnit = 'drone' | 'apache' | 'blackhawk' | 'f16' | 'f35' | 'su57' | 'ac130' | 'b52' | 'b2';
 export type Weapon = 'atom' | 'hbomb' | 'mirv';
 export type UnitType = LandUnit | SeaUnit | AirUnit;
 
@@ -54,6 +54,11 @@ export interface UnitDef {
   name: string; desc: string; cost: Cost; time: number; at: BuildingType; minLevel?: number;
   atk: number; def: number; hp: number; speed: number; upkeep: number;
   range?: number; capacity?: number; hidden?: boolean; detects?: boolean;
+  aa?: number;        // air-to-air power (interception / escort)
+  guns?: number;      // extra damage against troops (cannons, door guns)
+  stealth?: number;   // share of interception it avoids
+  bomb?: number;      // multiplier against buildings
+  role?: string;      // short role shown in the UI
 }
 
 export const LAND: Record<LandUnit, UnitDef> = {
@@ -71,10 +76,15 @@ export const SEA: Record<SeaUnit, UnitDef> = {
 };
 
 export const AIR: Record<AirUnit, UnitDef> = {
-  scout: { name: 'هليكوبتر استطلاع', desc: 'يكشف الغواصات ويوجّه القصف', cost: { gold: 70, steel: 25 }, time: 5, at: 'airbase', atk: 1, def: 1, hp: 2, speed: 9, upkeep: 0.1, range: 30, detects: true },
-  heli: { name: 'هليكوبتر هجومية', desc: 'تفتك بالمدرعات والمشاة', cost: { gold: 140, steel: 50 }, time: 8, at: 'airbase', atk: 9, def: 2, hp: 4, speed: 8, upkeep: 0.25, range: 34 },
-  fighter: { name: 'مقاتلة', desc: 'تفرض السيطرة الجوية وتعترض', cost: { gold: 200, steel: 80 }, time: 10, at: 'airbase', minLevel: 2, atk: 6, def: 8, hp: 6, speed: 14, upkeep: 0.35, range: 60 },
-  bomber: { name: 'قاذفة', desc: 'تدمر المباني والتجمعات بعيدًا', cost: { gold: 340, steel: 140 }, time: 14, at: 'airbase', minLevel: 2, atk: 16, def: 3, hp: 8, speed: 10, upkeep: 0.5, range: 95 },
+  drone: { name: 'مسيّرة MQ-9', role: 'استطلاع وضربات خفيفة — تكشف الغواصات', desc: 'تحلق طويلًا وتكشف الغواصات وتضرب بصواريخ صغيرة', cost: { gold: 90, steel: 30 }, time: 5, at: 'airbase', atk: 3, def: 1, hp: 2, speed: 7, upkeep: 0.1, range: 75, detects: true, aa: 0, guns: 0, bomb: 0.5 },
+  apache: { name: 'أباتشي AH-64', role: 'هليكوبتر هجومية: صواريخ هيلفاير ورشاش 30مم', desc: 'تفتك بالمدرعات والمشاة', cost: { gold: 160, steel: 60 }, time: 8, at: 'airbase', atk: 9, def: 2, hp: 5, speed: 7, upkeep: 0.25, range: 32, aa: 1, guns: 5, bomb: 0.6 },
+  blackhawk: { name: 'بلاك هوك UH-60', role: 'هجوم ونقل: رشاشات جانبية', desc: 'مساندة قريبة ورشاشات على الجنود', cost: { gold: 120, steel: 40 }, time: 6, at: 'airbase', atk: 3, def: 2, hp: 4, speed: 8, upkeep: 0.2, range: 36, aa: 0, guns: 4, bomb: 0.2 },
+  f16: { name: 'F-16 فايتنغ فالكون', role: 'مقاتلة متعددة المهام', desc: 'صواريخ جو-جو وقنابل موجهة', cost: { gold: 210, steel: 85 }, time: 10, at: 'airbase', minLevel: 2, atk: 6, def: 6, hp: 6, speed: 14, upkeep: 0.35, range: 60, aa: 7, guns: 1, bomb: 0.9 },
+  f35: { name: 'F-35 لايتنينغ II', role: 'مقاتلة شبحية — تتجنب الدفاعات', desc: 'شبحية: نصف الاعتراضات تفشل', cost: { gold: 390, steel: 150 }, time: 16, at: 'airbase', minLevel: 3, atk: 9, def: 8, hp: 7, speed: 13, upkeep: 0.6, range: 72, aa: 9, guns: 1, stealth: 0.5, bomb: 1 },
+  su57: { name: 'Su-57 فيلون', role: 'تفوق جوي — أقوى اعتراض', desc: 'تسيطر على السماء وتسقط الطائرات', cost: { gold: 350, steel: 140 }, time: 15, at: 'airbase', minLevel: 3, atk: 6, def: 9, hp: 8, speed: 15, upkeep: 0.55, range: 66, aa: 12, guns: 1, stealth: 0.2, bomb: 0.7 },
+  ac130: { name: 'AC-130 غانشيب', role: 'إسناد ناري: مدافع جانبية مستمرة', desc: 'تدور فوق الهدف وتحصد المشاة', cost: { gold: 380, steel: 150 }, time: 16, at: 'airbase', minLevel: 2, atk: 8, def: 3, hp: 10, speed: 6, upkeep: 0.6, range: 55, aa: 0, guns: 14, bomb: 0.5 },
+  b52: { name: 'B-52 ستراتوفورتريس', role: 'قاذفة ثقيلة: قصف بساطي', desc: 'تدمر المباني والتجمعات بعيدًا', cost: { gold: 430, steel: 180 }, time: 18, at: 'airbase', minLevel: 2, atk: 22, def: 3, hp: 12, speed: 9, upkeep: 0.7, range: 120, aa: 0, guns: 0, bomb: 1.5 },
+  b2: { name: 'B-2 سبيريت', role: 'قاذفة شبحية بعيدة المدى', desc: 'تخترق الدفاعات وتضرب العمق', cost: { gold: 720, steel: 260 }, time: 24, at: 'airbase', minLevel: 3, atk: 26, def: 3, hp: 9, speed: 10, upkeep: 1, range: 145, aa: 0, guns: 0, stealth: 0.6, bomb: 1.6 },
 };
 
 export interface WeaponDef { name: string; desc: string; cost: Cost; time: number; siloLevel: number; nuclearLevel: number; range: number; radius: number; warheads: number; speed: number; intercept: number }
@@ -104,8 +114,8 @@ export const COMBAT = {
   artilleryBoost: 0.5,      // attack multiplier per artillery share
   airSupportBoost: 0.35,
   neutralPerTile: 1.6,      // neutral militia per tile
-  cityDefense: 0.25,        // per city level
-  capitalDefense: 0.6,
+  cityDefense: 0.15,        // per city level
+  capitalDefense: 0.35,
   expandGarrisonPerTile: 0.4,
 };
 

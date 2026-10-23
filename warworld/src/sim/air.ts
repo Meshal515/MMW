@@ -42,7 +42,7 @@ export function cmdAirStrike(g: Game, n: number, cmd: { base: number; carrier?: 
   }
   const from = groupPos(g, grp);
   const dist = Math.hypot(tgt.x - from.x, tgt.y - from.y);
-  const kinds: AirUnit[] = seaTarget ? ['scout', 'heli', 'fighter', 'bomber'] : ['heli', 'fighter', 'bomber'];
+  const kinds: AirUnit[] = AIR_UNITS.filter(k => seaTarget || k !== 'drone' || grp.planes.drone > 0);
   // only send the types that can actually reach the target
   const inRange = kinds.filter(k => (AIR[k].range ?? 30) >= dist);
   if (!inRange.length) return { ok: false, error: `الهدف خارج المدى (${Math.round(dist)}) — قرّب قاعدة أو استخدم حاملة طائرات` };
@@ -101,15 +101,19 @@ export function cmdRebase(g: Game, n: number, cmd: { base: number; carrier?: num
 
 function lose(p: AirCounts, frac: number) { let l = 0; for (const k of AIR_UNITS) { const d = p[k] * frac; p[k] -= d; l += d; } return l; }
 
+const sum = (p: AirCounts, f: (k: AirUnit) => number) => AIR_UNITS.reduce((t, k) => t + p[k] * f(k), 0);
+
 function resolveStrike(g: Game, s: Sortie) {
   const defender = s.targetRegion >= 0 ? g.owner[s.targetRegion] : -1;
-  // interception by enemy fighters in range and air-defence sites near the target
+  // interception: enemy air-superiority aircraft in range and air-defence sites near the target
   let defPow = 0;
   const interceptors: AirGroup[] = [];
   for (const a of g.airGroups.values()) {
-    if (a.owner === s.owner || a.planes.fighter < 0.5 || !g.atWar(s.owner, a.owner)) continue;
+    if (a.owner === s.owner || !g.atWar(s.owner, a.owner)) continue;
+    const aa = sum(a.planes, k => AIR[k].aa ?? 0);
+    if (aa < 1) continue;
     const p = groupPos(g, a);
-    if (Math.hypot(p.x - s.tx, p.y - s.ty) <= (AIR.fighter.range ?? 60)) { defPow += a.planes.fighter * AIR.fighter.atk; interceptors.push(a); }
+    if (Math.hypot(p.x - s.tx, p.y - s.ty) <= 60) { defPow += aa; interceptors.push(a); }
   }
   for (let r = 0; r < g.owner.length; r++) {
     const o = g.owner[r];
@@ -117,21 +121,24 @@ function resolveStrike(g: Game, s: Sortie) {
     const lvl = g.level(r, 'airdefense'); if (!lvl) continue;
     if (Math.hypot(g.map.regions[r].cx - s.tx, g.map.regions[r].cy - s.ty) <= 10) defPow += lvl * 14;
   }
-  const hp = AIR_UNITS.reduce((t, k) => t + s.planes[k] * AIR[k].hp, 0);
-  const escort = s.planes.fighter * AIR.fighter.atk;
+  const escort = sum(s.planes, k => AIR[k].aa ?? 0);
   if (defPow > 0) {
-    const lost = lose(s.planes, Math.min(0.85, defPow * 0.35 / Math.max(1, hp)));
+    // stealth aircraft dodge part of the interception, escorts absorb part of it
+    const hp = sum(s.planes, k => AIR[k].hp * (1 + (AIR[k].stealth ?? 0) * 2));
+    const frac = Math.min(0.85, defPow * 0.35 / Math.max(1, hp + escort * 0.5));
+    let lost = 0;
+    for (const k of AIR_UNITS) { const d = s.planes[k] * frac * (1 - (AIR[k].stealth ?? 0)); s.planes[k] -= d; lost += d; }
     g.nations[s.owner].stats.deaths += lost;
-    if (escort > 0) for (const a of interceptors) { const l = a.planes.fighter * Math.min(0.8, escort * 0.3 / Math.max(1, defPow)); a.planes.fighter -= l; g.nations[s.owner].stats.kills += l; }
+    if (escort > 0) for (const a of interceptors) for (const k of AIR_UNITS) if ((AIR[k].aa ?? 0) > 0) { const l = a.planes[k] * Math.min(0.8, escort * 0.3 / Math.max(1, defPow)); a.planes[k] -= l; g.nations[s.owner].stats.kills += l; }
     g.fx.push({ k: 'intercept', x: s.tx, y: s.ty });
   }
-  const power = s.planes.heli * AIR.heli.atk + s.planes.bomber * AIR.bomber.atk + s.planes.fighter * 2 + s.planes.scout * 0.5;
+  const power = sum(s.planes, k => AIR[k].atk);
   g.fx.push({ k: 'explosion', x: s.tx, y: s.ty, r: 1.2 + Math.min(2, power / 60), nuke: false });
   if (s.targetRegion >= 0) {
     const r = s.targetRegion;
     g.airSupport[r] = 15;
     if (defender < 0) { g.neutral[r] = Math.max(0, g.neutral[r] - power * 1.2); return; }
-    const unitDmg = s.planes.heli * AIR.heli.atk * 1.4 + s.planes.bomber * AIR.bomber.atk * 0.7 + s.planes.fighter * 2;
+    const unitDmg = sum(s.planes, k => AIR[k].atk * 0.8 + (AIR[k].guns ?? 0) * 1.2);
     const hpG = g.inf[r] + g.tank[r] * 4 + g.art[r] * 2;
     if (hpG > 0) {
       const f = Math.min(0.7, unitDmg / hpG);
@@ -139,10 +146,9 @@ function resolveStrike(g: Game, s: Sortie) {
       g.inf[r] *= 1 - f; g.tank[r] *= 1 - f; g.art[r] *= 1 - f;
       g.nations[s.owner].stats.kills += killed; g.nations[defender].stats.deaths += killed;
     }
-    const bDmg = s.planes.bomber * AIR.bomber.atk * 1.1 + s.planes.heli * 1.5;
-    damageBuildings(g, r, bDmg);
+    damageBuildings(g, r, sum(s.planes, k => AIR[k].atk * (AIR[k].bomb ?? 0.5)));
   } else if (s.targetSea >= 0) {
-    const scouts = s.planes.scout > 0;
+    const scouts = s.planes.drone > 0;
     for (const f of g.fleets.values()) {
       if (f.sea !== s.targetSea || !g.atWar(s.owner, f.owner)) continue;
       let shp = 0; for (const k of SEA_UNITS) if (k !== 'sub' || scouts) shp += f.ships[k] * 10;

@@ -138,7 +138,7 @@ export function generateEarth(seed: number): TerrainResult {
       else if (FORESTS.some(b => inBox(lon, lat, b, (n - 0.5) * 6))) t = n2 > 0.72 ? T.Plains : T.Forest;
       else if (n2 > 0.62) t = T.Forest;
       else if (n2 < 0.24) t = T.Hills;
-      if (alat > 58 && t === T.Plains && n > 0.55) t = T.Snow;
+      if (alat > 63 && t === T.Plains && n > 0.55) t = T.Snow;
     }
     terrain[i] = t;
   }

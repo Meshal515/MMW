@@ -97,17 +97,19 @@ function start(s: Settings) {
       humans: [{ name: s.name }], bots: s.bots, difficulty: s.difficulty, mode: s.mode, teams: s.teams,
     });
     phaser = new Phaser.Game({
-      type: Phaser.AUTO, parent: 'game', backgroundColor: '#162670', pixelArt: true, banner: false,
+      type: Phaser.AUTO, parent: 'game', backgroundColor: '#1c2f72', pixelArt: true, roundPixels: true, banner: false,
       scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
       input: { activePointers: 3 }, disableContextMenu: true, fps: { target: 60 },
     });
     phaser.scene.add('world', WorldScene, true, { sim, human: 0 });
     const boot = () => {
       const scene = phaser!.scene.getScene('world') as WorldScene | null;
-      if (!scene || !scene.sys.isActive() || !(scene as any).overlay) { requestAnimationFrame(boot); return; }
-      hud = new Hud(sim, scene, 0, () => { teardown(); showMenu(); });
-      loading.remove();
-      (window as any).__ww = { sim, scene, hud };
+      if (!scene || !scene.sys.isActive() || !scene.ground) { requestAnimationFrame(boot); return; }
+      scene.prepare(f => { loading.textContent = `جاري رسم العالم... ${Math.round(f * 100)}%`; }).then(() => {
+        hud = new Hud(sim, scene, 0, () => { teardown(); showMenu(); });
+        loading.remove();
+        (window as any).__ww = { sim, scene, hud };
+      });
     };
     boot();
   }, 30);

@@ -125,10 +125,10 @@ export interface CommandResult { ok: boolean; error?: string; info?: string }
 
 export const REL = { peace: 0, war: 1, nap: 2, ally: 3 } as const;
 
-export function emptyAir(): AirCounts { return { scout: 0, heli: 0, fighter: 0, bomber: 0 }; }
+export function emptyAir(): AirCounts { return { drone: 0, apache: 0, blackhawk: 0, f16: 0, f35: 0, su57: 0, ac130: 0, b52: 0, b2: 0 }; }
 export function emptyShips(): ShipCounts { return { transport: 0, patrol: 0, destroyer: 0, sub: 0, carrier: 0 }; }
-export const airTotal = (a: AirCounts) => a.scout + a.heli + a.fighter + a.bomber;
+export const AIR_UNITS: AirUnit[] = ['drone', 'apache', 'blackhawk', 'f16', 'f35', 'su57', 'ac130', 'b52', 'b2'];
+export const airTotal = (a: AirCounts) => { let t = 0; for (const k of AIR_UNITS) t += a[k]; return t; };
 export const shipTotal = (s: ShipCounts) => s.transport + s.patrol + s.destroyer + s.sub + s.carrier;
 export const LAND_UNITS: LandUnit[] = ['inf', 'tank', 'art'];
 export const SEA_UNITS: SeaUnit[] = ['transport', 'patrol', 'destroyer', 'sub', 'carrier'];
-export const AIR_UNITS: AirUnit[] = ['scout', 'heli', 'fighter', 'bomber'];

@@ -7,7 +7,7 @@ import { nationColors, nationNames } from './names';
 import { Rng } from './rng';
 import {
   AirGroup, Army, Battle, Building, Command, CommandResult, DiploRequest, Fleet, Fx, GameConfig, GameEvent, Missile,
-  Nation, Operation, REL, Sortie, emptyAir,
+  Nation, Operation, REL, Sortie, emptyAir, airTotal,
 } from './state';
 import { rollPersonality } from './ai/personality';
 import { economyTick } from './economy';
@@ -360,15 +360,32 @@ export class Game {
     if (this.buildings[region].length >= R.slots) return `المنطقة ممتلئة (${R.slots} مبانٍ)`;
     if (def.canBuild && !def.canBuild(R)) return def.hint ?? 'غير مناسب هنا';
     if (def.needs && !this.cityLevel(region)) return def.hint ?? 'يحتاج مدينة';
+    if (type === 'city') {
+      // cities must be spread out: none within two regions of another city or the capital
+      const near = new Set([region]);
+      for (const a of R.neighbors) { near.add(a); for (const b of this.map.regions[a].neighbors) near.add(b); }
+      for (const r of near) if (this.owner[r] === n && (this.building(r, 'city') || this.building(r, 'capital'))) return 'قريبة جدًا من مدينة أخرى — ابنِ أبعد';
+    }
     if (this.battles.has(region)) return 'المنطقة تحت القتال';
     return null;
+  }
+
+  /** Founding a new city gets more expensive with every city the nation already has (up to 6×). */
+  buildCost(n: number, type: BuildingType): Cost {
+    const base = BUILDINGS[type].cost[0];
+    if (type !== 'city') return base;
+    let cities = 0;
+    for (let r = 0; r < this.owner.length; r++) if (this.owner[r] === n && this.building(r, 'city')) cities++;
+    const k = Math.min(6, 1 + cities);
+    return Object.fromEntries(Object.entries(base).map(([r, v]) => [r, Math.round((v as number) * k)])) as Cost;
   }
 
   cmdBuild(n: number, region: number, type: BuildingType): CommandResult {
     const err = this.buildError(n, region, type); if (err) return { ok: false, error: err };
     const nat = this.nations[n], def = BUILDINGS[type];
-    if (!this.canAfford(nat, def.cost[0])) return { ok: false, error: 'الموارد لا تكفي' };
-    this.pay(nat, def.cost[0]);
+    const cost = this.buildCost(n, type);
+    if (!this.canAfford(nat, cost)) return { ok: false, error: 'الموارد لا تكفي' };
+    this.pay(nat, cost);
     this.buildings[region].push({ type, level: 0, build: def.time[0], damage: 0, queue: [] });
     this.nbTick = -1;
     nat.stats.built++;
@@ -418,7 +435,7 @@ export class Game {
     if (!b || b.level < 1) return `يحتاج ${BUILDINGS[def.at].name}`;
     if (b.level < (def.minLevel ?? 1)) return `يحتاج ${BUILDINGS[def.at].name} مستوى ${def.minLevel}`;
     if (def.at === 'airbase') {
-      const here = [...this.airGroups.values()].filter(g => g.base === region && g.carrier < 0).reduce((s, g) => s + g.planes.scout + g.planes.heli + g.planes.fighter + g.planes.bomber, 0);
+      const here = [...this.airGroups.values()].filter(g => g.base === region && g.carrier < 0).reduce((s, g) => s + airTotal(g.planes), 0);
       const queued = b.queue.reduce((s, q) => s + q.left, 0);
       if (here + queued >= b.level * 12) return 'القاعدة ممتلئة — رقّها أو انقل الطائرات';
     }

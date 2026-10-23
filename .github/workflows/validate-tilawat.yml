@@ -1,0 +1,99 @@
+name: Validate Tilawat
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tilawat/**"
+      - ".github/workflows/validate-tilawat.yml"
+  pull_request:
+    paths:
+      - "tilawat/**"
+      - ".github/workflows/validate-tilawat.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject known runtime and legacy patch patterns
+        run: |
+          set -euo pipefail
+          matches="$(grep -RFn --include='*.js' 'return$$' tilawat || true)"
+          if [ -n "$matches" ]; then
+            echo "$matches"
+            echo 'Found accidental return$$ token that becomes a runtime ReferenceError.'
+            exit 1
+          fi
+          test ! -e tilawat/js/codex-ui-recovery.js
+          test ! -e tilawat/codex-ui-recovery.css
+          if grep -Fq "getElementById('.tabbar')" tilawat/js/v2.js tilawat/js/classic-ui.js; then
+            echo 'Legacy tabbar selector bridge returned.'
+            exit 1
+          fi
+          if grep -Fq 'tilawatV28EditBackdrop' tilawat/js/interaction-v28.js; then
+            echo 'Duplicate v28 edit form returned; editing must use the primary form.'
+            exit 1
+          fi
+      - name: Check JavaScript syntax
+        run: |
+          set -euo pipefail
+          for f in tilawat/sw.js tilawat/js/*.js tilawat/js/catalog/*.js tilawat/functions/api/*.js tilawat/tests/*.mjs tilawat/tools/*.mjs tilawat/worker/src/*.js; do
+            [ -e "$f" ] && node --check "$f"
+          done
+      - name: Run Tilawat behavior tests
+        working-directory: tilawat
+        run: npm test
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@latest
+          npx playwright install --with-deps chromium
+      - name: Run Tilawat browser regressions and product audit
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/tilawat-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5; do
+            if curl -fsS http://127.0.0.1:4173/tilawat/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node tilawat/tests/browser-regression.mjs
+          node tilawat/tests/mini-swipe-regression.mjs
+          node tilawat/tests/multipart-regression.mjs
+          node tilawat/tests/ux-stability-regression.mjs
+          node tilawat/tests/playback-continuity-regression.mjs
+          node tilawat/tests/visual-audit.mjs
+          node tilawat/tests/quran-regression.mjs
+      - name: Upload Tilawat visual QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tilawat-visual-qa
+          path: tilawat/test-artifacts
+          if-no-files-found: ignore
+      - name: Check HTML, manifest and required files
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import json
+          HTMLParser().feed(Path('tilawat/index.html').read_text())
+          json.loads(Path('tilawat/manifest.webmanifest').read_text())
+          required=['tilawat/sw.js','tilawat/assets/logo.svg','tilawat/assets/icon-192.png','tilawat/assets/icon-512.png',
+                    'tilawat/assets/fonts/plex-ar-arabic-400.woff2','tilawat/assets/fonts/amiri-quran.woff2',
+                    'tilawat/js/v2.js','tilawat/js/quran.js','tilawat/quran.css','tilawat/data/quran/index.json',
+                    'tilawat/data/quran/001.json','tilawat/data/quran/114.json','tilawat/assets/covers/surah/001.jpg',
+                    'tilawat/assets/covers/surah/114.jpg','tilawat/assets/covers/dossari-5.jpg',
+                    'tilawat/functions/api/resolve-source.js','tilawat/functions/api/yaldosry-audio.js','tilawat/package.json']
+          missing=[f for f in required if not Path(f).exists()]
+          assert not missing, f'Missing: {missing}'
+          for n in range(1,115):
+              p=Path(f'tilawat/data/quran/{n:03d}.json'); d=json.loads(p.read_text())
+              assert d['n']==n and d['ayahs'], p
+              assert Path(f'tilawat/assets/covers/surah/{n:03d}.jpg').exists(), n
+          print('Tilawat validation OK')
+          PY

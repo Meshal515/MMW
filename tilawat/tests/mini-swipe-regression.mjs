@@ -73,7 +73,7 @@ try{
   if(mediaArtwork!=='unsupported'){
     assert.ok(mediaArtwork,'media session should receive artwork');
     assert.equal(mediaArtwork.startsWith('blob:'),false,`media artwork must be OS-readable, got ${mediaArtwork}`);
-    assert.match(mediaArtwork,/\/assets\/covers\/dossari-[1-4]\.jpg$/,`local Blob cover should fall back to a recitation photo, got ${mediaArtwork}`);
+    assert.match(mediaArtwork,/\/assets\/covers\/(dossari-[1-5]|surah\/\d{3})\.jpg$/,`local Blob cover should fall back to a recitation photo, got ${mediaArtwork}`);
   }
 
   const mini=page.locator('#miniPlayer');

@@ -1,6 +1,6 @@
-@font-face{font-family:PlexArabic;src:url('../assets/fonts/plex-ar-arabic-400.woff2') format('woff2');font-weight:400;font-display:swap}
-@font-face{font-family:PlexArabic;src:url('../assets/fonts/plex-ar-arabic-600.woff2') format('woff2');font-weight:600;font-display:swap}
-@font-face{font-family:PlexArabic;src:url('../assets/fonts/plex-ar-arabic-700.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:PlexArabic;src:url('./assets/fonts/plex-ar-arabic-400.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:PlexArabic;src:url('./assets/fonts/plex-ar-arabic-600.woff2') format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:PlexArabic;src:url('./assets/fonts/plex-ar-arabic-700.woff2') format('woff2');font-weight:700;font-display:swap}
 :root{
   --bg:#121212;--bg-elev:#181818;--surface:#202020;--surface2:#282828;--surface3:#333;
   --ink:#fff;--muted:#b3b3b3;--faint:#777;--line:rgba(255,255,255,.1);
@@ -71,7 +71,7 @@ svg{fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-
 .tabbar{position:fixed;z-index:60;bottom:0;left:0;right:0;height:calc(var(--tab) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 80%,transparent),var(--bg) 27%);display:grid;grid-template-columns:repeat(3,1fr)}
 .tab{border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px}.tab[aria-current='page']{color:var(--ink)}.tab svg{width:24px;height:24px}.tab[aria-current='page'] svg{stroke-width:2.25}
 .search-head{padding:10px 0 17px}.search-head .eyebrow{display:none}.page-title{font-size:30px;margin:0 0 16px;letter-spacing:-.035em}
-.searchbox{display:flex;align-items:center;gap:9px;background:var(--ink);color:var(--bg);border-radius:7px;padding:0 13px;height:50px}
+.searchbox{display:flex;align-items:center;gap:9px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:0 14px;height:50px}.searchbox:focus-within{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
 .searchbox input{border:0;outline:0;background:transparent;flex:1;min-width:0;font-size:15px;color:inherit}.searchbox input::placeholder{color:color-mix(in srgb,currentColor 68%,transparent)}
 .searchbox svg{width:21px;stroke:currentColor}.search-results{display:grid;gap:24px}.result-list{display:grid;gap:2px}
 .result-row{border:0;background:transparent;border-radius:7px;padding:7px;display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;text-align:right}.result-row:hover{background:var(--surface)}

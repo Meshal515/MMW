@@ -1,0 +1,43 @@
+name: Validate Local
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "local/**"
+      - ".github/workflows/validate-local.yml"
+  pull_request:
+    paths:
+      - "local/**"
+      - ".github/workflows/validate-local.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          set -euo pipefail
+          for f in app.js sw.js js/*.js; do node --check "$f"; done
+      - name: Check HTML, manifest and required files
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import json
+          for f in ['index.html','runner.html']:
+              HTMLParser().feed(Path(f).read_text())
+          json.loads(Path('manifest.webmanifest').read_text())
+          required=['styles.css','manifest.webmanifest','assets/logo.svg','sw.js','_headers',
+                    'assets/fonts/plex-ar-arabic-400.woff2','assets/icon-192.png','assets/icon-512.png']
+          missing=[f for f in required if not Path(f).exists()]
+          assert not missing, f'Missing: {missing}'
+          print('Local validation OK')
+          PY

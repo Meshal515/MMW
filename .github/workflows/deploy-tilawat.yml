@@ -1,0 +1,171 @@
+name: Deploy Tilawat to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tilawat/**"
+      - "!tilawat/worker/**"
+      - "!tilawat/tests/**"
+      - ".github/workflows/deploy-tilawat.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: tilawat-pages-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          RESPONSE="$(mktemp)"
+          STATUS="$(curl --retry 3 --retry-all-errors -sS -o "$RESPONSE" -w "%{http_code}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects")"
+          if [ "$STATUS" != "200" ] || ! jq -e '.success == true' "$RESPONSE" >/dev/null; then
+            cat "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Build standalone Tilawat app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist-tilawat functions
+          mkdir -p dist-tilawat
+          cp -R tilawat/. dist-tilawat/
+
+          if [ -d tilawat/functions ]; then
+            cp -R tilawat/functions ./functions
+            rm -rf dist-tilawat/functions
+          fi
+          rm -rf dist-tilawat/worker dist-tilawat/tests dist-tilawat/tools dist-tilawat/package.json dist-tilawat/CODEX-HANDOFF.md dist-tilawat/README.md
+
+          jq '.id = "/" | .start_url = "./" | .scope = "./"' \
+            dist-tilawat/manifest.webmanifest > dist-tilawat/manifest.tmp
+          mv dist-tilawat/manifest.tmp dist-tilawat/manifest.webmanifest
+
+          cat > dist-tilawat/_headers <<'EOF'
+          /sw.js
+            Cache-Control: no-cache, no-store, must-revalidate
+
+          /*
+            X-Content-Type-Options: nosniff
+            Referrer-Policy: strict-origin-when-cross-origin
+          EOF
+
+      - name: Ensure standalone Tilawat Pages project exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
+          LIST="$(mktemp)"
+          curl --retry 3 --retry-all-errors -fsS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$API" > "$LIST"
+
+          EXISTING="$(jq -r '.result[]? | select(.name == "tilawat" or .name == "tilawat-mmw" or .name == "tilawat-1367603013") | .name' "$LIST" | head -n1)"
+          if [ -n "$EXISTING" ]; then
+            PROJECT_NAME="$EXISTING"
+          else
+            PROJECT_NAME=""
+            for CANDIDATE in tilawat tilawat-mmw tilawat-1367603013; do
+              BODY="$(mktemp)"
+              CODE="$(curl --retry 2 --retry-all-errors -sS -o "$BODY" -w "%{http_code}" \
+                -X POST \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "{\"name\":\"${CANDIDATE}\",\"production_branch\":\"main\"}" \
+                "$API")"
+              if [ "$CODE" = "200" ] && jq -e '.success == true' "$BODY" >/dev/null; then
+                PROJECT_NAME="$CANDIDATE"
+                break
+              fi
+              sleep 2
+            done
+          fi
+
+          if [ -z "$PROJECT_NAME" ]; then
+            echo "Could not create a dedicated Tilawat Pages project."
+            exit 1
+          fi
+
+          echo "TILAWAT_PROJECT=${PROJECT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Deploy standalone Tilawat
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deploy dist-tilawat \
+            --project-name="${TILAWAT_PROJECT}" \
+            --branch=main \
+            --commit-dirty=true | tee /tmp/tilawat-deploy.log
+
+      - name: Resolve and verify Tilawat production URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_JSON="$(mktemp)"
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${TILAWAT_PROJECT}"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$API" > "$PROJECT_JSON" \
+               && jq -e '.success == true and .result.latest_deployment != null' "$PROJECT_JSON" >/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+
+          jq -e '.success == true and .result.latest_deployment != null' "$PROJECT_JSON" >/dev/null
+          HOST="$(jq -r '.result.subdomain // empty' "$PROJECT_JSON")"
+          if [ -z "$HOST" ]; then HOST="${TILAWAT_PROJECT}.pages.dev"; fi
+          URL="https://${HOST}"
+          RESOLVER_URL="$URL/api/resolve-source?url=https%3A%2F%2Fyaldosry.com%2Ftaraweeh%2F2841"
+
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            PAGE="$(mktemp)"
+            SOURCE_JSON="$(mktemp)"
+            PAGE_OK=0
+            RESOLVER_OK=0
+            if curl -fsS --max-time 20 -o "$PAGE" "$URL/" && grep -q '<title>تلاوات</title>' "$PAGE"; then
+              PAGE_OK=1
+            fi
+            if [ "$PAGE_OK" = "1" ] \
+               && curl -fsS --max-time 25 "$RESOLVER_URL" > "$SOURCE_JSON" \
+               && jq -e '.ok == true and (.audioUrl | type == "string") and (.audioUrl | length > 5)' "$SOURCE_JSON" >/dev/null 2>&1; then
+              RESOLVER_OK=1
+            fi
+            if [ "$RESOLVER_OK" = "1" ]; then
+              AUDIO_PATH="$(jq -r '.audioUrl' "$SOURCE_JSON")"
+              AUDIO_SAMPLE="$(mktemp)"
+              AUDIO_CODE="$(curl --retry 2 --retry-all-errors -sS --max-time 25 -r 0-1023 -o "$AUDIO_SAMPLE" -w "%{http_code}" "$URL$AUDIO_PATH" || true)"
+              if { [ "$AUDIO_CODE" = "200" ] || [ "$AUDIO_CODE" = "206" ]; } && [ -s "$AUDIO_SAMPLE" ]; then
+                echo "TILAWAT_HOST=${HOST}" >> "$GITHUB_ENV"
+                echo "TILAWAT_URL=${URL}" >> "$GITHUB_ENV"
+                echo "Tilawat published and verified: ${URL}"
+                echo "Yaldosry resolver and range audio proxy verified."
+                exit 0
+              fi
+              echo "Yaldosry audio proxy not ready yet (HTTP ${AUDIO_CODE:-none}); retrying propagation."
+            else
+              echo "Tilawat page/functions not ready on canonical host yet; retrying propagation."
+            fi
+            sleep 6
+          done
+          echo "Tilawat production URL or resolver did not become ready: ${URL}"
+          exit 1

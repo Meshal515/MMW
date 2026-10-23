@@ -11,7 +11,7 @@ export type Cost = Partial<Record<Res, number>>;
 
 export type BuildingType =
   | 'capital' | 'city' | 'farm' | 'lumber' | 'mine' | 'factory' | 'port' | 'barracks'
-  | 'hospital' | 'market' | 'bank' | 'power' | 'airbase' | 'silo' | 'nuclear' | 'airdefense';
+  | 'hospital' | 'market' | 'bank' | 'power' | 'fort' | 'airbase' | 'silo' | 'nuclear' | 'airdefense';
 
 export interface BuildingDef {
   name: string;
@@ -40,13 +40,32 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   market: { name: 'سوق تجاري', desc: 'يزيد دخل الذهب — يكبر مع مستوى المدينة', cost: [{ gold: 220, wood: 140 }, { gold: 520, wood: 260, steel: 40 }, { gold: 1100, wood: 420, steel: 140 }], time: [10, 16, 24], workers: 180, maxLevel: 3, upkeep: 0.15, needs: 'city', hint: 'السوق يحتاج مدينة في المنطقة', district: true },
   bank: { name: 'بنك مركزي', desc: 'يسرّع كل دخل الذهب في دولتك بنسبة مئوية', cost: [{ gold: 600, wood: 120, steel: 120 }, { gold: 1400, wood: 240, steel: 300 }, { gold: 3000, wood: 400, steel: 650 }], time: [16, 26, 38], workers: 120, maxLevel: 3, upkeep: 0.3, needs: 'city', hint: 'البنك يحتاج مدينة في المنطقة', district: true },
   power: { name: 'محطة كهرباء', desc: 'تزيد إنتاج المصانع والأسواق والموانئ في منطقتها', cost: [{ gold: 380, wood: 120, steel: 160 }, { gold: 850, wood: 220, steel: 360 }, { gold: 1800, wood: 380, steel: 760 }], time: [14, 22, 32], workers: 140, maxLevel: 3, upkeep: 0.25, district: true },
+  fort: { name: 'دفاع حدودي', desc: 'قوة ثابتة على الحدود: مدرعات وجنود وتحصينات تقاتل تلقائيًا ولا تتحرك — تُدمَّر إذا هُزمت', cost: [{ gold: 50, wood: 40, steel: 20 }, { gold: 110, wood: 60, steel: 60 }, { gold: 240, wood: 90, steel: 140 }], time: [10, 16, 24], workers: 60, maxLevel: 3, upkeep: 0.25, hint: 'الدفاع الحدودي يُبنى في منطقة على الحدود' },
   airbase: { name: 'قاعدة جوية', desc: 'تصنع وتؤوي الطائرات والهليكوبترات', cost: [{ gold: 520, wood: 220, steel: 220 }, { gold: 1100, wood: 350, steel: 450 }, { gold: 2200, wood: 500, steel: 900 }], time: [18, 26, 36], workers: 300, maxLevel: 3, upkeep: 0.5, canBuild: r => r.terrain !== T.Mountain, hint: 'لا مدرج على الجبال' },
   silo: { name: 'منصة صواريخ', desc: 'تجهز وتطلق الأسلحة الاستراتيجية', cost: [{ gold: 900, wood: 200, steel: 450 }, { gold: 2200, wood: 400, steel: 1000 }], time: [24, 40], workers: 220, maxLevel: 2, upkeep: 0.8 },
   nuclear: { name: 'مفاعل نووي', desc: 'تخصيب يتيح القنابل الذرية ثم الهيدروجينية', cost: [{ gold: 1600, wood: 300, steel: 650 }, { gold: 3600, wood: 600, steel: 1400 }], time: [30, 50], workers: 420, maxLevel: 2, upkeep: 1.2 },
   airdefense: { name: 'دفاع جوي', desc: 'يعترض الصواريخ والطائرات المعادية', cost: [{ gold: 420, wood: 100, steel: 220 }, { gold: 900, wood: 200, steel: 450 }, { gold: 1800, wood: 300, steel: 900 }], time: [12, 18, 26], workers: 110, maxLevel: 3, upkeep: 0.4 },
 };
 
-export const BUILDABLE: BuildingType[] = ['city', 'farm', 'lumber', 'mine', 'factory', 'port', 'barracks', 'hospital', 'market', 'bank', 'power', 'airbase', 'silo', 'nuclear', 'airdefense'];
+export const BUILDABLE: BuildingType[] = ['city', 'farm', 'lumber', 'mine', 'factory', 'port', 'barracks', 'hospital', 'market', 'bank', 'power', 'fort', 'airbase', 'silo', 'nuclear', 'airdefense'];
+
+// ---------------- border defense (fort): a fixed garrison, not a damage multiplier ----------------
+/**
+ * A fort is a real force: its soldiers and armour fight like any garrison, dug in behind a bunker,
+ * trenches and tank obstacles. Cover is why they are harder to kill (entrenchment), the bunker soaks
+ * hits until it is breached, and the region cannot fall while the fort still stands.
+ */
+export const FORT = {
+  inf: (L: number) => 90 * L,
+  tank: (L: number) => 4 * L,
+  bunker: (L: number) => 60 + 70 * L,   // structure hit points (absorbs part of the incoming fire)
+  entrench: 1.5,                         // dug-in defenders: defence ×1.5 while the bunker stands
+  bunkerShare: 0.35,                     // share of incoming fire the bunker takes while standing
+  refill: 0.03,                          // share of full strength restored per second out of combat
+  extraCost: 25,                         // each extra fort costs this much more gold
+};
+/** UI shows gold in thousands so prices read like a real treasury (50 → 50,000). */
+export const GOLD_DISPLAY = 1000;
 
 // ---------------- cities: levels 1..50 ----------------
 export const MAX_CITY_LEVEL = 50;
@@ -112,9 +131,9 @@ export const AIR: Record<AirUnit, UnitDef> = {
   drone: { name: 'مسيّرة MQ-9', role: 'استطلاع وضربات خفيفة — تكشف الغواصات', desc: 'تحلق طويلًا وتكشف الغواصات وتضرب بصواريخ صغيرة', cost: { gold: 90, steel: 30 }, time: 5, at: 'airbase', atk: 3, def: 1, hp: 2, speed: 7, upkeep: 0.1, range: 75, detects: true, aa: 0, guns: 0, bomb: 0.5 },
   apache: { name: 'أباتشي AH-64', role: 'هليكوبتر هجومية: صواريخ هيلفاير ورشاش 30مم', desc: 'تفتك بالمدرعات والمشاة', cost: { gold: 160, steel: 60 }, time: 8, at: 'airbase', atk: 9, def: 2, hp: 5, speed: 7, upkeep: 0.25, range: 32, aa: 1, guns: 5, bomb: 0.6 },
   blackhawk: { name: 'بلاك هوك UH-60', role: 'هجوم ونقل: رشاشات جانبية', desc: 'مساندة قريبة ورشاشات على الجنود', cost: { gold: 120, steel: 40 }, time: 6, at: 'airbase', atk: 3, def: 2, hp: 4, speed: 8, upkeep: 0.2, range: 36, aa: 0, guns: 4, bomb: 0.2 },
-  f16: { name: 'F-16 فايتنغ فالكون', role: 'مقاتلة متعددة المهام', desc: 'صواريخ جو-جو وقنابل موجهة', cost: { gold: 210, steel: 85 }, time: 10, at: 'airbase', minLevel: 2, atk: 6, def: 6, hp: 6, speed: 14, upkeep: 0.35, range: 60, aa: 7, guns: 1, bomb: 0.9 },
-  f35: { name: 'F-35 لايتنينغ II', role: 'مقاتلة شبحية — تتجنب الدفاعات', desc: 'شبحية: نصف الاعتراضات تفشل', cost: { gold: 390, steel: 150 }, time: 16, at: 'airbase', minLevel: 3, atk: 9, def: 8, hp: 7, speed: 13, upkeep: 0.6, range: 72, aa: 9, guns: 1, stealth: 0.5, bomb: 1 },
-  su57: { name: 'Su-57 فيلون', role: 'تفوق جوي — أقوى اعتراض', desc: 'تسيطر على السماء وتسقط الطائرات', cost: { gold: 350, steel: 140 }, time: 15, at: 'airbase', minLevel: 3, atk: 6, def: 9, hp: 8, speed: 15, upkeep: 0.55, range: 66, aa: 12, guns: 1, stealth: 0.2, bomb: 0.7 },
+  f16: { name: 'F-16 فايتنغ فالكون', role: 'مقاتلة متعددة المهام', desc: 'صواريخ جو-جو وقنابل موجهة', cost: { gold: 210, steel: 85 }, time: 10, at: 'airbase', minLevel: 2, atk: 6, def: 6, hp: 6, speed: 18, upkeep: 0.35, range: 60, aa: 7, guns: 1, bomb: 0.9 },
+  f35: { name: 'F-35 لايتنينغ II', role: 'مقاتلة شبحية — تتجنب الدفاعات', desc: 'شبحية: نصف الاعتراضات تفشل', cost: { gold: 390, steel: 150 }, time: 16, at: 'airbase', minLevel: 3, atk: 9, def: 8, hp: 7, speed: 28, upkeep: 0.6, range: 72, aa: 9, guns: 1, stealth: 0.5, bomb: 1 },
+  su57: { name: 'Su-57 فيلون', role: 'تفوق جوي — أقوى اعتراض', desc: 'تسيطر على السماء وتسقط الطائرات', cost: { gold: 350, steel: 140 }, time: 15, at: 'airbase', minLevel: 3, atk: 6, def: 9, hp: 8, speed: 22, upkeep: 0.55, range: 66, aa: 12, guns: 1, stealth: 0.2, bomb: 0.7 },
   ac130: { name: 'AC-130 غانشيب', role: 'إسناد ناري: مدافع جانبية مستمرة', desc: 'تدور فوق الهدف وتحصد المشاة', cost: { gold: 380, steel: 150 }, time: 16, at: 'airbase', minLevel: 2, atk: 8, def: 3, hp: 10, speed: 6, upkeep: 0.6, range: 55, aa: 0, guns: 14, bomb: 0.5 },
   b52: { name: 'B-52 ستراتوفورتريس', role: 'قاذفة ثقيلة: قصف بساطي', desc: 'تدمر المباني والتجمعات بعيدًا', cost: { gold: 430, steel: 180 }, time: 18, at: 'airbase', minLevel: 2, atk: 22, def: 3, hp: 12, speed: 9, upkeep: 0.7, range: 120, aa: 0, guns: 0, bomb: 1.5 },
   b2: { name: 'B-2 سبيريت', role: 'قاذفة شبحية بعيدة المدى', desc: 'تخترق الدفاعات وتضرب العمق', cost: { gold: 720, steel: 260 }, time: 24, at: 'airbase', minLevel: 3, atk: 26, def: 3, hp: 9, speed: 10, upkeep: 1, range: 145, aa: 0, guns: 0, stealth: 0.6, bomb: 1.6 },
@@ -148,6 +167,9 @@ export const COMBAT = {
   airSupportBoost: 0.35,
   neutralPerTile: 1.6,      // neutral militia per tile
   expandGarrisonPerTile: 0.4,
+  // frontage: only part of a big army can engage at once — the front is as wide as the defence it faces
+  frontageBase: 140, frontagePerDefender: 0.7,
+  fortFrontage: 0.6,        // obstacles and trenches funnel attackers into narrow lanes
 };
 
 export const DIPLO = {

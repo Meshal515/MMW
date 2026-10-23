@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/sim/game';
-import { CITY, FOUNDING_SECONDS, levelCost, levelTime, MAX_CITY_LEVEL, TICK_RATE } from '../src/sim/balance';
+import { CITY, FORT, FOUNDING_SECONDS, levelCost, levelTime, MAX_CITY_LEVEL, TICK_RATE } from '../src/sim/balance';
 import { regionDistance } from '../src/sim/map/regions';
 import { REL } from '../src/sim/state';
 import type { GameConfig } from '../src/sim/state';
@@ -104,6 +104,42 @@ describe('conquest', () => {
     expect(before - after).toBeGreaterThan(0.5);
     expect(before - after).toBeLessThan(militia * 1.5 + 5);
     expect(g.nations[0].stats.deaths).toBeGreaterThan(0);
+  });
+
+  it('a border fort is a real fixed force: it fights, takes losses, delays the capture and can be destroyed', () => {
+    const setup = (withFort: boolean) => {
+      const g = new Game(cfg());
+      g.command(0, { c: 'found', region: site(g, 0, 230, 45) });
+      toWar(g);
+      for (const n of g.nations) n.autoRecruit = false;
+      g.bots = [];
+      // nation 1 attacks one of nation 0's regions from a region it is given next door
+      const cap = g.nations[0].capital, R = g.map.regions[cap];
+      const front = R.neighbors.find(m => g.owner[m] === 0 && !R.straits.includes(m))!;
+      const enemyR = g.map.regions[front].neighbors.find(m => g.owner[m] !== 0 && !g.map.regions[front].straits.includes(m))!;
+      g.transferRegion(enemyR, 1);
+      g.inf[front] = 100; g.tank[front] = 0; g.art[front] = 0;
+      if (withFort) { g.buildings[front].push({ type: 'fort', level: 1, build: 0, damage: 0, queue: [], garrison: { inf: FORT.inf(1), tank: FORT.tank(1), bunker: FORT.bunker(1) } }); }
+      g.inf[enemyR] = 1600; g.tank[enemyR] = 20;
+      expect(g.command(1, { c: 'attack', target: front, amount: 1500, tanks: 20, from: enemyR }).ok).toBe(true);
+      return { g, front };
+    };
+    const time = (withFort: boolean) => {
+      const { g, front } = setup(withFort);
+      let t = 0, hit = false;
+      while (g.owner[front] === 0 && t < 240 * TICK_RATE) {
+        g.step(); t++;
+        const f = g.building(front, 'fort');
+        if (f?.garrison && f.garrison.inf < FORT.inf(1)) hit = true;           // the fort itself takes losses
+        if (withFort && f && g.owner[front] !== 0) throw new Error('captured while the fort stood');
+      }
+      return { t, hit, fortLeft: !!g.building(front, 'fort'), owner: g.owner[front], g };
+    };
+    const plain = time(false), fortified = time(true);
+    expect(plain.owner).toBe(1);
+    expect(fortified.hit).toBe(true);
+    expect(fortified.t).toBeGreaterThan(plain.t);               // the fort delays the capture
+    if (fortified.owner === 1) expect(fortified.fortLeft).toBe(false);   // a captured region's fort was destroyed first
   });
 
   it('continuous expansion keeps conquering neighbouring regions with one order', () => {

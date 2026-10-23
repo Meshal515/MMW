@@ -1,6 +1,6 @@
 // Authoritative game simulation. Pure TypeScript with no DOM access, so the same engine runs
 // in the browser (single player) and later inside a Cloudflare Durable Object (online rooms).
-import { AIR, BUILDINGS, BuildingType, Cost, DT, ECON, FOUNDING_SECONDS, LAND, levelCost, levelTime, Res, SEA, TICK_RATE, UnitDef, VICTORY_SHARE, Weapon, WEAPONS } from './balance';
+import { AIR, BUILDINGS, BuildingType, Cost, DT, ECON, FORT, FOUNDING_SECONDS, LAND, levelCost, levelTime, Res, SEA, TICK_RATE, UnitDef, VICTORY_SHARE, Weapon, WEAPONS } from './balance';
 import { buildMap, MapData, regionDistance } from './map/regions';
 import { isLand } from './map/terrain';
 import { nationColors, nationNames } from './names';
@@ -360,6 +360,7 @@ export class Game {
     if (this.buildings[region].length >= R.slots) return `المنطقة ممتلئة (${R.slots} مبانٍ)`;
     if (def.canBuild && !def.canBuild(R)) return def.hint ?? 'غير مناسب هنا';
     if (def.needs && !this.cityLevel(region)) return def.hint ?? 'يحتاج مدينة';
+    if (type === 'fort' && !R.neighbors.some(m => this.owner[m] !== n)) return def.hint!;
     if (type === 'city') {
       // cities must be spread out: none within two regions of another city or the capital
       const near = new Set([region]);
@@ -373,6 +374,10 @@ export class Game {
   /** Founding a new city gets more expensive with every city the nation already has (up to 6×). */
   buildCost(n: number, type: BuildingType): Cost {
     const base = levelCost(type, 0);
+    if (type === 'fort') {
+      let forts = 0; for (let r = 0; r < this.owner.length; r++) if (this.owner[r] === n && this.building(r, 'fort')) forts++;
+      return { ...base, gold: (base.gold ?? 0) + forts * FORT.extraCost };
+    }
     if (type !== 'city') return base;
     let cities = 0;
     for (let r = 0; r < this.owner.length; r++) if (this.owner[r] === n && this.building(r, 'city')) cities++;
@@ -500,6 +505,8 @@ export class Game {
   /** Total defensive land strength sitting in a region (garrison + stationed allies). */
   garrisonStrength(r: number) {
     let s = this.inf[r] * LAND.inf.def + this.tank[r] * LAND.tank.def + this.art[r] * LAND.art.def;
+    const f = this.building(r, 'fort');
+    if (f?.garrison) s += (f.garrison.inf * LAND.inf.def + f.garrison.tank * LAND.tank.def) * (f.garrison.bunker > 0 ? FORT.entrench : 1);
     const st = this.stationed.get(r);
     if (st) for (const a of st) if (a.state === 'stationed') s += a.inf + a.tank * LAND.tank.def + a.art * LAND.art.def;
     return s;

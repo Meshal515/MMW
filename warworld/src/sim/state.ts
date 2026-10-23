@@ -22,6 +22,7 @@ export interface Building {
   type: BuildingType; level: number;
   build: number;            // seconds left on construction/upgrade (0 = idle)
   damage: number;           // accumulated bomb damage
+  garrison?: { inf: number; tank: number; bunker: number };  // fort only: its own fixed force
   queue: ProdItem[];
 }
 

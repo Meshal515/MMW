@@ -369,19 +369,53 @@ function truck() {
   for (const x of [2, 7, 11]) { p.px(x, c - 4, 'K'); p.px(x, c + 4, 'K'); }
   return p.finish();
 }
-function soldier(step: number) {
-  // top-down rifleman facing east: helmet, shoulders, backpack, rifle forward, legs alternate when walking
-  const p = new Pix(10, 9), c = 4;
-  const lf = step === 1 ? 1 : 0, rf = step === 2 ? 1 : 0;
+/** Infantry poses (top-down, facing east). 0-2 walk cycle, 'aim', 'fire' (muzzle flash), 'prone', 'down'. */
+function soldier(step: number | 'aim' | 'fire' | 'prone' | 'down') {
+  const p = new Pix(13, 9), c = 4;
+  if (step === 'prone') {
+    // lying flat behind the rifle: legs back, body long and low
+    p.hl(c - 1, 1, 3, 'a').hl(c + 1, 1, 3, 'a').rect(3, c - 1, 7, c + 1, 'c').hl(c - 1, 4, 6, 'b');
+    p.ell(8.5, c + 0.5, 1.5, 1.5, 'd').px(8, c, 'e').px(8, c - 1, 'T');
+    p.hl(c + 1, 9, 11, '1');
+    return p.finish();
+  }
+  if (step === 'down') {
+    // casualty: lying still, helmet off to the side, rifle dropped
+    p.rect(2, c, 7, c + 1, 'b').hl(c, 3, 6, 'c').ell(8.5, c + 0.5, 1.3, 1.3, 'n').px(4, c - 2, 'd');
+    p.line(3, c + 3, 7, c + 2, '2');
+    return p.finish();
+  }
+  const walk = typeof step === 'number' ? step : 0;
+  const lf = walk === 1 ? 1 : 0, rf = walk === 2 ? 1 : 0;
   p.hl(c - 2, 2 + lf, 3 + lf, 'a').hl(c + 2, 2 + rf, 3 + rf, 'a');
   p.rect(2, c - 1, 2, c + 1, 'b').rect(3, c - 2, 4, c + 2, 'c');
   p.ell(4, c + 0.5, 1.5, 1.5, 'd').px(3, c, 'e').px(4, c - 1, 'T');
-  p.hl(c + 1, 5, 8, '1').px(5, c + 2, 'n');
+  if (step === 'aim' || step === 'fire') {
+    // rifle shouldered and level, both arms forward
+    p.hl(c, 5, 9, '1').px(5, c - 1, 'c').px(5, c + 1, 'c');
+    if (step === 'fire') p.px(10, c, 'f').px(11, c, 'F').px(10, c - 1, 'F').px(10, c + 1, 'F');
+  } else p.hl(c + 1, 5, 8, '1').px(5, c + 2, 'n');
   return p.finish();
 }
 function car(col: string) {
   const p = new Pix(8, 5), c = 2;
   p.rect(1, c - 1, 6, c + 1, col).rect(3, c - 1, 4, c + 1, 'h').px(4, c - 1, 'i');
+  return p.finish();
+}
+/** Technical: desert pickup with a heavy machine gun on the bed. */
+function technical() {
+  const p = new Pix(13, 9), c = 4;
+  p.rect(1, c - 3, 11, c + 3, 'p').hl(c - 3, 1, 11, 'q').vl(11, c - 2, c + 2, 'o');
+  p.rect(7, c - 2, 9, c + 2, 'h').hl(c - 2, 7, 8, 'i');
+  p.rect(2, c - 2, 6, c + 2, 'n');
+  p.ell(3.5, c + 0.5, 1.5, 1.5, '2').hl(c, 4, 8, '1').px(3, c, 'T');
+  for (const x of [2, 9]) { p.px(x, c - 4, 'K'); p.px(x, c + 4, 'K'); }
+  return p.finish();
+}
+function ambulance() {
+  const p = new Pix(12, 7), c = 3;
+  p.rect(1, c - 2, 10, c + 2, 'W').rect(8, c - 2, 9, c + 2, 'h').hl(c - 2, 1, 7, '5');
+  p.rect(3, c - 1, 5, c + 1, 'W').hl(c, 2, 6, 'r').vl(4, c - 2, c + 2, 'r').px(10, c - 2, 's').px(10, c + 2, 'D');
   return p.finish();
 }
 
@@ -418,8 +452,16 @@ export const VEHICLES: Vehicle[] = [
   { name: 'soldier0', label: 'جندي', group: 'land', draw: () => soldier(0) },
   { name: 'soldier1', label: 'جندي (مشي)', group: 'land', draw: () => soldier(1) },
   { name: 'soldier2', label: 'جندي (مشي)', group: 'land', draw: () => soldier(2) },
+  { name: 'soldier_aim', label: 'جندي يصوّب', group: 'land', draw: () => soldier('aim') },
+  { name: 'soldier_fire', label: 'جندي يطلق', group: 'land', draw: () => soldier('fire') },
+  { name: 'soldier_prone', label: 'جندي منبطح', group: 'land', draw: () => soldier('prone') },
+  { name: 'soldier_down', label: 'جندي مصاب', group: 'land', draw: () => soldier('down') },
   { name: 'car_r', label: 'سيارة', group: 'land', draw: () => car('r') },
   { name: 'car_b', label: 'سيارة', group: 'land', draw: () => car('D') },
   { name: 'car_w', label: 'سيارة', group: 'land', draw: () => car('5') },
+  { name: 'car_y', label: 'سيارة', group: 'land', draw: () => car('z') },
+  { name: 'car_g', label: 'سيارة', group: 'land', draw: () => car('J') },
+  { name: 'technical', label: 'سيارة رشاش', group: 'land', draw: technical },
+  { name: 'ambulance', label: 'إسعاف', group: 'land', draw: ambulance },
 ];
 export const VEHICLE = Object.fromEntries(VEHICLES.map(v => [v.name, v]));

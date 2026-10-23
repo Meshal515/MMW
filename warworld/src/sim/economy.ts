@@ -1,6 +1,6 @@
 // Causal economy: population needs housing and food, buildings need workers, output needs workers,
 // soldiers come out of the population and eat, hospitals return the wounded.
-import { AIR, BUILDINGS, CITY, ECON, LAND, SEA, WEAPONS } from './balance';
+import { AIR, BUILDINGS, CITY, ECON, FORT, LAND, SEA, WEAPONS } from './balance';
 import type { Game } from './game';
 import { T } from './map/terrain';
 import { airTotal, LandCounts } from './state';
@@ -48,6 +48,18 @@ export function economyTick(g: Game, dt: number) {
             break;
           }
           case 'barracks': cap[o] += ECON.capacity.barracks * lvl * boost; recruitSpots[o].push({ r, rate: ECON.passiveRecruit.barracks * lvl * boost }); break;
+          case 'fort': {
+            // the fort's men and armour slowly return to full strength when not fighting (and eat/cost upkeep)
+            const gq = b.garrison ??= { inf: 0, tank: 0, bunker: 0 };
+            if (!g.battles.has(r)) {
+              const k = FORT.refill * dt;
+              gq.inf = Math.min(FORT.inf(lvl), gq.inf + FORT.inf(lvl) * k);
+              gq.tank = Math.min(FORT.tank(lvl), gq.tank + FORT.tank(lvl) * k);
+              gq.bunker = Math.min(FORT.bunker(lvl), gq.bunker + FORT.bunker(lvl) * k);
+            }
+            sold[o] += gq.inf; tanks[o] += gq.tank;
+            break;
+          }
           case 'market': market[o] += ECON.marketGold * lvl * rad * boost; break;
           case 'bank': bank[o] += lvl * (cityL ? CITY.synergy(cityL) : 1); break;
           case 'farm': farm[o] += ECON.farmFood * lvl * rad * (Rg.flatShare > 0.5 ? 1.2 : 1); break;
@@ -67,6 +79,7 @@ export function economyTick(g: Game, dt: number) {
         b.build -= dt * (0.5 + 0.5 * g.nations[o].fill);
         if (b.build <= 0) {
           b.build = 0; b.level++; b.damage = 0;
+          if (b.type === 'fort') b.garrison = { inf: FORT.inf(b.level), tank: FORT.tank(b.level), bunker: FORT.bunker(b.level) };
           g.markDirty(r);
           if (g.nations[o].human) g.log('built', `اكتمل ${def.name} (مستوى ${b.level})`, o, -1, r);
         }

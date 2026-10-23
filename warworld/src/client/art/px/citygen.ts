@@ -12,11 +12,12 @@ import { BUILDINGS } from './buildings';
 import { bank, barracks, hospital, houseV, market, midrise, palace, portQuay, powerPlant, tallTower } from './districts';
 
 export type District = 'factory' | 'power' | 'port' | 'hospital' | 'market' | 'bank' | 'barracks';
-export interface CityInput { cx: number; cy: number; level: number; capital: boolean; seed: number; team: C3; districts: Partial<Record<District, number>> }
+export interface CityInput { cx: number; cy: number; level: number; capital: boolean; seed: number; team: C3; districts: Partial<Record<District, number>>; damage?: { x: number; y: number; r: number }[] }
 export interface Site { ok(x: number, y: number): boolean; water(x: number, y: number): boolean }
-export interface Paint { get(x: number, y: number): C3; set(x: number, y: number, c: number[]): void; stamp(p: Pix | ImageData, x: number, y: number, shadow?: number, team?: C3): void }
+export interface Paint { noLawn?: boolean; get(x: number, y: number): C3; set(x: number, y: number, c: number[]): void; stamp(p: Pix | ImageData, x: number, y: number, shadow?: number, team?: C3): void }
 export interface Placed { kind: string; x: number; y: number; w: number; h: number }
-export interface CityResult { placed: Placed[]; chimneys: { x: number; y: number }[]; radius: number }
+export interface Street { x0: number; y0: number; x1: number; y1: number }
+export interface CityResult { placed: Placed[]; chimneys: { x: number; y: number }[]; radius: number; streets: Street[] }
 
 export const CELL = 32;
 const sw = (k: number) => (k === 0 ? 6 : 4);
@@ -39,11 +40,30 @@ function rot90(img: ImageData, k: number) {
   return src;
 }
 
+/** Charred ruin of a sprite: broken walls, rubble, soot, a few embers; holes show the ground below. */
+export function ruin(img: ImageData, seed: number) {
+  const o = new ImageData(img.width, img.height), W = img.width;
+  const op = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < img.height && img.data[(y * W + x) * 4 + 3] > 0;
+  for (let y = 0; y < img.height; y++) for (let x = 0; x < W; x++) {
+    if (!op(x, y)) continue;
+    const k = (y * W + x) * 4, h = hash(x, y, seed), edge = !op(x - 1, y) || !op(x + 1, y) || !op(x, y - 1) || !op(x, y + 1);
+    const l = (img.data[k] + img.data[k + 1] + img.data[k + 2]) / 3;
+    let c: number[] | null;
+    if (edge) c = h < 0.7 ? [38, 32, 36] : null;                 // standing wall stubs, broken in places
+    else if (h < 0.28) c = null;                                    // collapsed: ground shows through
+    else if (h < 0.295) c = [255, 150 + Math.round(h * 300) % 80, 50]; // a few embers
+    else if (h < 0.66) c = [42 + l * 0.12, 36 + l * 0.1, 36 + l * 0.08]; // soot
+    else c = [120 + l * 0.2, 104 + l * 0.15, 88 + l * 0.1];         // concrete rubble
+    if (c) o.data.set([c[0], c[1], c[2], 255], k);
+  }
+  return o;
+}
+
 interface Block { i: number; j: number; x0: number; y0: number; x1: number; y1: number; d: number; use: string | null }
 
 export function paintCity(g: Paint, c: CityInput, site: Site): CityResult {
   const L = Math.max(1, Math.min(50, c.level)), R = CITY.radius(L), K = Math.ceil((R + CELL) / CELL) + 1;
-  const placed: Placed[] = [], chimneys: { x: number; y: number }[] = [];
+  const placed: Placed[] = [], chimneys: { x: number; y: number }[] = [], streets: Street[] = [];
   const cellX = (i: number) => c.cx + i * CELL, cellY = (j: number) => c.cy + j * CELL;
   const inner = (i: number, j: number) => ({ x0: cellX(i) + Math.ceil(sw(i) / 2), y0: cellY(j) + Math.ceil(sw(j) / 2), x1: cellX(i + 1) - Math.floor(sw(i + 1) / 2) - 1, y1: cellY(j + 1) - Math.floor(sw(j + 1) / 2) - 1 });
   const rectOk = (x0: number, y0: number, x1: number, y1: number) => {
@@ -116,9 +136,9 @@ export function paintCity(g: Paint, c: CityInput, site: Site): CityResult {
     const ny0 = cellY(b.j) - Math.floor(sw(b.j) / 2), ny1 = cellY(b.j) + Math.ceil(sw(b.j) / 2) - 1;
     const sy0 = cellY(b.j + 1) - Math.floor(sw(b.j + 1) / 2), sy1 = cellY(b.j + 1) + Math.ceil(sw(b.j + 1) / 2) - 1;
     const W_ = !!B(b.i - 1, b.j) || b.i === 0, E_ = !!B(b.i + 1, b.j) || b.i === -1, N_ = !!B(b.i, b.j - 1) || b.j === 0, S_ = !!B(b.i, b.j + 1) || b.j === -1;
-    if (W_) paintRect(sx0, N_ ? ny0 : b.y0, sx1, S_ ? sy1 : b.y1);
+    if (W_) { paintRect(sx0, N_ ? ny0 : b.y0, sx1, S_ ? sy1 : b.y1); streets.push({ x0: cellX(b.i), y0: b.y0, x1: cellX(b.i), y1: b.y1 }); }
     if (E_) paintRect(ex0, N_ ? ny0 : b.y0, ex1, S_ ? sy1 : b.y1);
-    if (N_) paintRect(W_ ? sx0 : b.x0, ny0, E_ ? ex1 : b.x1, ny1);
+    if (N_) { paintRect(W_ ? sx0 : b.x0, ny0, E_ ? ex1 : b.x1, ny1); streets.push({ x0: b.x0, y0: cellY(b.j), x1: b.x1, y1: cellY(b.j) }); }
     if (S_) paintRect(W_ ? sx0 : b.x0, sy0, E_ ? ex1 : b.x1, sy1);
   }
   if (port) { const [dx, dy] = [Math.sign(port.ax - c.cx), Math.sign(port.ay - c.cy)]; for (let t = 0; t < Math.hypot(port.ax - c.cx, port.ay - c.cy) - 20; t++) for (let w2 = -3; w2 <= 2; w2++) { const x = c.cx + dx * t + (dy ? w2 : 0), y = c.cy + dy * t + (dx ? w2 : 0); if (!site.water(x, y)) g.set(x, y, asphalt); } }
@@ -130,8 +150,8 @@ export function paintCity(g: Paint, c: CityInput, site: Site): CityResult {
   function isInterior(x: number, y: number) { for (const z of zones) if (x >= z.r.x0 && x <= z.r.x1 && y >= z.r.y0 && y <= z.r.y1) return true; return false; }
 
   // 4) block grounds
-  const fillRect = (x0: number, y0: number, x1: number, y1: number, f: (x: number, y: number) => number[] | null) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const v = f(x, y); if (v) g.set(x, y, v); } };
-  const lawn = (x: number, y: number) => { const n = hash(x, y, 77); return n < 0.5 ? col('G') : n < 0.85 ? [92, 148, 60] : col('H'); };
+  const fillRect = (x0: number, y0: number, x1: number, y1: number, f: (x: number, y: number) => number[] | null | undefined) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const v = f(x, y); if (v) g.set(x, y, v); } };
+  const lawn = (x: number, y: number) => { if (g.noLawn) return null; const n = hash(x, y, 77); return n < 0.5 ? col('G') : n < 0.85 ? [92, 148, 60] : col('H'); };
   const paved = (x: number, y: number) => (hash(x >> 1, y >> 1, 5) < 0.5 ? col('X') : [176, 171, 160]);
   const kindOf = (b: Block) => {
     const t = b.d / R;
@@ -214,11 +234,16 @@ export function paintCity(g: Paint, c: CityInput, site: Site): CityResult {
   if (port) jobs.push({ x: port.x, y: port.y, p: port.img, sh: 1, kind: 'port' });
   jobs.sort((a, b) => a.x + a.y - (b.x + b.y));
   for (const j of jobs) {
+    const jw = j.p instanceof Pix ? j.p.w : j.p.width, jh = j.p instanceof Pix ? j.p.h : j.p.height;
+    const mx = j.x + jw / 2, my = j.y + jh / 2;
+    // a building inside a blast circle stands as a charred ruin; the city keeps its shape
+    const hit = c.damage?.find(d => (mx - d.x) ** 2 + (my - d.y) ** 2 < d.r * d.r);
+    if (hit) { g.stamp(ruin(j.p instanceof Pix ? j.p.toImage(c.team) : j.p, (j.x * 7 + j.y * 13) | 0), j.x, j.y, j.kind === 'tree' ? 0 : 1, c.team); continue; }
     g.stamp(j.p, j.x, j.y, j.sh, c.team);
     const w = j.p instanceof Pix ? j.p.w : j.p.width, h = j.p instanceof Pix ? j.p.h : j.p.height;
     if (j.kind !== 'tree' && j.kind !== 'house' && j.kind !== 'apt') placed.push({ kind: j.kind, x: j.x, y: j.y, w, h });
   }
-  return { placed, chimneys, radius: R };
+  return { placed, chimneys, radius: R, streets };
 }
 
 /** A highway between two cities: L-shaped, follows the grid, never paints over water. */

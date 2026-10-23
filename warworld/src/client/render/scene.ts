@@ -6,10 +6,14 @@ import type { Game } from '../../sim/game';
 import { AIR_UNITS, Army, Fleet, SEA_UNITS } from '../../sim/state';
 import { buildAtlas } from '../art/sprites';
 import { canvasOf } from '../art/pixel';
-import { ROTORS } from '../art/models';
 import { Ground, TILE } from './ground';
-import { CITY_SIZE } from '../art/city';
-import { DIRS, dirIndex, Registry, UNIT_SCALE } from './registry';
+import { CITY } from '../../sim/balance';
+import { Fx } from './fx';
+import { paintGameCity } from './cities';
+import type { District, Street } from '../art/px/citygen';
+import { FORT_PITS, FORT_TRENCH } from '../art/px/facilities';
+import * as sfx from '../audio/sfx';
+import { DIRS, dirIndex, Registry, ROTOR_OFFSETS } from './registry';
 
 export type Lod = 'far' | 'mid' | 'near';
 export interface TapInfo { region: number; sea: number; x: number; y: number }
@@ -35,7 +39,9 @@ const FIGHTERS = ['f16', 'f35', 'su57'], BOMBERS = ['b52', 'b2', 'ac130'], ESCOR
 
 interface Vis { parts: { img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; model: string }[]; label: Phaser.GameObjects.BitmapText | null; heading: number; lx: number; ly: number }
 interface PlaneVis { img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; shadow: Phaser.GameObjects.Image; rotors: Phaser.GameObjects.Image[]; model: string; heading: number; lx: number; ly: number; flame: Phaser.GameObjects.Image | null }
-interface CityVis { key: string; img: Phaser.GameObjects.Image; roads: [number, number, number][]; size: number; x: number; y: number; flag: Phaser.GameObjects.Image | null; flagT: Phaser.GameObjects.Image | null }
+interface CityVis { key: string; img: Phaser.GameObjects.Image; streets: Street[]; size: number; radius: number; x: number; y: number; chimneys: { x: number; y: number }[] }
+const DISTRICTS: District[] = ['factory', 'power', 'port', 'hospital', 'market', 'bank', 'barracks'];
+const rgb = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
 interface FacVis { key: string; img: Phaser.GameObjects.Image; team: Phaser.GameObjects.Image | null; type: string; x: number; y: number; dir: number }
 
 export class WorldScene extends Phaser.Scene {
@@ -48,6 +54,12 @@ export class WorldScene extends Phaser.Scene {
   lod: Lod = 'far';
   ground!: Ground;
   reg!: Registry;
+  fx!: Fx;
+  /** Blast marks per city region (world px): buildings inside stand as ruins until the city is rebuilt. */
+  private cityDamage = new Map<number, { x: number; y: number; r: number }[]>();
+  private seenLoss = new Map<string, number>();
+  private corpses: { o: Phaser.GameObjects.Image; t: number }[] = [];
+  private battleVis = new Map<number, { men: Phaser.GameObjects.Image[]; t: number }>();
 
   private acc = 0;
   private cities = new Map<number, CityVis>();
@@ -72,6 +84,7 @@ export class WorldScene extends Phaser.Scene {
   private pinch: { d: number; z: number } | null = null;
   private keys: Record<string, Phaser.Input.Keyboard.Key> = {};
   private walkFrame = 0;
+  private walkFrame2 = 0;
   private sortiePhase = new Map<number, string>();
   worldW = 0; worldH = 0;
 
@@ -87,6 +100,7 @@ export class WorldScene extends Phaser.Scene {
     for (const [k, f] of Object.entries(atlas.frames)) at.add(k, 0, f.x, f.y, f.w, f.h);
     this.makeDigitFont();
     this.reg = new Registry(this);
+    this.fx = new Fx(this);
     this.ground = new Ground(this, g);
     this.targetGfx = this.add.graphics().setDepth(60);
     const cam = this.cameras.main;
@@ -95,7 +109,7 @@ export class WorldScene extends Phaser.Scene {
     this.fitWorld();
     this.scale.on('resize', () => this.clampCamera());
     this.input.addPointer(1);
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { sfx.unlockAudio(); this.pointerDown(p); });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.pointerMove(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.pointerUp(p));
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => this.zoomAt(p.x, p.y, dy > 0 ? 0.85 : 1.18));
@@ -234,8 +248,10 @@ export class WorldScene extends Phaser.Scene {
     const view = this.viewRect(80);
     this.ground.update(view, this.cameras.main.zoom, now);
     this.walkFrame = Math.floor(now / 180) % 2;
+    this.walkFrame2 = Math.floor(now / 140) % 4;
     this.syncBuildings(view);
     this.syncArmies(view);
+    this.syncBattles(view, now);
     this.syncFleets(view, delta);
     this.syncAir(view, delta, now);
     this.syncMissiles(delta);
@@ -243,6 +259,8 @@ export class WorldScene extends Phaser.Scene {
     this.syncGarrisons(view);
     this.syncLabels(now);
     this.ambientLife(view, delta);
+    this.fx.update(delta);
+    this.ageCorpses(delta);
     this.drawTargeting();
     this.onFrame();
   }
@@ -298,31 +316,33 @@ export class WorldScene extends Phaser.Scene {
     const a = this.anchorPx(r);
     const bl = g.buildings[r];
     const cityB = bl.find(b => b.type === 'city' || b.type === 'capital');
-    // city
     const cur = this.cities.get(r);
     const cap = cityB?.type === 'capital';
-    // capitals always get a palace plaza, so they start from the level-2 layout
-    const lvl = cityB ? Math.max(cap ? 2 : 1, cityB.level) : 0;
-    const key = cityB ? `city_${r}_${lvl}_${cap ? 1 : 0}_${owner}` : '';
-    if (cur && cur.key !== key) { cur.img.destroy(); cur.flag?.destroy(); cur.flagT?.destroy(); this.cities.delete(r); }
+    const lvl = cityB ? Math.max(1, cityB.level) : 0;
+    const districts: Partial<Record<District, number>> = {};
+    for (const b of bl) if ((DISTRICTS as string[]).includes(b.type) && b.level > 0) districts[b.type as District] = b.level;
+    const dmg = this.cityDamage.get(r) ?? [];
+    const key = cityB ? `city_${r}_${lvl}_${cap ? 1 : 0}_${owner}_${Object.entries(districts).join()}_${dmg.length}` : '';
+    if (cur && cur.key !== key) { cur.img.destroy(); this.textures.remove(cur.key); this.cities.delete(r); }
     if (cityB && (!cur || cur.key !== key)) {
-      const art = this.reg.city(key, {
-        seed: r * 31 + 7, level: lvl, capital: cap,
-        buildable: (px, py) => {
-          const S = CITY_SIZE[lvl] + (cap ? 16 : 0);
-          const wx = a.x - S / 2 + px, wy = a.y - S / 2 + py;
-          const rr = this.ground.regionAtPixel(wx, wy);
-          return rr >= 0 && (rr === r || (owner >= 0 && g.owner[rr] === owner));
+      // every city builds only on its owner's land and inside its own claim (closer to it than to any other city)
+      const others: { x: number; y: number; R: number }[] = [];
+      for (let q = 0; q < g.owner.length; q++) if (q !== r) { const c = g.buildings[q].find(b => b.type === 'city' || b.type === 'capital'); if (c) { const p = this.anchorPx(q); if (Math.abs(p.x - a.x) < 400 && Math.abs(p.y - a.y) < 400) others.push({ x: p.x, y: p.y, R: CITY.radius(Math.max(1, c.level)) }); } }
+      const Rm = CITY.radius(lvl);
+      const art = paintGameCity({
+        cx: a.x, cy: a.y, level: lvl, capital: cap, seed: r * 31 + 7, team: rgb(owner >= 0 ? g.nations[owner].color : 0x888888), districts, damage: dmg,
+        water: (x, y) => this.ground.regionAtPixel(x, y) < 0,
+        ok: (x, y) => {
+          const rr = this.ground.regionAtPixel(x, y);
+          if (rr < 0 || !(rr === r || (owner >= 0 && g.owner[rr] === owner))) return false;
+          const dm = Math.hypot(x - a.x, y - a.y);
+          for (const o of others) if (dm - Rm > Math.hypot(x - o.x, y - o.y) - o.R - 20) return false;
+          return true;
         },
       });
-      const img = this.add.image(a.x, a.y, art.key).setDepth(5 + a.y * 1e-5);
-      let flag: Phaser.GameObjects.Image | null = null, flagT: Phaser.GameObjects.Image | null = null;
-      if (cap && art.capitalAt && owner >= 0) {
-        const fx = a.x - art.size / 2 + art.capitalAt[0] + 4, fy = a.y - art.size / 2 + art.capitalAt[1] - 12;
-        flag = this.add.image(fx, fy, 'atlas', 'flag0').setDepth(6);
-        flagT = this.add.image(fx, fy, 'atlas', 'flag0_t').setDepth(6.01).setTint(g.nations[owner].color);
-      }
-      this.cities.set(r, { key, img, roads: art.roads, size: art.size, x: a.x, y: a.y, flag, flagT });
+      this.textures.addCanvas(key, art.canvas);
+      const img = this.add.image(art.x0, art.y0, key).setOrigin(0, 0).setDepth(5);
+      this.cities.set(r, { key, img, streets: art.streets, size: art.size, radius: art.radius, x: a.x, y: a.y, chimneys: art.chimneys });
     }
     const city = this.cities.get(r);
     if (city) city.img.setAlpha(cityB && cityB.level === 0 ? 0.55 : 1);
@@ -331,24 +351,26 @@ export class WorldScene extends Phaser.Scene {
     let slot = 0;
     for (const b of bl) {
       if (b.type === 'city' || b.type === 'capital') continue;
+      if (city && b.level > 0 && (DISTRICTS as string[]).includes(b.type)) continue;   // drawn as a city quarter
       const fk = `${r}:${b.type}`;
       keep.add(fk);
       const existing = this.facs.get(fk);
       let pos: { x: number; y: number; dir: number };
       if (existing) pos = existing;
-      else pos = this.placeFacility(r, b.type, slot, city ? city.size / 2 : 0);
+      else pos = this.placeFacility(r, b.type, slot, city ? city.radius : 0);
       slot++;
-      const { key: tk, team } = this.reg.facility(b.type, pos.dir);
+      const { key: tk, team } = this.reg.facility(b.type === 'fort' ? 'fort' + Math.max(1, b.level) : b.type);
       let v = existing;
+      if (v && v.key !== tk) { v.img.destroy(); v.team?.destroy(); this.facs.delete(fk); v = undefined; }
       if (!v) {
-        const img = this.add.image(pos.x, pos.y, tk).setDepth(5 + pos.y * 1e-5);
-        const t = team ? this.add.image(pos.x, pos.y, team).setDepth(5.001 + pos.y * 1e-5) : null;
+        const img = this.add.image(Math.round(pos.x), Math.round(pos.y), tk).setDepth(4.8 + pos.y * 1e-6);
+        const t = team ? this.add.image(Math.round(pos.x), Math.round(pos.y), team).setDepth(4.801 + pos.y * 1e-6) : null;
         v = { key: tk, img, team: t, type: b.type, x: pos.x, y: pos.y, dir: pos.dir };
         this.facs.set(fk, v);
       }
       v.img.setAlpha(b.level === 0 ? 0.5 : 1);
-      if (b.level === 0) v.img.setTint(0xb0b0b0); else v.img.clearTint();
       if (v.team && owner >= 0) v.team.setTint(g.nations[owner].color);
+      v.img.setTint(b.level === 0 ? 0xb0b0b0 : 0xffffff);
     }
     for (const [k, v] of this.facs) if (k.startsWith(r + ':') && !keep.has(k)) { v.img.destroy(); v.team?.destroy(); this.facs.delete(k); }
   }
@@ -369,7 +391,7 @@ export class WorldScene extends Phaser.Scene {
       }
       return best;
     }
-    const want = cityR + 18;
+    const want = cityR + 30;
     for (let k = 0; k < 24; k++) {
       const ang = (slot * 2.399 + k * 0.52) % (Math.PI * 2), rad = want * (0.75 + (k % 4) * 0.12);
       const x = a.x + Math.cos(ang) * rad, y = a.y + Math.sin(ang) * rad;
@@ -388,8 +410,8 @@ export class WorldScene extends Phaser.Scene {
     const out: string[] = [];
     const tanks = Math.min(3, Math.ceil(a.tank / 15)), arts = Math.min(2, Math.ceil(a.art / 15));
     for (let i = 0; i < tanks; i++) out.push('mbt');
-    if (a.inf > 150) out.push(a.id % 2 ? 'apc' : 'ifv');
-    if (a.inf > 600) out.push('truck');
+    if (!tanks && !arts) { for (let i = 0; i < Math.min(3, Math.ceil(a.inf / 140)); i++) out.push('technical'); }   // light raid: infantry + gun trucks
+    else { if (a.inf > 150) out.push(a.id % 2 ? 'apc' : 'ifv'); if (a.inf > 600) out.push('truck'); }
     for (let i = 0; i < arts; i++) out.push('spg');
     const soldiers = Math.max(2, Math.min(8, Math.round(Math.log2(a.inf + 1))));
     for (let i = 0; i < soldiers; i++) out.push('soldier');
@@ -417,28 +439,124 @@ export class WorldScene extends Phaser.Scene {
       const col = g.nations[a.owner].color;
       const dir = dirIndex(v.heading);
       const fx = Math.cos(v.heading), fy = Math.sin(v.heading);
-      let vi = 0, si = 0;
+      let vi = 0, si = 0, back = 0;
       models.forEach((m, i) => {
-        const model = m === 'soldier' ? 'soldier' + ((this.walkFrame + i) % 2) : m;
+        const fighting = a.state === 'fight';
+        const pose = ['soldier_prone', 'soldier_aim', 'soldier_fire', 'soldier_prone'][(Math.floor(this.time.now / 220) + i) % 4];
+        const model = m === 'soldier' ? (fighting ? pose : 'soldier' + [0, 1, 0, 2][(this.walkFrame2 + i) % 4]) : m;
         const key = this.reg.model(model);
         let p = v!.parts[i];
         if (!p) { p = { img: this.add.image(0, 0, key, '0').setDepth(20), team: this.add.image(0, 0, key, '0_t').setDepth(20.01), model }; v!.parts.push(p); }
         if (p.model !== model) { p.img.setTexture(key, '0'); p.team!.setTexture(key, '0_t'); p.model = model; }
         // formation: vehicles in a column, infantry fanned out behind
         let ox: number, oy: number;
-        if (m === 'soldier') { const row = Math.floor(si / 3), col3 = (si % 3) - 1; ox = -fx * (6 + row * 3.5) - fy * col3 * 3; oy = -fy * (6 + row * 3.5) + fx * col3 * 3; si++; }
-        else { ox = -fx * vi * 11 + (vi % 2 ? -fy * 4 : 0); oy = -fy * vi * 11 + (vi % 2 ? fx * 4 : 0); vi++; }
+        if (m === 'soldier') { const row = Math.floor(si / 3), col3 = (si % 3) - 1; ox = -fx * (back + 8 + row * 7) - fy * col3 * 6; oy = -fy * (back + 8 + row * 7) + fx * col3 * 6; si++; }
+        else { const len = this.reg.modelSize(m); ox = -fx * back + (vi % 2 ? -fy * 7 : 0); oy = -fy * back + (vi % 2 ? fx * 7 : 0); back += len + 3; vi++; }
         const sc = far ? Math.max(1, 0.9 / z) : 1;
         p.img.setFrame(String(dir)).setPosition(Math.round(x + ox * sc), Math.round(y + oy * sc)).setScale(sc).setVisible(true);
         p.team!.setFrame(dir + '_t').setPosition(Math.round(x + ox * sc), Math.round(y + oy * sc)).setScale(sc).setTint(col).setVisible(true);
       });
-      // muzzle flashes while fighting
-      if (a.state === 'fight' && !far && Math.random() < 0.25) this.spark(x + fx * 10 + (Math.random() - 0.5) * 12, y + fy * 10 + (Math.random() - 0.5) * 12, 0xffd860);
+      // firefight: tracers from the line towards the defenders, guns rattling
+      if (a.state === 'fight' && !far) {
+        const T2 = g.map.regions[a.target >= 0 ? a.target : nxt], tx = W2(T2.cx), ty = W2(T2.cy);
+        if (Math.random() < 0.35 && v.parts.length) { const p = v.parts[Math.floor(Math.random() * v.parts.length)]; this.fx.tracer(p.img.x, p.img.y, tx + (Math.random() - 0.5) * 18, ty + (Math.random() - 0.5) * 14, 0xffe070); this.fx.muzzle(p.img.x, p.img.y, v.heading); }
+        if (Math.random() < 0.05) sfx.gun(this.where(x, y), 5);
+        if (a.tank > 0.5 && Math.random() < 0.02) { this.fx.tracer(x, y, tx, ty, 0xfff4c0); this.time.delayedCall(200, () => this.boom(tx + (Math.random() - 0.5) * 14, ty + (Math.random() - 0.5) * 10, 0.8)); }
+      }
+      this.lossFx('a' + a.id, a.inf, a.tank + a.art, v.parts.map(p => ({ x: p.img.x, y: p.img.y, model: p.model })), v.heading, a.owner);
       const showLabel = !far || a.owner === this.human;
       v.label!.setText(fmt(a.inf + a.tank + a.art)).setPosition(x, y - 14 / Math.max(z, 0.6)).setScale(Math.max(0.35, 1.4 / z))
         .setTint(a.state === 'fight' ? 0xff9080 : a.owner === this.human ? 0xbfe0ff : 0xffffff).setVisible(showLabel);
     }
     for (const [id, v] of this.armyVis) if (!seen.has(id)) { this.dropVis(v); this.armyVis.delete(id); }
+  }
+
+
+  /** Casualties made visible: a vehicle that is lost explodes and leaves a burning wreck; fallen infantry stay on the ground for a while. */
+  private lossFx(id: string, inf: number, heavy: number, parts: { x: number; y: number; model: string }[], heading: number, _owner: number) {
+    const prevI = this.seenLoss.get(id + 'i'), prevH = this.seenLoss.get(id + 'h');
+    this.seenLoss.set(id + 'i', inf); this.seenLoss.set(id + 'h', heavy);
+    if (prevI === undefined || this.lod === 'far' || !parts.length) return;
+    const veh = parts.filter(p => !p.model.startsWith('soldier')), men = parts.filter(p => p.model.startsWith('soldier'));
+    if (prevH! - heavy >= 1 && veh.length) {
+      const p = veh[Math.floor(Math.random() * veh.length)];
+      const wreck = this.reg.model(p.model.replace(/_wreck$/, '') + '_wreck');
+      this.boom(p.x, p.y, 1.1);
+      this.corpse(wreck, String(dirIndex(heading)), p.x, p.y, 40000);
+      this.fx.fire(p.x, p.y + 2, 20000);
+    }
+    const dead = Math.min(4, Math.floor((prevI! - inf) / 12));
+    for (let i = 0; i < dead && men.length; i++) {
+      const p = men[Math.floor(Math.random() * men.length)];
+      this.corpse(this.reg.model('soldier_down'), String(dirIndex(heading + (Math.random() - 0.5) * 2)), p.x + (Math.random() - 0.5) * 6, p.y + (Math.random() - 0.5) * 6, 18000);
+    }
+  }
+
+  /** Defenders on the ground: fort crews in their trench and tanks hull-down, or the region's garrison when it is attacked. */
+  private syncBattles(view: ReturnType<WorldScene['viewRect']>, now: number) {
+    const g = this.sim, used = new Set<number>();
+    if (this.lod === 'far') { for (const [r, v] of this.battleVis) { v.men.forEach(m => m.destroy()); this.battleVis.delete(r); } return; }
+    const want = new Set<number>(g.battles.keys());
+    for (const f of this.facs.values()) if (f.type === 'fort') want.add(Number([...this.facs.entries()].find(e => e[1] === f)![0].split(':')[0]));
+    for (const r of want) {
+      const R = g.map.regions[r], o = g.owner[r];
+      const fort = g.building(r, 'fort'), fv = this.facs.get(r + ':fort');
+      const cx = fv ? fv.x : W2(R.cx), cy = fv ? fv.y : W2(R.cy);
+      if (!this.inView(view, cx, cy, 60)) continue;
+      used.add(r);
+      const fighting = g.battles.has(r);
+      // face the nearest hostile neighbour
+      let ang = 0, best = Infinity;
+      for (const m of R.neighbors) if (g.owner[m] !== o) { const M = g.map.regions[m], d = (M.cx - R.cx) ** 2 + (M.cy - R.cy) ** 2; if (d < best) { best = d; ang = Math.atan2(M.cy - R.cy, M.cx - R.cx); } }
+      const gq = fort?.garrison;
+      const nTank = gq ? Math.min(4, Math.ceil(gq.tank - 0.05)) : fighting ? Math.min(2, Math.ceil(g.tank[r] / 15)) : 0;
+      const nMen = gq ? Math.min(10, Math.ceil(gq.inf / 18)) : fighting ? Math.min(8, Math.ceil((o < 0 ? g.neutral[r] : g.inf[r]) / 25)) : 0;
+      let v = this.battleVis.get(r);
+      if (!v) { v = { men: [], t: 0 }; this.battleVis.set(r, v); }
+      const color = o >= 0 ? g.nations[o].color : 0xa0a0a0;
+      let fixedDir = -1;
+      const fx = Math.cos(ang), fy = Math.sin(ang);
+      let k = 0;
+      const put = (model: string, x: number, y: number, tint: boolean) => {
+        const key = this.reg.model(model);
+        let img = v!.men[k], team = v!.men[k + 1];
+        if (!img) { img = this.add.image(0, 0, key, '0').setDepth(19); team = this.add.image(0, 0, key, '0_t').setDepth(19.01); v!.men.push(img, team); }
+        const dir = fixedDir >= 0 ? fixedDir : dirIndex(ang);
+        img.setTexture(key, String(dir)).setPosition(Math.round(x), Math.round(y)).setVisible(true);
+        team.setTexture(key, dir + '_t').setPosition(Math.round(x), Math.round(y)).setTint(color).setVisible(tint);
+        k += 2;
+        return img;
+      };
+      const side = (i: number, n: number, sp: number) => (i - (n - 1) / 2) * sp;
+      const shooters: Phaser.GameObjects.Image[] = [];
+      if (fv) {
+        // the fort's crew sits in its trench, armour parked hull-down between trench and tank obstacles
+        // art is 64×48 centred on (cx, cy): tanks sit in their pits facing the border, riflemen line the trench
+        const ox = cx - 32, oy = cy - 24, lvl = fort?.level ?? 1;
+        fixedDir = 0;   // fort art faces east: crews and guns face the obstacles
+        FORT_PITS.slice(0, Math.min(nTank, lvl >= 3 ? 3 : 2)).forEach(([px, py]) => put('mbt', ox + px, oy + py, true));
+        const men = Math.min(nMen, 6);
+        for (let i = 0; i < men; i++) {
+          const pose = fighting ? ['soldier_aim', 'soldier_fire', 'soldier_prone'][(Math.floor(now / 200) + i) % 3] : 'soldier_prone';
+          shooters.push(put(pose, ox + FORT_TRENCH.x0 + 4 + i * 7, oy + FORT_TRENCH.y, true));
+        }
+      } else {
+        for (let i = 0; i < nTank; i++) put('mbt', cx + fx * 8 - fy * side(i, nTank, 22), cy + fy * 8 + fx * side(i, nTank, 22), true);
+        for (let i = 0; i < nMen; i++) {
+          const pose = ['soldier_prone', 'soldier_aim', 'soldier_fire'][(Math.floor(now / 200) + i) % 3], row = i % 2;
+          shooters.push(put(pose, cx + fx * (18 + row * 7) - fy * side(i >> 1, Math.ceil(nMen / 2), 9), cy + fy * (18 + row * 7) + fx * side(i >> 1, Math.ceil(nMen / 2), 9), true));
+        }
+      }
+      if (fighting) for (const img of shooters) if (Math.random() < 0.06) {
+        const tx = img.x + fx * (30 + Math.random() * 30) + (Math.random() - 0.5) * 20, ty = img.y + fy * (30 + Math.random() * 30) + (Math.random() - 0.5) * 20;
+        this.fx.tracer(img.x, img.y, tx, ty, 0xffd070); this.fx.muzzle(img.x, img.y, ang);
+      }
+      if (fighting && nTank && Math.random() < 0.03) { const tx = cx + fx * 60, ty = cy + fy * 60; this.fx.muzzle(cx + fx * 14, cy + fy * 14, ang); this.fx.tracer(cx, cy, tx, ty, 0xfff4c0); this.time.delayedCall(220, () => this.boom(tx + (Math.random() - 0.5) * 16, ty + (Math.random() - 0.5) * 16, 0.8)); sfx.boom(5, this.where(cx, cy)); }
+      if (fighting && Math.random() < 0.04) sfx.gun(this.where(cx, cy), 4, !!gq);
+      for (let i = k; i < v.men.length; i++) v.men[i].setVisible(false);
+      if (gq) this.lossFx('f' + r, gq.inf, gq.tank, v.men.filter((_, i) => i % 2 === 0 && v!.men[i].visible).map(m => ({ x: m.x, y: m.y, model: m.texture.key.replace(/^m_/, '') })), ang, o);
+    }
+    for (const [r, v] of this.battleVis) if (!used.has(r)) { v.men.forEach(m => m.destroy()); this.battleVis.delete(r); }
   }
 
   /** Troop numbers: own and frontline regions at mid zoom, everything in view up close. */
@@ -529,11 +647,12 @@ export class WorldScene extends Phaser.Scene {
       seen.add(key);
       let v = this.planeVis.get(key);
       const tex = this.reg.model(model);
+      if (v && v.model !== model) { v.img.destroy(); v.team?.destroy(); v.shadow.destroy(); v.rotors.forEach(r => r.destroy()); v.flame?.destroy(); this.planeVis.delete(key); v = undefined; }
       if (!v) {
         const shadow = this.add.image(0, 0, tex, '0').setTint(0x2a1838).setAlpha(0.38).setDepth(30);
         const img = this.add.image(0, 0, tex, '0').setDepth(40);
         const team = this.add.image(0, 0, tex, '0_t').setDepth(40.01);
-        const rotors = (ROTORS[model] ?? []).map((_, i) => this.add.image(0, 0, this.reg.rotor(model, i, model === 'chinook' ? 1.2 : 1.3), '0').setDepth(40.02));
+        const rotors = (ROTOR_OFFSETS[model] ?? []).map((_, i) => this.add.image(0, 0, this.reg.rotor(model, i), '0').setDepth(40.02));
         const flame = FIGHTERS.includes(model) || BOMBERS.includes(model) ? this.add.image(0, 0, 'atlas', 'px').setDepth(39.9).setTint(0xffb040) : null;
         v = { img, team, shadow, rotors, model, heading: heading, lx: x, ly: y, flame };
         this.planeVis.set(key, v);
@@ -547,10 +666,9 @@ export class WorldScene extends Phaser.Scene {
       v.shadow.setFrame(String(dir)).setPosition(Math.round(x + alt * 0.8), Math.round(y + alt * 0.5)).setScale(sc).setVisible(alt > 0.5);
       v.img.setFrame(String(dir)).setPosition(px, py).setScale(sc);
       v.team?.setFrame(dir + '_t').setPosition(px, py).setScale(sc).setTint(g.nations[owner].color);
-      const k = (model === 'chinook' ? 1.2 : 1.3) * (UNIT_SCALE[model] ?? 1);
-      (ROTORS[model] ?? []).forEach((r, i) => {
+      (ROTOR_OFFSETS[model] ?? []).forEach((r, i) => {
         const rot = v!.rotors[i];
-        rot.setFrame(String(Math.floor(now / 45 + i * 3) % 6)).setPosition(Math.round(px + Math.cos(v!.heading) * r.x * k * sc), Math.round(py + Math.sin(v!.heading) * r.x * k * sc)).setScale(sc);
+        rot.setFrame(String(Math.floor(now / 45 + i * 3) % 6)).setPosition(Math.round(px + Math.cos(v!.heading) * r.dx * sc), Math.round(py + Math.sin(v!.heading) * r.dx * sc)).setScale(sc);
       });
       if (v.flame) {
         const back = this.reg.modelSize(model) * 0.42;
@@ -567,6 +685,16 @@ export class WorldScene extends Phaser.Scene {
     for (const id of [...this.sortiePhase.keys()]) if (!g.sorties.has(id)) this.sortiePhase.delete(id);
     for (const s of g.sorties.values()) {
       const x = W2(s.x), y = W2(s.y);
+      // planes shot down on the way spin down in flames; new sorties roar off the runway
+      const tot = AIR_UNITS.reduce((t, k) => t + s.planes[k], 0), key = 'sp' + s.id, prev = this.seenLoss.get(key);
+      this.seenLoss.set(key, tot);
+      if (prev === undefined) { const fast = s.planes.f35 + s.planes.su57 + s.planes.f16 > 0; sfx.jet(this.where(x, y), fast ? 1.8 : 1); if (s.planes.apache + s.planes.blackhawk > 0) sfx.rotor(this.where(x, y)); }
+      else if (prev - tot >= 0.5 && this.inView(view, x, y, 80)) {
+        const k = AIR_UNITS.find(u => s.planes[u] > 0) ?? 'f16', m = this.planeModel(k, s.owner);
+        this.fx.crash(this.reg.model(m), String(dirIndex(Math.atan2(s.ty - s.y, s.tx - s.x))), x, y, 9, Math.atan2(s.ty - s.y, s.tx - s.x));
+        this.fx.explosion(x, y, 7, { alt: 9 });
+        sfx.boom(8, this.where(x, y));
+      }
       if (!this.inView(view, x, y, 60)) continue;
       const heading = Math.atan2(s.ty - s.y, s.tx - s.x);
       const travelled = Math.hypot(s.x - s.fromX, s.y - s.fromY);
@@ -661,15 +789,17 @@ export class WorldScene extends Phaser.Scene {
       if (f.k === 'explosion') {
         const x = W2(f.x), y = W2(f.y);
         if (f.nuke) this.nukeFx(x, y, f.r);
-        else if (this.inView(view, x, y)) { this.boom(x, y, Math.min(3, 1 + f.r * 0.5)); for (let i = 0; i < 4; i++) this.spawnAmbient('u_smoke', x + (Math.random() - 0.5) * 16, y + (Math.random() - 0.5) * 16, (Math.random() - 0.3) * 4, -6, 1800, 'smoke'); }
+        else if (this.inView(view, x, y, 60)) { const n = Math.min(6, 1 + Math.round(f.r * 2)); for (let i = 0; i < n; i++) this.time.delayedCall(i * 140, () => this.boom(x + (Math.random() - 0.5) * f.r * 20, y + (Math.random() - 0.5) * f.r * 16, Math.min(3, 1 + f.r * 0.5))); }
+        else this.damageCity(x, y, 10 + f.r * 8, 0);
       } else if (f.k === 'shot') {
         const x = W2(f.x), y = W2(f.y), tx = W2(f.tx), ty = W2(f.ty);
         if (!this.inView(view, tx, ty) || this.lod === 'far') continue;
-        const tr = this.add.image(x, y, 'atlas', 'px').setDepth(41).setTint(f.sea ? 0xfff1a0 : 0xffe066).setScale(1.2, 0.6).setRotation(Math.atan2(ty - y, tx - x));
-        this.tweens.add({ targets: tr, x: tx, y: ty, duration: 240, onComplete: () => { tr.destroy(); this.boom(tx, ty, f.sea ? 0.7 : 0.55); } });
+        this.fx.tracer(x, y, tx, ty, f.sea ? 0xfff1a0 : 0xffe066);
+        sfx.gun(this.where(x, y), 3, true);
+        this.time.delayedCall(Math.max(60, Math.hypot(tx - x, ty - y) * 2.2), () => this.boom(tx, ty, f.sea ? 0.7 : 0.55));
       } else if (f.k === 'intercept') {
-        const x = W2(f.x), y = W2(f.y) - 60;
-        if (this.inView(view, x, y)) this.boom(x, y, 1.3);
+        const x = W2(f.x), y = W2(f.y);
+        if (this.inView(view, x, y, 80)) { this.boom(x, y, 1.6, 70); sfx.launch(this.where(x, y)); }
       } else if (f.k === 'capture') {
         if (this.lod === 'far') continue;
         const a = this.anchorPx(f.region);
@@ -686,23 +816,52 @@ export class WorldScene extends Phaser.Scene {
     this.tweens.add({ targets: s, alpha: 0, scale: 0.5, duration: 160, onComplete: () => s.destroy() });
   }
 
-  boom(x: number, y: number, scale = 1) {
-    const img = this.add.image(Math.round(x), Math.round(y), 'atlas', 'boom0').setDepth(43).setScale(scale);
-    let f = 0;
-    const ev = this.time.addEvent({ delay: 60, repeat: 7, callback: () => { f++; if (f >= 8) { img.destroy(); ev.remove(); } else img.setFrame('boom' + f); } });
+  /** Generic explosion (scale 1 ≈ a tank shell). Ground blasts scar the terrain and damage cities. */
+  boom(x: number, y: number, scale = 1, alt = 0) {
+    this.fx.explosion(x, y, 4 + scale * 4, { alt, crater: !alt && scale >= 0.8 && this.ground.regionAtPixel(x, y) >= 0, fires: scale > 1.2 ? 2 : 0 });
+    sfx.boom(4 + scale * 4, this.where(x, y));
+    if (!alt && scale >= 1) this.damageCity(x, y, 6 + scale * 6);
+  }
+
+  /** Stereo position and loudness of something happening at world (x, y). */
+  where(x: number, y: number): sfx.Where {
+    const cam = this.cameras.main, v = cam.worldView;
+    const pan = ((x - v.x) / Math.max(1, v.width)) * 2 - 1;
+    const inside = x > v.x - 40 && x < v.right + 40 && y > v.y - 40 && y < v.bottom + 40;
+    const d = Math.hypot(x - v.centerX, y - v.centerY) / Math.max(v.width, v.height);
+    return { pan, gain: inside ? Math.min(1, 0.25 + cam.zoom * 0.18) * Math.max(0.3, 1 - d) : 0.06 };
+  }
+
+  /** Records a blast on any city it touches; the city redraws with ruins once the smoke has covered it. */
+  damageCity(x: number, y: number, r: number, delay = 900) {
+    for (const [reg, c] of this.cities) {
+      if (Math.hypot(x - c.x, y - c.y) > c.radius + r + 20) continue;
+      const list = this.cityDamage.get(reg) ?? [];
+      list.push({ x: Math.round(x), y: Math.round(y), r: Math.round(r) });
+      if (list.length > 40) list.shift();
+      this.cityDamage.set(reg, list);
+      this.time.delayedCall(delay, () => this.dirtyBuild.add(reg));
+    }
   }
 
   private nukeFx(x: number, y: number, radius: number) {
-    const scale = radius * TILE / 30;
-    const flash = this.add.image(x, y, 'atlas', 'nukeflash0').setDepth(59).setScale(scale * 1.6);
-    let f = 0;
-    const ev = this.time.addEvent({ delay: 80, repeat: 10, callback: () => { f++; if (f >= 10) { flash.destroy(); ev.remove(); } else flash.setFrame('nukeflash' + f); } });
-    const ring = this.add.image(x, y, 'atlas', 'ring8').setDepth(59).setScale(0.5).setTint(0xfff4c0);
-    this.tweens.add({ targets: ring, scale: radius * TILE / 8 * 1.3, alpha: 0, duration: 1200, onComplete: () => ring.destroy() });
-    const mush = this.add.image(x, y + 4, 'atlas', 'mushroom0').setOrigin(0.5, 0.92).setDepth(59.5).setScale(scale * 0.9);
-    let m = 0;
-    const ev2 = this.time.addEvent({ delay: 170, repeat: 12, callback: () => { m++; if (m >= 12) { this.tweens.add({ targets: mush, alpha: 0, duration: 1500, onComplete: () => mush.destroy() }); ev2.remove(); } else mush.setFrame('mushroom' + m); } });
-    if (this.inView(this.viewRect(0), x, y)) this.cameras.main.shake(600, 0.01);
+    const R = radius * TILE;
+    sfx.boom(60, this.where(x, y));
+    this.fx.nuke(x, y, Math.min(140, R * 0.55), () => this.damageCity(x, y, R * 0.8, 0));
+  }
+
+  private ageCorpses(delta: number) {
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      const c = this.corpses[i]; c.t -= delta;
+      if (c.t < 3000) c.o.setAlpha(Math.max(0, c.t / 3000));
+      if (c.t <= 0) { c.o.destroy(); this.corpses.splice(i, 1); }
+    }
+  }
+  private corpse(tex: string, frame: string, x: number, y: number, ms: number, tint?: number) {
+    if (this.corpses.length > 160) { this.corpses.shift()!.o.destroy(); }
+    const o = this.add.image(Math.round(x), Math.round(y), tex, frame).setDepth(6);
+    if (tint !== undefined) o.setTint(tint);
+    this.corpses.push({ o, t: ms });
   }
 
   // ---------------- ambient life ----------------
@@ -734,39 +893,25 @@ export class WorldScene extends Phaser.Scene {
     let cars = 0, people = 0;
     for (const a of this.ambient) { if (a.kind === 'car') cars++; else if (a.kind === 'person') people++; }
     for (const c of this.cities.values()) {
-      if (!c.img.visible || !c.roads.length) continue;
+      if (!c.img.visible || !c.streets.length) continue;
+      // cars drive along real streets, from one end of the block edge to the other, in their lane
       if (cars < 90 && Math.random() < 0.7) {
-        const [rx, ry, horiz] = c.roads[Math.floor(Math.random() * c.roads.length)];
-        const dir = Math.random() < 0.5 ? 1 : -1, sp = 12 + Math.random() * 8;
-        // drive only until the edge of the street grid
-        const along = horiz ? rx : ry, room = dir > 0 ? c.size - 6 - along : along - 6;
-        if (room < 10) continue;
-        const name = ['car_r', 'car_b', 'car_w', 'car_y', 'car_g'][Math.floor(Math.random() * 5)];
-        const key = this.reg.model(name);
-        const ang = horiz ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
-        const lane = dir > 0 ? 1 : -1;
-        const x = c.x - c.size / 2 + rx + (horiz ? 0 : lane), y = c.y - c.size / 2 + ry + (horiz ? lane : 0);
+        const st = c.streets[Math.floor(Math.random() * c.streets.length)], horiz = st.y0 === st.y1;
+        const fwd = Math.random() < 0.5, len = horiz ? st.x1 - st.x0 : st.y1 - st.y0;
+        if (len < 10) continue;
+        const name = ['car_r', 'car_b', 'car_w', 'car_y', 'car_g'][Math.floor(Math.random() * 5)], key = this.reg.model(name);
+        const ang = horiz ? (fwd ? 0 : Math.PI) : (fwd ? Math.PI / 2 : -Math.PI / 2), lane = fwd ? 1 : -1, sp = 12 + Math.random() * 8;
+        const x = horiz ? (fwd ? st.x0 : st.x1) : st.x0 + lane, y = horiz ? st.y0 + lane : (fwd ? st.y0 : st.y1);
         const img = this.add.image(x, y, key, String(dirIndex(ang))).setDepth(5.5);
-        const life = Math.min(4000, room / sp * 1000);
-        this.ambient.push({ img, vx: horiz ? dir * sp : 0, vy: horiz ? 0 : dir * sp, life, max: life, kind: 'car' });
+        const life = len / sp * 1000;
+        this.ambient.push({ img, vx: horiz ? (fwd ? sp : -sp) : 0, vy: horiz ? 0 : (fwd ? sp : -sp), life, max: life, kind: 'car' });
       }
-      if (people < 140 && Math.random() < 0.8) {
-        const [rx, ry, horiz] = c.roads[Math.floor(Math.random() * c.roads.length)];
-        const off = (Math.random() < 0.5 ? 3 : -3);
-        const x = c.x - c.size / 2 + rx + (horiz ? 0 : off), y = c.y - c.size / 2 + ry + (horiz ? off : 0);
-        const sp = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 3);
-        this.spawnAmbient('px', x, y, horiz ? sp : 0, horiz ? 0 : sp, 2400, 'person');
-      }
+      for (const ch of c.chimneys) if (Math.random() < 0.5) this.spawnAmbient('u_smoke', ch.x, ch.y, 2 + Math.random() * 3, -10, 2200, 'smoke');
     }
     for (const f of this.facs.values()) {
       if (!f.img.visible) continue;
-      if (f.type === 'factory') for (const [cx, cy] of [[7, -4], [10, -4]]) if (Math.random() < 0.55) this.spawnAmbient('u_smoke', f.x + cx, f.y + cy - 6, 2 + Math.random() * 3, -10, 2200, 'smoke');
-      if (f.type === 'nuclear' && Math.random() < 0.4) this.spawnAmbient('u_smoke', f.x - 7, f.y - 6, 2, -7, 2600, 'smoke');
-      if (f.type === 'hospital' && Math.random() < 0.06) {
-        const key = this.reg.model('ambulance');
-        const img = this.add.image(f.x - 30, f.y + 10, key, '0').setDepth(5.5);
-        this.ambient.push({ img, vx: 14, vy: 0, life: 2000, max: 2000, kind: 'car' });
-      }
+      if (f.type === 'factory') for (const [cx, cy] of [[9, 4], [14, 4]]) if (Math.random() < 0.55) this.spawnAmbient('u_smoke', f.x + cx, f.y + cy, 2 + Math.random() * 3, -10, 2200, 'smoke');
+      if (f.type === 'nuclear' && Math.random() < 0.4) this.spawnAmbient('u_smoke', f.x + 10, f.y - 4, 2, -7, 2600, 'smoke');
     }
     // sparkle on open water in view
     for (let i = 0; i < 4; i++) {

@@ -1,5 +1,5 @@
 // Land armies, operations (gather → stage → strike), battles, conquest, fleets and naval landings.
-import { CITY, COMBAT, ECON, LAND, SEA, SeaUnit } from './balance';
+import { CITY, COMBAT, ECON, FORT, LAND, SEA, SeaUnit } from './balance';
 import type { Game } from './game';
 import { Army, ArmyKind, CommandResult, Fleet, LandCounts, Operation, emptyAir, SEA_UNITS, shipTotal, REL } from './state';
 import { declareWar } from './diplomacy';
@@ -493,14 +493,25 @@ function battleTick(g: Game, r: number, dt: number) {
 
   const stationed: Army[] = o >= 0 ? (g.stationed.get(r) ?? []).filter(a => a.state === 'stationed' && g.armies.has(a.id)) : [];
   const mult = defenseMultiplier(g, r);
-  let D: number, defHp: number;
+  let D = 0, defHp = 0;
   if (o < 0) { D = g.neutral[r] * g.map.regions[r].defense; defHp = g.neutral[r]; }
+  const fortB = o >= 0 ? g.building(r, 'fort') : undefined;
+  const fort = fortB && fortB.level > 0 ? fortB.garrison : undefined;
+  const fortUnits: LandCounts | null = fort ? { inf: fort.inf, tank: fort.tank, art: 0 } : null;
+  if (o < 0) { /* neutral handled above */ }
   else {
     const gar = garrison(g, r);
     D = (defOf(gar) + stationed.reduce((s, a) => s + defOf(a), 0)) * mult;
     defHp = hpOf(gar) + stationed.reduce((s, a) => s + hpOf(a), 0);
+    // the fort's own men and armour fight from cover while the bunker stands
+    if (fortUnits) { D += defOf(fortUnits) * mult * (fort!.bunker > 0 ? FORT.entrench : 1); defHp += hpOf(fortUnits) + fort!.bunker; }
   }
-  const A_i = valid.map(a => atkOf(a) * (a.amphibious ? 0.75 : 1) * (g.airSupport[r] > 0 ? 1 + COMBAT.airSupportBoost : 1));
+  const A_raw = valid.map(a => atkOf(a) * (a.amphibious ? 0.75 : 1) * (g.airSupport[r] > 0 ? 1 + COMBAT.airSupportBoost : 1));
+  const rawSum = A_raw.reduce((s, x) => s + x, 0);
+  // only the troops on the front line fight; the rest queue behind it
+  const front = (COMBAT.frontageBase + COMBAT.frontagePerDefender * defHp) * (fort && fort.bunker > 0 ? COMBAT.fortFrontage : 1);
+  const engaged = rawSum > 0 ? Math.min(1, front / rawSum) : 1;
+  const A_i = A_raw.map(x => x * engaged);
   const A = A_i.reduce((s, x) => s + x, 0);
 
   const toDef = COMBAT.rate * A * dt, toAtt = COMBAT.rate * D * dt;
@@ -510,7 +521,12 @@ function battleTick(g: Game, r: number, dt: number) {
     g.neutral[r] -= lost;
     defHp = g.neutral[r];
   } else {
-    const share = defHp > 0 ? toDef / defHp : 1;
+    // the bunker takes part of the fire while it stands; the rest is shared by everyone in the region
+    let incoming = toDef;
+    if (fort && fort.bunker > 0) { const hit = Math.min(fort.bunker, incoming * FORT.bunkerShare); fort.bunker -= hit; incoming -= hit; }
+    const unitHp = defHp - (fort ? fort.bunker : 0);
+    const share = unitHp > 0 ? incoming / unitHp : 1;
+    if (fortUnits && fort) { applyLosses(fortUnits, hpOf(fortUnits) * share); fort.inf = fortUnits.inf; fort.tank = fortUnits.tank; }
     const gar = garrison(g, r);
     const lost = applyLosses(gar, hpOf(gar) * share);
     g.inf[r] = gar.inf; g.tank[r] = gar.tank; g.art[r] = gar.art;
@@ -518,7 +534,9 @@ function battleTick(g: Game, r: number, dt: number) {
     g.nations[o].stats.deaths += killed;
     g.nations[o].wounded += lost.inf * ECON.woundedShare;
     for (const s of stationed) { applyLosses(s, hpOf(s) * share); if (s.inf + s.tank + s.art < 0.3) g.armies.delete(s.id); }
-    defHp = hpOf(gar) + stationed.reduce((s2, a) => s2 + hpOf(a), 0);
+    defHp = hpOf(gar) + stationed.reduce((s2, a) => s2 + hpOf(a), 0) + (fort ? hpOf({ inf: fort.inf, tank: fort.tank, art: 0 }) + fort.bunker : 0);
+    // a fort with no men left and a breached bunker is destroyed
+    if (fortB && fort && fort.inf + fort.tank < 0.5 && fort.bunker <= 0) { g.buildings[r].splice(g.buildings[r].indexOf(fortB), 1); g.markDirty(r); g.fx.push({ k: 'explosion', x: g.map.regions[r].cx, y: g.map.regions[r].cy, r: 1.2, nuke: false }); }
     for (let i = 0; i < valid.length; i++) g.nations[valid[i].owner].stats.kills += killed * A_i[i] / A;
   }
   // attackers

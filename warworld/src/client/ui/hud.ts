@@ -1,4 +1,4 @@
-// HTML interface layered over the map: thin top bar, collapsible action dock, one floating card at a time.
+// HTML interface layered over the map: thin top bar, WorldBox-style bottom toolbar, one floating card at a time.
 import { AIR, BUILDABLE, BUILDINGS, BuildingType, Cost, LAND, SEA, Weapon, WEAPONS } from '../../sim/balance';
 import type { Game } from '../../sim/game';
 import { availableFor, estimateDefense, defenseMultiplier } from '../../sim/military';
@@ -8,6 +8,7 @@ import { hexColor } from '../art/pixel';
 import { iconURL } from '../art/sprites';
 import { fmt, WorldScene } from '../render/scene';
 import { regionName } from './names';
+import { cityIcon, facilityIcon, modelIcon } from './icons';
 
 type Mode =
   | { k: 'move'; from: number; share: number }
@@ -15,7 +16,20 @@ type Mode =
   | { k: 'rebase'; base: number; carrier: number }
   | { k: 'launch'; weapon: Weapon }
   | { k: 'fleet'; fleet: number }
-  | { k: 'aid'; to: number; kind: 'support' | 'gift'; amount: number };
+  | { k: 'aid'; to: number; kind: 'support' | 'gift'; amount: number }
+  | { k: 'build'; type: BuildingType };
+
+type Tab = 'cities' | 'economy' | 'land' | 'sea' | 'air' | 'missiles' | 'empire';
+const TABS: { id: Tab; label: string; icon: () => string }[] = [
+  { id: 'cities', label: 'المدن', icon: () => cityIcon(2, false, 26) },
+  { id: 'economy', label: 'الاقتصاد', icon: () => facilityIcon('factory', 0x3d7bff, 26) },
+  { id: 'land', label: 'البرية', icon: () => modelIcon('mbt', 0x3d7bff, 26) },
+  { id: 'sea', label: 'البحرية', icon: () => modelIcon('destroyer', 0x3d7bff, 26) },
+  { id: 'air', label: 'الجوية', icon: () => modelIcon('f16', 0x3d7bff, 26) },
+  { id: 'missiles', label: 'الصواريخ', icon: () => facilityIcon('silo', 0x3d7bff, 26) },
+  { id: 'empire', label: 'الإمبراطورية', icon: () => iconURL('handshake') },
+];
+const MODEL_OF: Record<string, string> = { drone: 'reaper', tank: 'mbt', art: 'spg' };
 
 type CardKind = 'region' | 'sea' | 'build' | 'army' | 'weapons' | 'diplo';
 
@@ -34,7 +48,7 @@ export class Hud {
   private attackShare = 0.5; private withArmor = true; private expand = false; private moveShare = 0.5;
   private openNation = -1;
   private lastEvent = 0;
-  private lastTop = 0; private lastCard = 0;
+  private lastTop = 0; private lastCard = 0; private lastTools = 0;
   private interacting = false;
   private ended = false;
   private seenRequests = new Set<number>();
@@ -68,12 +82,10 @@ export class Hud {
       <button class="tb-btn" data-act="menu" title="القائمة">${ic('menu')}</button>
     </div>`);
     this.resdrop = add(`<div id="resdrop" class="hidden"></div>`);
-    this.dock = add(`<div id="dock">
-      <button class="fab" data-act="open" data-v="build" title="بناء (B)">${ic('build')}<span class="tip">بناء</span></button>
-      <button class="fab" data-act="open" data-v="army" title="الجيش (A)">${ic('army')}<span class="tip">الجيش والأساطيل</span></button>
-      <button class="fab" data-act="open" data-v="weapons" title="الأسلحة (W)">${ic('nuke')}<span class="tip">الأسلحة الاستراتيجية</span></button>
-      <button class="fab" data-act="open" data-v="diplo" title="التحالفات (D)">${ic('handshake')}<span class="tip">الدبلوماسية</span><span class="badge hidden" id="diplobadge">0</span></button>
-      <button class="fab" id="dockToggle" data-act="dock" title="إخفاء الأزرار">▾</button>
+    this.dock = add(`<div id="bar" class="collapsed">
+      <div class="tabs">${TABS.map(t => `<button class="tab" data-act="tab" data-v="${t.id}"><img class="px" src="${t.icon()}" alt=""><span>${t.label}</span>${t.id === 'empire' ? '<span class="badge hidden" id="diplobadge">0</span>' : ''}</button>`).join('')}
+        <button class="tab tog" data-act="bar" title="إظهار/إخفاء">▴</button></div>
+      <div class="tools"></div>
     </div>`);
     this.card = add(`<div id="card" class="hidden"></div>`);
     this.banner = add(`<div id="banner" class="hidden"></div>`);
@@ -88,6 +100,7 @@ export class Hud {
   private frame() {
     const now = performance.now();
     if (now - this.lastTop > 250) { this.lastTop = now; this.updateTop(); this.updateBanner(); this.pollEvents(); }
+    if (!this.dock.classList.contains('collapsed') && now - this.lastTools > 1200 && !this.interacting) { this.lastTools = now; this.renderTools(); }
     if (this.cardKind && !this.interacting && now - this.lastCard > 700) { this.lastCard = now; this.renderCard(); }
     if (this.g.phase === 'over' && !this.ended) { this.ended = true; this.showEnd(); }
     if (!this.nat.alive && !this.ended && this.g.phase === 'war') { this.ended = true; this.showEnd(); }
@@ -136,7 +149,7 @@ export class Hud {
     else if (this.mode) {
       const m = this.mode;
       const txt = m.k === 'move' ? 'اختر منطقتك الوجهة لنقل القوات' : m.k === 'air' ? 'اختر هدف الضربة الجوية' : m.k === 'rebase' ? 'اختر قاعدة جوية (لك أو لحليف) أو بحرًا فيه حاملتك'
-        : m.k === 'launch' ? `اختر هدف ${WEAPONS[m.weapon].name}` : m.k === 'fleet' ? 'اختر منطقة بحرية لتحريك الأسطول' : 'اختر منطقة الحليف';
+        : m.k === 'launch' ? `اختر هدف ${WEAPONS[m.weapon].name}` : m.k === 'fleet' ? 'اختر منطقة بحرية لتحريك الأسطول' : m.k === 'build' ? `اختر منطقة من أراضيك لـ${BUILDINGS[m.type].name} (المبنى الموجود يُطوَّر)` : 'اختر منطقة الحليف';
       html = `<span>${txt}</span><button class="btn sm danger" data-act="cancelMode">إلغاء</button>`;
     }
     if (b.dataset.html !== html) { b.dataset.html = html; b.innerHTML = html; }
@@ -175,7 +188,8 @@ export class Hud {
     const k = e.key.toLowerCase();
     if (k === 'escape') { if (this.mode) this.setMode(null); else this.closeCard(); }
     else if (k === ' ') { e.preventDefault(); this.scene.paused = !this.scene.paused; this.syncSpeed(); }
-    else if (k === 'b') this.openCard('build');
+    else if (k >= '1' && k <= '7' && e.altKey) this.setTab(TABS[Number(k) - 1].id);
+    else if (k === 'b') this.setTab('cities');
     else if (k === 'a') this.openCard('army');
     else if (k === 'w' && !e.repeat && e.shiftKey) this.openCard('weapons');
     else if (k === 'd' && e.shiftKey) this.openCard('diplo');
@@ -218,6 +232,12 @@ export class Hud {
       } else if (m.k === 'launch' && region >= 0) done = this.run({ c: 'launch', weapon: m.weapon, target: region });
       else if (m.k === 'fleet' && sea >= 0) done = this.run({ c: 'fleetMove', fleet: m.fleet, sea }, 'الأسطول يبحر');
       else if (m.k === 'aid' && region >= 0) done = this.run({ c: m.kind === 'gift' ? 'giftTroops' : 'support', to: m.to, amount: m.amount, region });
+      else if (m.k === 'build' && region >= 0) {
+        const existing = g.building(region, m.type) ?? (m.type === 'city' ? g.building(region, 'capital') : undefined);
+        if (existing && g.owner[region] === this.me) done = this.run({ c: 'upgrade', region, type: existing.type }, `بدأ تطوير ${BUILDINGS[existing.type].name}`);
+        else done = this.run({ c: 'build', region, type: m.type }, `بدأ بناء ${BUILDINGS[m.type].name}`);
+        if (done) this.renderTools();
+      }
       if (done) this.setMode(null);
       return;
     }
@@ -276,7 +296,9 @@ export class Hud {
       case 'pause': this.scene.paused = !this.scene.paused; this.syncSpeed(); break;
       case 'speed': this.scene.speed = num; this.scene.paused = false; this.syncSpeed(); break;
       case 'menu': this.showMenu(); break;
-      case 'dock': this.dock.classList.toggle('collapsed'); el.textContent = this.dock.classList.contains('collapsed') ? '▴' : '▾'; break;
+      case 'bar': this.setTab(this.dock.classList.contains('collapsed') ? this.tab : null); break;
+      case 'tab': this.setTab(this.tab === v && !this.dock.classList.contains('collapsed') ? null : v as Tab); break;
+      case 'tool': this.useTool(v, el); break;
       case 'open': this.cardKind === v ? this.closeCard() : this.openCard(v as CardKind); break;
       case 'close': this.closeCard(); break;
       case 'cancelMode': this.setMode(null); break;
@@ -336,10 +358,79 @@ export class Hud {
     this.run({ c: 'airStrike', base: best.base, carrier: best.carrier >= 0 ? best.carrier : undefined, target: sea >= 0 ? -1 : this.region, sea: sea >= 0 ? sea : undefined });
   }
 
+  // ---------------- bottom toolbar ----------------
+  private tab: Tab = 'cities';
+  private setTab(t: Tab | null) {
+    if (t) this.tab = t;
+    this.dock.classList.toggle('collapsed', !t);
+    this.dock.querySelectorAll('.tab[data-v]').forEach(b => b.classList.toggle('on', !!t && (b as HTMLElement).dataset.v === t));
+    (this.dock.querySelector('.tog') as HTMLElement).textContent = t ? '▾' : '▴';
+    if (t) this.renderTools();
+    document.body.classList.toggle('bar-open', !!t);
+  }
+
+  private tools(): { id: string; icon: string; name: string; cost?: Cost; err?: string | null; sub?: string }[] {
+    const g = this.g, me = this.me, n = this.nat, col = n.color;
+    const b = (t: BuildingType) => ({ id: 'b:' + t, icon: t === 'city' ? cityIcon(1, false) : facilityIcon(t, col), name: BUILDINGS[t].name, cost: g.buildCost(me, t), sub: BUILDINGS[t].desc });
+    const unit = (u: string, def: any) => {
+      const at = g.nationBuildings(me, def.at, def.minLevel ?? 1);
+      const err = at.length ? null : `يحتاج ${BUILDINGS[def.at as BuildingType].name}${def.minLevel > 1 ? ' مستوى ' + def.minLevel : ''}`;
+      const m = MODEL_OF[u] ?? u;
+      return { id: 'u:' + u, icon: modelIcon(m, col), name: def.name, cost: def.cost, err, sub: def.role ?? def.desc };
+    };
+    switch (this.tab) {
+      case 'cities': return [b('city'), { id: 'a:upcity', icon: cityIcon(3, false), name: 'تطوير مدينة', sub: 'اختر مدينة لترقيتها' }, b('hospital'), b('barracks')];
+      case 'economy': return [b('farm'), b('lumber'), b('mine'), b('factory'), b('port')];
+      case 'land': return [{ id: 'a:recruit', icon: modelIcon('soldier0', col), name: 'تجنيد 200', cost: { gold: 600, food: 200 }, err: g.nationBuildings(me, 'barracks').length ? null : 'يحتاج ثكنة' }, unit('tank', LAND.tank), unit('art', LAND.art), { id: 'a:reinforce', icon: modelIcon('truck', col), name: 'تعزيز الجبهة', sub: 'ربع الجيش لأضعف جبهة' }];
+      case 'sea': return [b('port'), ...(Object.keys(SEA) as (keyof typeof SEA)[]).map(k => unit(k, SEA[k]))];
+      case 'air': return [b('airbase'), ...(Object.keys(AIR) as (keyof typeof AIR)[]).map(k => unit(k, AIR[k]))];
+      case 'missiles': return [b('silo'), b('nuclear'), b('airdefense'), ...(Object.keys(WEAPONS) as Weapon[]).flatMap(w => {
+        const silo = g.nationBuildings(me, 'silo').find(r => !g.produceError(me, r, w));
+        return [{ id: 'w:' + w, icon: facilityIcon('silo', col), name: WEAPONS[w].name, cost: WEAPONS[w].cost, err: silo === undefined ? (g.nationBuildings(me, 'silo').length ? g.produceError(me, g.nationBuildings(me, 'silo')[0], w) : 'يحتاج منصة صواريخ') : null, sub: `لديك ${n.weapons[w]}` },
+          { id: 'l:' + w, icon: iconURL('nuke'), name: 'إطلاق ' + WEAPONS[w].name, err: n.weapons[w] < 1 ? 'لا تملك هذا السلاح' : null, sub: 'اختر الهدف' }];
+      })];
+      case 'empire': return [{ id: 'a:diplo', icon: iconURL('handshake'), name: 'الدول والتحالفات', sub: 'طلبات، تحالفات، مساعدات' }, { id: 'a:army', icon: modelIcon('carrier', col), name: 'الأساطيل والطيران', sub: 'إدارة القوات' }, { id: 'a:weapons', icon: iconURL('nuke'), name: 'الترسانة', sub: 'الأسلحة الاستراتيجية' }];
+    }
+  }
+
+  private renderTools() {
+    const box = this.dock.querySelector('.tools') as HTMLElement;
+    box.innerHTML = this.tools().map(t => {
+      const afford = !t.cost || this.g.canAfford(this.nat, t.cost);
+      const off = !!t.err || !afford;
+      const price = t.cost ? Object.entries(t.cost).filter(([, v]) => v).slice(0, 2).map(([r, v]) => `<span class="${(this.nat as any)[r] < v! ? 'lack' : ''}"><img class="px" src="${iconURL(RES_ICON[r])}">${fmt(v!)}</span>`).join('') : '';
+      return `<button class="tool ${off ? 'off' : ''}" data-act="tool" data-v="${t.id}" title="${esc(t.sub ?? '')}${t.err ? ' — ' + esc(t.err) : ''}"><img class="px ico" src="${t.icon}" alt=""><span class="tn">${esc(t.name)}</span><span class="tp">${price}</span></button>`;
+    }).join('');
+  }
+
+  private useTool(id: string, el: HTMLElement) {
+    const [kind, v] = id.split(':');
+    const tool = this.tools().find(t => t.id === id);
+    if (tool?.err) { this.toast(tool.err, 'bad'); return; }
+    if (tool?.cost && !this.g.canAfford(this.nat, tool.cost)) { this.toast('الموارد لا تكفي', 'bad'); return; }
+    if (kind === 'b') { this.setMode({ k: 'build', type: v as BuildingType }); return; }
+    if (kind === 'u') {
+      const def = (this.g.unitDef(v) as any);
+      const sites = this.g.nationBuildings(this.me, def.at, def.minLevel ?? 1).sort((a, b) => (this.g.building(a, def.at)!.queue.length - this.g.building(b, def.at)!.queue.length));
+      this.run({ c: 'produce', region: sites[0], unit: v as any, n: def.at === 'factory' ? 5 : 1 }, `بدأ إنتاج ${def.name}`);
+    } else if (kind === 'w') {
+      const silo = this.g.nationBuildings(this.me, 'silo').find(r => !this.g.produceError(this.me, r, v));
+      if (silo !== undefined) this.run({ c: 'produce', region: silo, unit: v as Weapon, n: 1 }, `بدأ تصنيع ${WEAPONS[v as Weapon].name}`);
+    } else if (kind === 'l') this.setMode({ k: 'launch', weapon: v as Weapon });
+    else if (v === 'recruit') this.run({ c: 'recruit', n: 200 });
+    else if (v === 'reinforce') this.run({ c: 'reinforce', amount: this.nat.soldiers * 0.25 });
+    else if (v === 'upcity') this.setMode({ k: 'build', type: 'city' });
+    else if (v === 'diplo') this.openCard('diplo');
+    else if (v === 'army') this.openCard('army');
+    else if (v === 'weapons') this.openCard('weapons');
+    void el;
+    this.renderTools();
+  }
+
   // ---------------- cards ----------------
   openCard(k: CardKind) {
     this.cardKind = k;
-    this.dock.querySelectorAll('.fab').forEach(b => b.classList.toggle('active', (b as HTMLElement).dataset.v === k));
+
     this.card.classList.remove('hidden');
     this.card.scrollTop = 0;
     this.renderCard();
@@ -347,7 +438,7 @@ export class Hud {
   closeCard() {
     this.cardKind = null;
     this.card.classList.add('hidden');
-    this.dock.querySelectorAll('.fab').forEach(b => b.classList.remove('active'));
+
     this.scene.select(-1);
   }
 

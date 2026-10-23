@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>WAR WORLD — لوحة استعراض الوحدات</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1c2f72; font-family: Cairo, sans-serif; }
+  #game { position: fixed; inset: 0; }
+  #zoom { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 4px; background: rgba(20,16,30,.82); border: 1px solid #3a3350; border-radius: 8px; z-index: 5; }
+  #zoom button { font: 700 13px Cairo, sans-serif; color: #e8e4f0; background: #2b2540; border: 1px solid #453c60; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  #zoom button:hover { background: #3a3258; }
+  #zoom .t { color: #ffe28a; font: 700 13px Cairo, sans-serif; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="zoom">
+  <span class="t">لوحة الاستعراض — أحجام حقيقية</span>
+  <button data-z="fit">الكل</button>
+  <button data-z="2">2×</button>
+  <button data-z="4">4×</button>
+  <button data-z="6">6×</button>
+  <button data-z="8">8×</button>
+</div>
+<script type="module" src="/src/client/showcase.ts"></script>
+</body>
+</html>

@@ -2,10 +2,11 @@ import { allTracks, putTrack, putBlob, getBlob, newId, getPref, setPref } from '
 import { SURAHS, SOURCE_REGISTRY, normalizeArabic, tokens, detectSource, youtubeId, youtubeMeta, normalizeVariant, migrateTrack, resolveVariant, variantScore } from './catalog/core.js';
 import { fetchReciters, hydrateArchive1425, catalogRecitation, reciterMoshafs, reciterSurahs, hasSurah } from './catalog/mp3quran.js';
 import { Player, bindMediaSession, prewarmYouTube } from './player.js';
-import { dossariImage, imageFor, QURAN_FALLBACK } from './ui-dossari-only.js';
+import { dossariImage, imageFor, surahCover, QURAN_FALLBACK } from './ui-dossari-only.js';
 import { makeSortable } from './reorder.js';
 import { queueTargetIndex, findEquivalentTrack, mergeVariants, recordMatchesQuery, catalogRefKey } from './app-logic.js';
 import './classic-ui.js';
+import { homeQuranCard } from './quran.js';
 
 const $=id=>document.getElementById(id);
 const $$=(sel,root=document)=>[...root.querySelectorAll(sel)];
@@ -71,6 +72,7 @@ function cardHTML(rec,{tag=''}={}){
   const cover=coverSync(rec),fallback=fallbackCover(rec),status=tag||(rec.rare?'نادرة':isOffline(rec)?'بلا نت':''),current=elementActionKey({dataset:isPersisted(rec)?{play:rec.id}:rec.catalogRef?{catalogPlay:catalogRefKey(rec.catalogRef)}:{play:rec.id}})===currentActionKey();
   return`<button class="media-card ${current?'is-current':''}" type="button" ${actionAttr(rec)}><div class="art"><img src="${esc(cover)}" data-fallback="${esc(fallback)}" alt="" loading="lazy">${status?`<span class="tag ${status==='نادرة'?'gold':''}">${esc(status)}</span>`:''}<span class="art__play">${playSvg()}${eqSvg()}</span></div><h3>${esc(rec.title||`سورة ${rec.surah}`||'تلاوة')}</h3><p>${esc(recSubtitle(rec))}</p></button>`;
 }
+function reciterBannerHTML(r){const m=reciterMoshafs(r),surahs=Math.max(0,...m.map(x=>Number(x.surah_total||0)));return`<button class="reciter-banner" data-reciter="${r.id}" type="button"><img src="${dossariImage(`reciter-banner|${r.name}`)}" data-fallback="${QURAN_FALLBACK}" alt=""><span class="reciter-banner__text"><small>القارئ</small><b>${esc(r.name)}</b><span>${m.length} مصحف · ${surahs} سورة</span></span><span class="reciter-banner__go">كل المصاحف</span></button>`}
 function reciterCardHTML(r){const m=reciterMoshafs(r),cover=imageFor({reciter:r.name,seed:`reciter|${r.name}`});return`<button class="reciter-card" data-reciter="${r.id}" type="button"><div class="reciter-art"><img src="${cover}" data-fallback="${fallbackCover({reciter:r.name,id:r.id})}" alt=""></div><div class="reciter-card__text"><h3>${esc(r.name)}</h3><p>${m.length} مصحف · ${Math.max(0,...m.map(x=>Number(x.surah_total||0)))} سورة</p></div></button>`}
 function shelf(title,body,sub='',more=''){return`<section class="shelf"><div class="shelf__head"><div><h2>${esc(title)}</h2>${sub?`<p>${esc(sub)}</p>`:''}</div>${more?`<button class="more" data-more="${esc(more)}">عرض الكل</button>`:''}</div>${body}</section>`}
 function rail(items){return`<div class="rail">${items.join('')}</div>`}
@@ -87,13 +89,13 @@ function renderLastListened(){
 function renderHome(){
   $('homeGreeting').textContent=greeting();renderLastListened();
   const stats=['ياسر الدوسري','114 سورة'];if(state.local.length)stats.push(`${state.local.length} محفوظة`);stats.push('تشغيل بالخلفية');$('heroStats').innerHTML=stats.map(s=>`<span>${esc(s)}</span>`).join('');
-  const blocks=[];
+  const blocks=[`<section class="shelf shelf--quran">${homeQuranCard()}</section>`];
   if(state.local.length)blocks.push(shelf('أضيف حديثًا',rail(state.local.slice(0,10).map(cardHTML))));
   if(state.catalogReady){
     const reciter=state.reciters[0],moshafs=reciterMoshafs(reciter),archive=moshafs.find(m=>Number(m.id)===1425),murattal=moshafs.find(m=>Number(m.id)===1);
     if(archive){const ids=reciterSurahs(reciter,archive).map(s=>s.id),tracks=catalogueSet(archive,ids.slice(0,12));if(tracks.length)blocks.push(shelf('رمضان 1425هـ',rail(tracks.map(r=>cardHTML(r,{tag:'نادرة'}))),'تسجيلات الأرشيف القديمة'))}
     const murattalTracks=catalogueSet(murattal,[18,36,55,56,67,78,112,113,114,2,19,20]);if(murattalTracks.length)blocks.push(shelf('المصحف المرتل',rail(murattalTracks.map(cardHTML)),'تلاوات مختارة بصوت ياسر الدوسري'));
-    blocks.push(shelf('ياسر الدوسري',rail(featuredReciters().map(reciterCardHTML)),'المصاحف والتسجيلات','reciters'));
+    blocks.push(`<section class="shelf shelf--reciter">${featuredReciters().map(reciterBannerHTML).join('')}</section>`);
   }else blocks.push(shelf(state.catalogError?'تعذر تحميل الكتالوج':'جارٍ تجهيز التلاوات',''));
   const rare=state.local.filter(r=>r.rare).slice(0,10);if(rare.length)blocks.push(shelf('كنوز الأرشيف',rail(rare.map(r=>cardHTML(r,{tag:'نادرة'})))));
   $('homeShelves').innerHTML=blocks.join('');syncCurrentCards();
@@ -144,7 +146,7 @@ function renderSearch(q=''){
   root.innerHTML=html||'<div class="empty"><h2>لا توجد نتيجة مطابقة</h2><p>جرّب اسم القارئ أو السورة أو السنة بشكل أقصر.</p></div>';syncCurrentCards();
 }
 
-function showTab(tab){state.tab=tab;['home','search','library'].forEach(t=>$(t+'View').classList.toggle('hidden',t!==tab));$$('.tab').forEach(b=>b.toggleAttribute('aria-current',b.dataset.tab===tab));if(tab==='library')renderLibrary();if(tab==='search'){renderSearch($('searchInput').value);setTimeout(()=>$('searchInput').focus(),80)}window.scrollTo({top:0,behavior:'auto'})}
+function showTab(tab){state.tab=tab;['home','quran','search','library'].forEach(t=>$(t+'View').classList.toggle('hidden',t!==tab));document.dispatchEvent(new CustomEvent('tilawat:tab',{detail:{tab}}));$$('.tab').forEach(b=>b.toggleAttribute('aria-current',b.dataset.tab===tab));if(tab==='library')renderLibrary();if(tab==='search'){renderSearch($('searchInput').value);setTimeout(()=>$('searchInput').focus(),80)}window.scrollTo({top:0,behavior:'auto'})}
 document.querySelector('.tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab)});$('brand').onclick=()=>showTab('home');$('searchInput').addEventListener('input',e=>renderSearch(e.target.value));$('librarySegs').addEventListener('click',e=>{const b=e.target.closest('[data-seg]');if(!b)return;state.librarySeg=b.dataset.seg;renderLibrary()});
 
 function findRec(id){return state.local.find(r=>r.id===id)||(state.current?.id===id?state.current:null)}
@@ -167,7 +169,11 @@ function openAllSurahs(){openBrowse('سور القرآن','114 سورة','اخت
 function openLocalGroup(title,list){openBrowse(title,'من مكتبتك',`${list.length} تسجيل`,`<div class="library-grid">${list.map(cardHTML).join('')}</div>`,title.trim()[0]||'ت')}
 function renderMoshafSurahs(r,m){const ss=reciterSurahs(r,m);return`<div class="surah-list reciter-surah-grid">${ss.map(s=>{const rec=applyCatalogState(catalogRecitation(r,m,s.id)),cover=fallbackCover(rec),key=`${r.id}|${m.id}|${s.id}`,current=`catalog:${key}`===currentActionKey();return`<button class="surah-row reciter-surah-card ${current?'is-current':''}" data-catalog-play="${key}" type="button" aria-label="تشغيل سورة ${esc(s.name)}"><span class="surah-card__art"><img src="${esc(cover)}" alt="" loading="lazy"></span><span class="surah-card__number">${String(s.id).padStart(3,'0')}</span><span class="surah-card__meta"><b>سورة ${esc(s.name)}</b><small>${esc(m.name||'المصحف')}</small></span><span class="surah-card__play">${playSvg()}<span class="surah-card__eq" aria-hidden="true"><i></i><i></i><i></i></span></span></button>`}).join('')}</div>`}
 function openReciter(id){const r=state.reciters.find(x=>Number(x.id)===Number(id));if(!r)return;const ms=reciterMoshafs(r);if(!ms.length)return;const tabs=ms.map((m,i)=>`<button class="${i===0?'on':''}" data-moshaf-index="${i}">${esc(m.name||`مصحف ${i+1}`)}</button>`).join('');openBrowse(r.name,'صفحة القارئ',`${ms.length} مصحف`,`<div class="moshaf-tabs" id="moshafTabs">${tabs}</div><div id="moshafBody">${renderMoshafSurahs(r,ms[0])}</div>`,(r.name||'ق')[0]);$('moshafTabs').onclick=e=>{const b=e.target.closest('[data-moshaf-index]');if(!b)return;const i=Number(b.dataset.moshafIndex);$$('#moshafTabs button').forEach(x=>x.classList.toggle('on',x===b));$('moshafBody').innerHTML=renderMoshafSurahs(r,ms[i]);syncCurrentCards()}}
-function openSurah(id){const name=SURAHS[id-1],available=[];for(const r of state.reciters)for(const m of reciterMoshafs(r))if(hasSurah(m,id))available.push({r,m});openBrowse(`سورة ${name}`,'صفحة السورة',`${available.length} تسجيل متاح`,`<div class="result-list">${available.map(({r,m})=>`<button class="result-row" data-catalog-play="${r.id}|${m.id}|${id}"><img src="${dossariImage(`surah|${name}|${m.id}`)}" data-fallback="${QURAN_FALLBACK}" alt=""><span><b>${esc(r.name)}</b><small>${esc(m.name||'')}</small></span><span class="row-play">▶</span></button>`).join('')}</div>`,'س')}
+function openSurah(id){const name=SURAHS[id-1],available=[];for(const r of state.reciters)for(const m of reciterMoshafs(r))if(hasSurah(m,id))available.push({r,m});openBrowse(`سورة ${name}`,'صفحة السورة',`${available.length} تسجيل متاح`,`<div class="result-list">${available.map(({r,m})=>`<button class="result-row" data-catalog-play="${r.id}|${m.id}|${id}"><img src="${surahCover(id)||dossariImage(`surah|${name}|${m.id}`)}" data-fallback="${QURAN_FALLBACK}" alt=""><span><b>${esc(r.name)}</b><small>${esc(m.name||'')}</small></span><span class="row-play">▶</span></button>`).join('')}</div>`,'س')}
+
+// The Quran reader asks for a surah by number; play Yasser Al-Dosari's murattal
+// mushaf when it has that surah, otherwise the first catalog recording of it.
+document.addEventListener('tilawat:listen-surah',async e=>{const n=Number(e.detail?.surah);if(!n)return;const options=[];for(const r of state.reciters)for(const m of reciterMoshafs(r))if(hasSurah(m,n))options.push({r,m});if(!options.length){toast(state.catalogReady?'ما لقيت تسجيلًا لهذه السورة.':'الكتالوج يتجهز، جرّب بعد لحظات.');return}const pick=options.find(o=>/مرتل/.test(o.m.name||''))||options[0];const el=document.createElement('button');el.dataset.catalogPlay=`${pick.r.id}|${pick.m.id}|${n}`;await playByElement(el)});
 
 async function playByElement(el){
   if(state.editMode&&el.closest('#libraryGrid'))return;

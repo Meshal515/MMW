@@ -67,6 +67,7 @@ jobs:
           node tilawat/tests/ux-stability-regression.mjs
           node tilawat/tests/playback-continuity-regression.mjs
           node tilawat/tests/visual-audit.mjs
+          node tilawat/tests/quran-regression.mjs
       - name: Upload Tilawat visual QA artifacts
         if: always()
         uses: actions/upload-artifact@v4

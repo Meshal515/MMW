@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>Surah cover renderer</title>
+<style>
+@font-face{font-family:QuranName;src:url('../assets/fonts/amiri-quran.woff2') format('woff2')}
+@font-face{font-family:Plex;src:url('../assets/fonts/plex-ar-arabic-600.woff2') format('woff2');font-weight:600}
+body{margin:0;background:#111;color:#eee;font:14px system-ui}
+canvas{width:360px;height:360px;margin:8px}
+</style>
+</head>
+<body>
+<canvas id="c" width="720" height="720"></canvas>
+<script>
+/* Renders one cover per surah from the owner-supplied Yasser Al-Dosari photos.
+   Each photo has a focal point (the face); a surah picks a photo, a framing and
+   a palette so that neighbouring surahs never look alike. Used by
+   make-surah-covers.mjs, which writes the results to assets/covers/surah/. */
+const PHOTOS = [
+  { src:'../assets/covers/dossari-1.jpg', fx:.38, fy:.33 },
+  { src:'../assets/covers/dossari-2.jpg', fx:.37, fy:.29 },
+  { src:'../assets/covers/dossari-3.jpg', fx:.50, fy:.29 },
+  { src:'../assets/covers/dossari-4.jpg', fx:.52, fy:.30 },
+  { src:'../assets/covers/dossari-5.jpg', fx:.62, fy:.40 }
+];
+const FRAMES = [
+  { zoom:1.00, pull:0.0 },
+  { zoom:1.45, pull:1.0 },
+  { zoom:1.85, pull:1.0 },
+  { zoom:1.25, pull:0.6 }
+];
+const PALETTES = {
+  meccan:  { ink:[18,12,7],  light:[243,226,196], accent:'#D9B26A', label:'مكية' },
+  medinan: { ink:[6,20,18],  light:[214,236,227], accent:'#86D3BE', label:'مدنية' }
+};
+const AR_DIGITS = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+
+let images, index;
+async function ready(){
+  if (images) return;
+  images = await Promise.all(PHOTOS.map(p => loadImg(p.src)));
+  index = (await (await fetch('../data/quran/index.json')).json()).surahs;
+  await document.fonts.load('120px QuranName', 'سورة'); await document.fonts.load('600 26px Plex', 'سورة');
+}
+
+function pick(n){
+  const photo = (n * 3 + Math.floor(n / 5)) % PHOTOS.length;
+  const frame = (n + Math.floor(n / PHOTOS.length)) % FRAMES.length;
+  return { photo, frame };
+}
+
+async function renderCover(n){
+  await ready();
+  const meta = index[n - 1], pal = PALETTES[meta.type] || PALETTES.meccan;
+  const { photo, frame } = pick(n);
+  const img = images[photo], P = PHOTOS[photo], F = FRAMES[frame];
+  const c = document.getElementById('c'), g = c.getContext('2d'), S = c.width;
+  g.clearRect(0, 0, S, S);
+
+  // Square crop pulled toward the face by the frame's strength.
+  const side = Math.min(img.width, img.height) / F.zoom;
+  const cx = img.width * (0.5 + (P.fx - 0.5) * F.pull), cy = img.height * (0.5 + (P.fy - 0.5) * F.pull) + side * 0.12;
+  const sx = Math.max(0, Math.min(img.width - side, cx - side / 2));
+  const sy = Math.max(0, Math.min(img.height - side, cy - side / 2));
+  g.drawImage(img, sx, sy, side, side, 0, 0, S, S);
+
+  // Duotone: luminance mapped between the palette's ink and light.
+  const d = g.getImageData(0, 0, S, S), px = d.data;
+  for (let i = 0; i < px.length; i += 4){
+    let l = (px[i] * .299 + px[i + 1] * .587 + px[i + 2] * .114) / 255;
+    l = Math.pow(l, 1.12);
+    px[i]     = pal.ink[0] + (pal.light[0] - pal.ink[0]) * l;
+    px[i + 1] = pal.ink[1] + (pal.light[1] - pal.ink[1]) * l;
+    px[i + 2] = pal.ink[2] + (pal.light[2] - pal.ink[2]) * l;
+  }
+  g.putImageData(d, 0, 0);
+
+  const ink = `rgb(${pal.ink.join(',')})`, inkA = a => `rgba(${pal.ink.join(',')},${a})`;
+  const v = g.createRadialGradient(S * .5, S * .38, S * .2, S * .5, S * .5, S * .78);
+  v.addColorStop(0, inkA(0)); v.addColorStop(1, inkA(.55));
+  g.fillStyle = v; g.fillRect(0, 0, S, S);
+  const b = g.createLinearGradient(0, S * .42, 0, S);
+  b.addColorStop(0, inkA(0)); b.addColorStop(.62, inkA(.82)); b.addColorStop(1, inkA(.96));
+  g.fillStyle = b; g.fillRect(0, 0, S, S);
+
+  // Thin frame, like a printed sleeve.
+  g.strokeStyle = pal.accent; g.globalAlpha = .55; g.lineWidth = 2;
+  g.strokeRect(26, 26, S - 52, S - 52); g.globalAlpha = 1;
+
+  // Surah number seal.
+  g.fillStyle = inkA(.72); g.beginPath(); g.arc(S - 82, 82, 38, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = pal.accent; g.lineWidth = 2; g.stroke();
+  g.fillStyle = pal.accent; g.font = '600 30px Plex'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(AR_DIGITS(n), S - 82, 84);
+
+  // Name block, right-aligned for Arabic.
+  g.direction = 'rtl'; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+  const right = S - 62;
+  g.fillStyle = pal.accent; g.font = '600 26px Plex';
+  g.fillText('سورة', right, S - 236);
+  let size = 132; g.font = `${size}px QuranName`;
+  while (g.measureText(meta.name).width > S - 130 && size > 70){ size -= 6; g.font = `${size}px QuranName`; }
+  g.fillStyle = `rgb(${pal.light.join(',')})`;
+  g.fillText(meta.name, right, S - 128);
+  g.globalAlpha = .78; g.font = '600 24px Plex';
+  g.fillText(`ياسر الدوسري · ${pal.label} · ${AR_DIGITS(meta.count)} آية`, right, S - 50);
+  g.globalAlpha = 1;
+  return c.toDataURL('image/jpeg', .82);
+}
+window.renderCover = renderCover;
+const q = new URLSearchParams(location.search).get('n');
+if (q) renderCover(+q);
+</script>
+</body>
+</html>

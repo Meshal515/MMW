@@ -1,14 +1,18 @@
 /* Local artwork policy for Tilawat.
    No image search. No Wikipedia/Wikimedia. No remote artwork lookup.
-   Yasser Al-Dosari uses only the five owner-supplied local photos.
-   Any other manually-added reciter rotates through the three owner-supplied
-   Quran/Kaaba fallback images. */
+   Yasser Al-Dosari uses only the five owner-supplied local photos. When the
+   surah is known, his recitation gets that surah's own cover, rendered from
+   those photos by tools/make-surah-covers.mjs. Any other manually-added
+   reciter rotates through the three owner-supplied Quran/Kaaba fallback images. */
+
+import { SURAHS } from './catalog/core.js';
 
 export const DOSSARI_IMAGES = [
   './assets/covers/dossari-1.jpg',
   './assets/covers/dossari-2.jpg',
   './assets/covers/dossari-3.jpg',
-  './assets/covers/dossari-4.jpg'
+  './assets/covers/dossari-4.jpg',
+  './assets/covers/dossari-5.jpg'
 ];
 
 export const FALLBACK_IMAGES = [
@@ -44,6 +48,21 @@ export function isDossari(name=''){
   return ar || en;
 }
 
+const SURAH_KEYS=new Map(SURAHS.map((name,i)=>[normalizeName(name),i+1]));
+
+export function surahNumber(value){
+  if(value==null||value==='')return 0;
+  const n=Number(value);
+  if(Number.isInteger(n)&&n>=1&&n<=114)return n;
+  const key=normalizeName(value).replace(/^سوره\s+/,'');
+  return SURAH_KEYS.get(key)||0;
+}
+
+export function surahCover(value){
+  const n=surahNumber(value);
+  return n?`./assets/covers/surah/${String(n).padStart(3,'0')}.jpg`:'';
+}
+
 export function dossariImage(seed='yasser'){
   return DOSSARI_IMAGES[stableHash(seed)%DOSSARI_IMAGES.length];
 }
@@ -56,6 +75,6 @@ export function imageFor({reciter='',surah='',seed='',manual=''}={}){
   const src=String(manual||'');
   const local=src && !/^https?:\/\//i.test(src) && !src.startsWith('data:image/svg') && !src.includes('default.jpg');
   if(local) return src;
-  if(isDossari(reciter)) return dossariImage(`${reciter}|${surah}|${seed}`);
+  if(isDossari(reciter)) return surahCover(surah) || dossariImage(`${reciter}|${surah}|${seed}`);
   return fallbackImage(`${reciter}|${surah}|${seed}`);
 }

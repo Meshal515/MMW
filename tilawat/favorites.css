@@ -2,13 +2,13 @@
 .favorite-hub{
   width:100%;min-height:76px;margin:4px 0 14px;padding:10px 12px;
   display:grid;grid-template-columns:48px minmax(0,1fr) auto 18px;gap:11px;align-items:center;
-  border:1px solid color-mix(in srgb,var(--favorite) 18%,var(--line));border-radius:16px;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--favorite) 8%,var(--surface)),var(--surface) 62%);
+  border:1px solid var(--line);border-radius:16px;
+  background:var(--surface);
   color:var(--ink);text-align:right;box-shadow:0 14px 40px -34px rgba(0,0,0,.8);
   overflow:hidden;position:relative;isolation:isolate;
 }
-.favorite-hub::before{content:'';position:absolute;z-index:-1;left:-34px;top:-52px;width:130px;height:130px;border-radius:50%;background:color-mix(in srgb,var(--favorite) 14%,transparent);filter:blur(24px);opacity:.65}
-.favorite-hub__icon{width:48px;height:48px;display:grid;place-items:center;justify-self:center;align-self:center;background:transparent;color:var(--favorite);box-shadow:none}
+.favorite-hub::before{content:none}
+.favorite-hub__icon{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;justify-self:center;align-self:center;background:color-mix(in srgb,var(--favorite) 13%,transparent);color:var(--favorite);box-shadow:none}
 .favorite-hub__icon svg{width:19px;height:19px;fill:var(--favorite);stroke:var(--favorite);stroke-width:1.7}
 .favorite-hub__text{min-width:0}.favorite-hub__text b{display:block;font-size:15px;line-height:1.35}.favorite-hub__text small{display:block;margin-top:3px;color:var(--muted);font-size:10.5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .favorite-hub__count{min-width:30px;height:30px;padding:0 8px;border-radius:999px;display:grid;place-items:center;background:var(--surface2);color:var(--ink);font-size:11px;font-variant-numeric:tabular-nums}
@@ -32,7 +32,7 @@
 .library-favorite:active::before{transform:scale(.88)}
 .library-favorite:focus-visible{outline:2px solid var(--ink);outline-offset:-6px;border-radius:50%}
 .library-editing .library-favorite{opacity:0;visibility:hidden;pointer-events:none}
-#libraryGrid .library-row.is-favorite h3::after{content:'';display:inline-block;width:5px;height:5px;margin-inline-start:7px;border-radius:50%;background:var(--favorite);vertical-align:middle;opacity:.82}
+
 
 /* Top actions need independent breathing room; the spacer still owns alignment. */
 .player-top{gap:10px}

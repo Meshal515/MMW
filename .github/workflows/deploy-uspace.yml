@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
           LIST="$(mktemp)"
-          curl --retry 3 --retry-all-errors -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$API?per_page=100" > "$LIST"
+          curl --retry 3 --retry-all-errors -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$API" > "$LIST"
           PROJECT="$(jq -r '.result[]? | select(.name == "uspace" or .name == "uspace-mmw" or .name == "uspace-meshal515") | .name' "$LIST" | head -n1)"
           if [ -z "$PROJECT" ]; then
             for NAME in uspace uspace-mmw uspace-meshal515; do

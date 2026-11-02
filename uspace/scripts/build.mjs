@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(import.meta.dirname, '..');
+const src = name => fs.readFileSync(path.join(root, 'src', name), 'utf8');
+const out = path.join(root, 'dist');
+fs.rmSync(out,{recursive:true,force:true});
+fs.mkdirSync(path.join(out,'assets'),{recursive:true});
+fs.cpSync(path.join(root,'public'),out,{recursive:true});
+const format = src('format.js').replace(/\bexport (function|const)\b/g,'$1');
+const storage = src('storage.js').replace(/\bexport (async function|const)\b/g,'$1');
+const main = src('main.js').replace(/^import .*;\s*$/gm,'').replace('import.meta.env.PROD','true');
+fs.writeFileSync(path.join(out,'assets','app.js'),`${format}\n${storage}\n${main}`);
+fs.writeFileSync(path.join(out,'assets','app.css'),src('style.css'));
+const html = fs.readFileSync(path.join(root,'index.html'),'utf8').replace('<script type="module" src="/src/main.js"></script>','<link rel="stylesheet" href="/assets/app.css" />\n    <script type="module" src="/assets/app.js"></script>');
+fs.writeFileSync(path.join(out,'index.html'),html);
+console.log(`USPACE built in ${out}`);

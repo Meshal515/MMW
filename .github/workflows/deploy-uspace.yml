@@ -1,0 +1,107 @@
+name: Deploy USPACE to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'uspace/**'
+      - '.github/workflows/deploy-uspace.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: uspace-pages-production
+  cancel-in-progress: true
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      AI_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      USPACE_GATE_KEY: ${{ secrets.USPACE_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test USPACE
+        run: |
+          node --test uspace/tests/*.test.js
+          node uspace/scripts/build.mjs
+          test -s uspace/dist/assets/app.js
+          test -s uspace/dist/index.html
+      - name: Validate credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+      - name: Prepare isolated Pages Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p functions/api worker
+          cp uspace/functions/api/ai.js functions/api/ai.js
+          cp uspace/worker/index.js worker/index.js
+      - name: Resolve or create USPACE Pages project
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
+          LIST="$(mktemp)"
+          curl --retry 3 --retry-all-errors -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$API?per_page=100" > "$LIST"
+          PROJECT="$(jq -r '.result[]? | select(.name == "uspace" or .name == "uspace-mmw" or .name == "uspace-meshal515") | .name' "$LIST" | head -n1)"
+          if [ -z "$PROJECT" ]; then
+            for NAME in uspace uspace-mmw uspace-meshal515; do
+              OUTPUT="$(mktemp)"
+              STATUS="$(curl -sS --retry 2 --retry-all-errors -o "$OUTPUT" -w '%{http_code}' -X POST \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H 'Content-Type: application/json' \
+                -d "{\"name\":\"${NAME}\",\"production_branch\":\"main\"}" "$API")"
+              if [ "$STATUS" = '200' ] && jq -e '.success == true' "$OUTPUT" >/dev/null; then
+                PROJECT="$NAME"
+                break
+              fi
+            done
+          fi
+          test -n "$PROJECT"
+          echo "USPACE_PROJECT=${PROJECT}" >> "$GITHUB_ENV"
+      - name: Install USPACE AI secrets if available
+        if: ${{ env.AI_API_KEY != '' && env.USPACE_GATE_KEY != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$AI_API_KEY" | npx --yes wrangler@latest pages secret put DEEPSEEK_API_KEY --project-name="$USPACE_PROJECT"
+          printf '%s' "$USPACE_GATE_KEY" | npx --yes wrangler@latest pages secret put APP_ACCESS_KEY --project-name="$USPACE_PROJECT"
+      - name: Deploy USPACE only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deploy uspace/dist \
+            --project-name="$USPACE_PROJECT" \
+            --branch=main \
+            --commit-dirty=true
+      - name: Verify live USPACE
+        shell: bash
+        run: |
+          set -euo pipefail
+          DETAILS="$(mktemp)"
+          curl --retry 3 --retry-all-errors -fsS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${USPACE_PROJECT}" > "$DETAILS"
+          HOST="$(jq -r '.result.subdomain // empty' "$DETAILS")"
+          if [ -z "$HOST" ]; then HOST="${USPACE_PROJECT}.pages.dev"; fi
+          URL="https://${HOST}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            PAGE="$(mktemp)"
+            if curl -fsS --max-time 15 "$URL/" > "$PAGE" && grep -q '<title>USPACE' "$PAGE"; then
+              echo "USPACE published and HTML verified: ${URL}"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "USPACE was not reachable with expected HTML: ${URL}"
+          exit 1

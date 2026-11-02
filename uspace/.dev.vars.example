@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars (ignored by git) for local testing only.
+# Never commit the real values or paste them in a chat.
+DEEPSEEK_API_KEY=replace_locally
+APP_ACCESS_KEY=choose_a_long_random_personal_access_password

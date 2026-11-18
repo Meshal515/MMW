@@ -387,6 +387,7 @@ function renderModes(){
  if(command && label){
    label.textContent=state.mode==='custom'?'ما الأمر الذي تريد تنفيذه؟ (مطلوب)':'أمرك الخاص لهذه العملية (اختياري)';
    command.setAttribute('aria-required',String(state.mode==='custom'));
+   command.toggleAttribute('required',state.mode==='custom');
  }
 }
 function showDialog(title, content, opts={}){

@@ -629,3 +629,52 @@ html[data-theme="dark"] .page-meta,html[data-theme="dark"] .count-line,html[data
 @media(prefers-reduced-motion:reduce){
  button{transition:none!important}
 }
+
+/* Persistent desktop library, discoverable mobile sidebar: navigation restoration. */
+.sidebar{min-width:0;overflow:hidden}
+.sidebar .pages-list{min-height:90px}
+.sidebar .sidebar-foot{flex:none}
+@media(min-width:720px){
+  .shell{grid-template-columns:268px minmax(0,1fr)}
+  .sidebar{
+    position:relative;grid-column:1;grid-row:1;width:100%;height:100%;
+    transform:none;visibility:visible;
+  }
+  .main{grid-column:2;grid-row:1}
+  .mobile-menu,.mobile-close{display:none!important}
+}
+@media(min-width:1280px){
+  .shell:has(>.right-panel.open){grid-template-columns:268px minmax(0,1fr) min(33vw,470px)}
+  .shell:has(>.right-panel.open) .sidebar{grid-column:1}
+  .shell:has(>.right-panel.open) .main{grid-column:2}
+}
+@media(max-width:719px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .sidebar{
+    position:fixed;top:0;right:0;bottom:0;
+    width:min(340px,92vw);max-width:92vw;height:100dvh;
+    transform:translateX(105%);z-index:45;
+    background:var(--studio-pane);
+    box-shadow:-12px 0 35px rgba(16,22,55,.18);
+  }
+  .sidebar.open{transform:translateX(0)}
+  .main{grid-column:1;grid-row:1;min-width:0;width:100%}
+  .mobile-menu#open-sidebar{
+    display:inline-flex;align-items:center;justify-content:center;flex:none;
+    width:auto;min-width:80px;min-height:39px;height:39px;
+    gap:6px;padding:6px 10px;border:1px solid var(--studio-border);
+    border-radius:11px;color:var(--studio-accent-strong);
+    background:var(--studio-accent-soft);font-size:12px;font-weight:750;
+  }
+  .mobile-menu#open-sidebar:hover{background:var(--studio-hover);border-color:var(--studio-accent)}
+  .sidebar-open-label{white-space:nowrap;line-height:1.4}
+  .breadcrumbs{gap:6px;min-width:0;flex:1;max-width:none}
+  .breadcrumbs #crumb-space,.breadcrumbs .crumb-slash{display:none}
+  .breadcrumbs #crumb-page{max-width:clamp(50px,23vw,115px);font-size:11px}
+  .top-actions{gap:2px;flex:none}
+  .topbar{overflow:hidden}
+  .mobile-close#close-sidebar{display:inline-grid;width:38px;height:38px}
+  .sidebar .brand{min-height:83px}
+  .sidebar .pages-list{overflow-y:auto;overscroll-behavior:contain}
+  .scrim.show{background:rgba(13,18,39,.48)}
+}

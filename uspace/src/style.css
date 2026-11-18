@@ -5,3 +5,43 @@
 @media(max-width:720px){.shell{grid-template-columns:minmax(0,1fr)}.sidebar{position:fixed;top:0;right:0;bottom:0;width:min(310px,87vw);transform:translateX(105%);transition:transform .25s ease;z-index:45;box-shadow:-7px 0 25px #102b2113}.sidebar.open{transform:translateX(0)}.scrim{display:block;position:fixed;inset:0;background:#10282066;z-index:43;opacity:0;pointer-events:none;transition:opacity .25s}.scrim.open{opacity:1;pointer-events:all}.mobile-menu,.mobile-close{display:inline-grid}.mobile-close{margin-right:auto}.topbar{padding:0 14px;height:65px}.breadcrumbs{gap:5px;flex:1;font-size:11px}.top-actions{gap:5px}.top-actions .quiet-btn{display:none}.top-actions .accent-btn{padding:10px}.accent-btn span{display:none}.save-indicator{font-size:10px}.editor-paper{padding:40px 25px 30px}.page-title{font-size:33px}.editor-footer{flex-wrap:wrap;gap:2px;padding:10px 14px}.footer-tools{margin-right:auto}.count-line{gap:8px;font-size:9px}.text-btn{padding:6px;font-size:10px;gap:3px}.right-panel{width:min(100vw,420px)}#editor{min-height:max(300px,calc(100dvh - 310px));font-size:15px}.page-meta{gap:6px;font-size:10px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 .mode-btn.chosen{border-color:#609b78;background:#f0f7f1;box-shadow:0 0 0 1px #8aba9629}.mode-btn.chosen .mode-radio{border:5px solid #246e4b}.scrim.show{opacity:1;pointer-events:all}
+
+
+/* USPACE design-system refinement: touch-friendly controls, typography, tables and vault. */
+:root{--us-ink:#19372f;--us-accent:#23664f;--us-line:#dce8e0;--us-surface:#fdfefa;--us-muted:#6c8778}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid #2d8060;outline-offset:3px}
+.format-toolbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px 0 12px;margin:0 0 13px;background:var(--us-surface);border-bottom:1px solid #e7eee8}
+.format-toolbar button,.format-toolbar select{height:35px;min-width:35px;border:1px solid transparent;border-radius:8px;background:transparent;color:#416452;padding:0 9px;font-size:12px;transition:background .15s,border-color .15s}
+.format-toolbar select{border-color:#e1eae4;background:#fff;max-width:110px}
+.format-toolbar button:hover{background:#eaf3ed;border-color:#d5e5da}
+.format-toolbar button:active{background:#d2e7d8}
+.format-toolbar .toolbar-divider{height:24px;width:1px;background:#dce7e0;margin:0 3px}
+.editor-paper #editor,.editor-paper .markdown-preview{font-size:var(--editor-body-size,16px);line-height:1.95}
+.editor-paper[data-font="system"] #editor,.editor-paper[data-font="system"] .markdown-preview{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif}
+.editor-paper[data-font="sans"] #editor,.editor-paper[data-font="sans"] .markdown-preview{font-family:Tahoma,Arial,sans-serif}
+.editor-paper[data-font="serif"] #editor,.editor-paper[data-font="serif"] .markdown-preview{font-family:Georgia,'Times New Roman',serif}
+.editor-paper[data-font="mono"] #editor,.editor-paper[data-font="mono"] .markdown-preview{font-family:ui-monospace,'Cascadia Code',Consolas,monospace}
+.key-buttons{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:10px}
+.key-buttons .quiet-btn{border:1px solid #d6e4d9;border-radius:9px;white-space:normal;min-height:37px;padding:8px 11px}
+.key-status{border-radius:9px;background:#eef6f0;padding:9px 11px;color:#426b53}
+.vault-details{border:1px solid #dce7de;border-radius:12px;padding:12px 13px;margin-top:14px;background:#fff}
+.vault-details summary{font-size:12px;font-weight:700;color:#315f49;cursor:pointer;user-select:none}
+.vault-details[open] summary{margin-bottom:12px}
+.markdown-preview table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:.9em;margin:15px 0;overflow:hidden}
+.markdown-preview .md-table-scroll{overflow-x:auto;width:100%;border:1px solid #dde8e1;border-radius:12px;margin:12px 0;overscroll-behavior-inline:contain}
+.markdown-preview th,.markdown-preview td{padding:9px 14px;text-align:start;border-inline-end:1px solid #e2ebe4;border-bottom:1px solid #e2ebe4;white-space:normal;min-width:90px}
+.markdown-preview th{background:#edf5ef;font-weight:700;color:#285740}
+.markdown-preview tr:last-child td{border-bottom:0}
+.markdown-preview td:last-child,.markdown-preview th:last-child{border-inline-end:0}
+.markdown-preview code{padding:1px 5px;background:#ebf1ed;border-radius:5px;font-family:ui-monospace,monospace;font-size:.9em}
+.markdown-preview .markdown-li{padding-right:16px}
+.right-panel .panel-body{padding-bottom:max(36px,env(safe-area-inset-bottom))}
+@media(max-width:720px){
+ .editor-paper{padding-inline:20px}
+ .format-toolbar{margin-inline:-4px;gap:3px;max-height:125px;overflow-y:auto}
+ .format-toolbar button,.format-toolbar select{height:36px;min-width:36px}
+ .format-toolbar select{max-width:105px}
+ .editor-paper #editor{min-height:max(280px,calc(100dvh - 360px))}
+ .key-buttons .quiet-btn{flex:1 1 auto}
+ .vault-details{padding:11px}
+}

@@ -54,19 +54,9 @@ function renderShell(){
     <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/icons/icon.svg" alt="شعار USPACE الثابت" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button type="button" class="icon-btn mobile-close" id="close-sidebar" title="إغلاق المكتبة" aria-label="إغلاق المكتبة">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
-    <div class="sidebar-utility" aria-label="أدوات المعرفة">
-      <button type="button" class="quick-launch" id="quick-switch-btn">${icon('search',16)} بحث وتنقل سريع <span>Ctrl K</span></button>
-      <div class="sidebar-quick-row">
-        <button type="button" id="daily-note-btn" title="إنشاء أو فتح مذكّرة اليوم">${icon('edit',16)} اليوميّة</button>
-        <button type="button" id="templates-btn" title="مستند من قالب">${icon('file',16)} قوالب</button>
-        <button type="button" id="graph-btn" title="خريطة الروابط">${icon('book',16)} الخريطة</button>
-      </div>
-    </div>
     <div class="sidebar-separator"></div>
     <div class="pages-head"><span>الصفحات <b id="page-count">0</b></span><button class="icon-btn small" id="add-page" title="صفحة جديدة">${icon('plus',17)}</button></div>
     <label class="search-wrap">${icon('search',17)}<input id="search" type="search" placeholder="ابحث في صفحاتك..." autocomplete="off" aria-label="البحث في الصفحات"/><span>⌘K</span></label>
-    <div id="favorite-list" class="favorites-list" aria-label="الصفحات المثبتة"></div>
-    <div id="recent-list" class="recent-list" aria-label="الصفحات الأخيرة"></div>
     <div class="pages-list" id="pages-list"></div>
     <div class="sidebar-foot"><div class="local-status"><span class="local-dot"></span>محفوظ على هذا الجهاز</div><button class="sidebar-action" id="backup-btn">${icon('download',17)} تصدير نسخة احتياطية</button><button class="sidebar-action" id="import-btn">${icon('upload',17)} استيراد Markdown</button><button class="sidebar-action" id="restore-backup-btn">${icon('history',17)} استعادة نسخة JSON</button><button class="sidebar-action" id="settings-btn">${icon('settings',17)} الإعدادات والاتصال</button></div>
   </aside>
@@ -167,14 +157,10 @@ function renderNav(){
  s.innerHTML=state.spaces.map(sp=>'<button type="button" data-space="'+sp.id+'" class="space-option'+(sp.id===state.activeSpace?' selected':'')+'"><span class="space-icon">'+icon('book',17)+'</span><span>'+escapeHtml(sp.name)+'</span>'+(sp.id===state.activeSpace?icon('chevron',16):'')+'</button>').join('');
  const term=state.search.trim();
  const currentPages=state.pages.filter(p=>p.spaceId===state.activeSpace);
- const shown=rankPages(state.pages,term,term?null:state.activeSpace);
+ const shown=rankPages(state.pages,term,state.activeSpace);
  $('#page-count').textContent=term?shown.length:currentPages.length;
  const pageRow=p=>'<button type="button" data-page="'+p.id+'" class="page-option'+(p.id===state.activePage?' active':'')+'" title="'+escapeHtml(p.title||'بدون عنوان')+'"><span class="page-line">'+(p.favorite?'★ ':icon('file',16))+'<span class="page-item-title">'+escapeHtml(p.title||'صفحة بدون عنوان')+'</span></span><span class="page-date">'+fmtDate(p.updatedAt)+'</span></button>';
  $('#pages-list').innerHTML=shown.length?shown.map(pageRow).join(''):'<p class="empty-nav">لا توجد صفحات مطابقة.</p>';
- const favorites=currentPages.filter(p=>p.favorite).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,6);
- $('#favorite-list').innerHTML=favorites.length?'<div class="nav-section-title">★ المفضلة</div>'+favorites.map(pageRow).join(''):'';
- const recent=currentPages.filter(p=>p.id!==state.activePage&&!p.favorite).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,3);
- $('#recent-list').innerHTML=recent.length?'<div class="nav-section-title">مؤخرًا</div>'+recent.map(pageRow).join(''):'';
  $('#crumb-space').textContent=getSpace()?.name||'مساحتي';
 }
 function currentDocumentBody(){
@@ -529,7 +515,13 @@ function openQuickSwitcher(){
  }});
 }
 function pageInstructions(){const p=getPage();const space=getSpace();showDialog('تعليمات الصفحة',`<p class="dialog-description">تُرسل هذه التعليمات مع طلبات الذكاء الاصطناعي لهذه الصفحة فقط. ضع أسلوبك أو قواعد الرواية هنا.</p><label class="field-label" for="space-instructions">تعليمات المساحة (تنطبق على كل صفحاتها)</label><textarea id="space-instructions" class="dialog-textarea" placeholder="مثال: لا تختلق أي معلومة، حافظ على جميع قرارات المشروع...">${escapeHtml(space.instructions||'')}</textarea><label class="field-label" for="page-instructions">تعليمات خاصة بهذه الصفحة</label><textarea id="page-instructions" class="dialog-textarea" placeholder="مثال: لا تغير الحوارات، راجع تسلسل الأحداث...">${escapeHtml(p.instructions||'')}</textarea><div class="dialog-actions"><button id="instructions-save" class="run-btn">حفظ التعليمات</button></div>`,{onOpen:()=>$('#instructions-save').onclick=async()=>{space.instructions=$('#space-instructions').value.slice(0,1500);p.instructions=$('#page-instructions').value.slice(0,1500);await Promise.all([put('spaces',{...space}),put('pages',{...p})]);closeDialog();toast('تم حفظ التعليمات');}});}
-function settings(){showDialog('إعدادات USPACE',`<p class="dialog-description">الصفحات تُحفظ محليًا عبر IndexedDB. لا توجد مزامنة سحابية حاليًا؛ نزّل نسخة احتياطية باستمرار.</p><div class="info-row">${icon('shield',20)}<span>يمكن إدخال مفتاح DeepSeek من لوحة المساعد دون وضعه في GitHub. افتراضيًا يبقى في ذاكرة الصفحة، مع حفظ محلي مشفر اختياري.</span></div><div class="info-row">${icon('book',20)}<span>يمكن تصدير واستيراد ملفات Markdown.</span></div><div class="dialog-actions"><button class="quiet-btn bordered" id="export-backup-modal">تصدير نسخة احتياطية</button></div>`,{onOpen:()=>$('#export-backup-modal').onclick=()=>{closeDialog();backup();}});}
+function settings(){showDialog('إعدادات USPACE',`<p class="dialog-description">الصفحات محفوظة على جهازك عبر IndexedDB. أنشئ نسخة احتياطية بانتظام.</p><div class="info-row">${icon('shield',20)}<span>مفتاح DeepSeek يبقى في ذاكرة الصفحة افتراضيًا ويمكن حفظه مشفرًا بشكل اختياري.</span></div><div class="info-row">${icon('book',20)}<span>يمكن تصدير واستيراد المستندات بصيغة Markdown.</span></div><div class="dialog-actions"><button class="quiet-btn bordered" id="export-backup-modal">تصدير نسخة احتياطية</button></div><details class="settings-tools"><summary>أدوات إضافية (اختيارية)</summary><div class="settings-tool-actions"><button type="button" class="quiet-btn bordered" id="settings-quick">بحث سريع</button><button type="button" class="quiet-btn bordered" id="settings-daily">مذكرة اليوم</button><button type="button" class="quiet-btn bordered" id="settings-templates">القوالب</button><button type="button" class="quiet-btn bordered" id="settings-graph">خريطة المعرفة</button></div></details>`,{onOpen:()=>{
+ $('#export-backup-modal').onclick=()=>{closeDialog();backup();};
+ $('#settings-quick').onclick=()=>{closeDialog();openQuickSwitcher();};
+ $('#settings-daily').onclick=()=>{closeDialog();createDailyNote().catch(e=>toast(e.message,'error'));};
+ $('#settings-templates').onclick=()=>{closeDialog();showTemplates();};
+ $('#settings-graph').onclick=()=>{closeDialog();showGraph();};
+ }});}
 function download(name,content,type='text/plain;charset=utf-8'){
  const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
@@ -741,14 +733,8 @@ function bind(){
  $('#add-page').onclick=()=>addPage().catch(e=>toast(e.message,'error'));
  $('#spaces-list').onclick=e=>{const el=e.target.closest('[data-space]');if(el)activateSpace(el.dataset.space).catch(err=>toast(err.message,'error'));};
  $('#pages-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
- $('#favorite-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
- $('#recent-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
  $('#favorite-btn').onclick=()=>toggleFavoritePage().catch(e=>toast(e.message,'error'));
  $('#theme-btn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
- $('#quick-switch-btn').onclick=openQuickSwitcher;
- $('#daily-note-btn').onclick=()=>createDailyNote().catch(e=>toast(e.message,'error'));
- $('#templates-btn').onclick=showTemplates;
- $('#graph-btn').onclick=showGraph;
  setTheme(localStorage.getItem('uspace-theme'));
  $('#editor').oninput=()=>{
    if(state.sourceMode&&!state.sourceEdited&&getPage()?.richDoc){snapshot().catch(e=>toast(e.message,'error'));}

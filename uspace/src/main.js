@@ -375,7 +375,7 @@ async function saveCurrent(){
    $('#save-status').classList.remove('pending');
  }
  $('#crumb-page').textContent=p.title;
- renderNav();
+ renderNav();renderKnowledgeContext();
 }
 function queueSave(){
  editVersion++;markUnsaved();updateStats();
@@ -427,6 +427,106 @@ function showDialog(title, content, opts={}){
  opts.onOpen?.();
 }
 function closeDialog(){$('#dialog-root').innerHTML='';}
+function updateFavoriteButton(){
+ const p=getPage(),button=$('#favorite-btn');
+ if(!button)return;
+ const marked=Boolean(p?.favorite);
+ button.textContent=marked?'★':'☆';
+ button.title=marked?'إزالة من المفضلة':'إضافة للمفضلة';
+ button.setAttribute('aria-label',button.title);
+ button.setAttribute('aria-pressed',String(marked));
+ button.classList.toggle('is-active',marked);
+}
+async function toggleFavoritePage(){
+ const p=getPage();if(!p)return;
+ p.favorite=!p.favorite;
+ await put('pages',{...p});
+ renderNav();updateFavoriteButton();
+ toast(p.favorite?'تم تثبيت الصفحة في المفضلة':'أُزيلت الصفحة من المفضلة');
+}
+function renderKnowledgeContext(){
+ const root=$('#doc-context'),p=getPage();if(!root||!p)return;
+ const body=currentDocumentBody(),tags=extractTags(body),titles=extractWikiLinks(body);
+ const inLinks=backlinksFor(p,state.pages).slice(0,8);
+ const linked=state.pages.filter(page=>page.spaceId===p.spaceId);
+ const targetByTitle=new Map(linked.map(page=>[(page.title||'').trim().toLowerCase(),page]));
+ const links=titles.map(title=>({title,page:targetByTitle.get(title.toLowerCase())}));
+ root.innerHTML='<div class="knowledge-head">'+icon('book',16)+'<span>معرفة مرتبطة</span><small>الوسوم · الروابط · الإشارات</small></div>'+
+  '<div class="knowledge-row"><b>الوسوم</b><div class="knowledge-chips">'+(tags.length?tags.map(tag=>'<button type="button" data-tag-filter="'+escapeHtml(tag)+'" class="knowledge-chip tag">#'+escapeHtml(tag)+'</button>').join(''):'<span class="knowledge-empty">اكتب #وسم داخل الصفحة</span>')+'</div></div>'+
+  '<div class="knowledge-row"><b>الروابط</b><div class="knowledge-chips">'+(links.length?links.map(link=>'<button type="button" class="knowledge-chip'+(link.page?'':' unlinked')+'" '+(link.page?'data-open-page="'+link.page.id+'"':'data-create-wikilink="'+escapeHtml(link.title)+'"')+'>'+icon('file',13)+escapeHtml(link.title)+(link.page?'':' +')+'</button>').join(''):'<span class="knowledge-empty">اربط الصفحات بـ [[اسم الصفحة]]</span>')+'</div></div>'+
+  (inLinks.length?'<div class="knowledge-row"><b>يشير إلى هذه الصفحة</b><div class="knowledge-chips">'+inLinks.map(page=>'<button type="button" class="knowledge-chip" data-open-page="'+page.id+'">'+icon('file',13)+escapeHtml(page.title)+'</button>').join('')+'</div></div>':'');
+ root.onclick=async e=>{
+   const target=e.target.closest('[data-open-page],[data-create-wikilink],[data-tag-filter]');
+   if(!target)return;
+   try{
+     if(target.dataset.openPage)await activatePage(target.dataset.openPage);
+     else if(target.dataset.createWikilink)await addPage('blank',target.dataset.createWikilink.slice(0,190));
+     else if(target.dataset.tagFilter){state.search='#'+target.dataset.tagFilter;$('#search').value=state.search;renderNav();toggleSidebar(true);}
+   }catch(error){toast(error.message,'error');}
+ };
+}
+function setTheme(next){
+ const theme=next==='dark'?'dark':'light';
+ document.documentElement.dataset.theme=theme;
+ try{localStorage.setItem('uspace-theme',theme);}catch{}
+ const button=$('#theme-btn');
+ if(button){button.textContent=theme==='dark'?'☀':'☾';button.setAttribute('aria-label',theme==='dark'?'تفعيل الوضع الفاتح':'تفعيل الوضع الداكن');button.title=button.getAttribute('aria-label');}
+}
+async function createDailyNote(){
+ const title=dailyTitle();
+ const page=state.pages.find(p=>p.spaceId===state.activeSpace&&p.title===title);
+ if(page)await activatePage(page.id);else await addPage('note',title);
+}
+function showTemplates(){
+ const html='<p class="dialog-description">اختر قالبًا لصفحة جديدة. كل شيء محفوظ محليًا ويمكن تعديله بعد الإنشاء.</p><div class="template-gallery">'+Object.entries(PAGE_TEMPLATES).map(([key,t])=>'<button type="button" data-template="'+key+'" class="template-card"><span>'+icon('file',21)+'</span><strong>'+escapeHtml(t.label)+'</strong><small>'+escapeHtml((t.body||'صفحة فارغة').replace(/[#\n*-]/g,' ').trim().slice(0,85))+'</small></button>').join('')+'</div>';
+ showDialog('قوالب USPACE',html,{onOpen:()=>{
+   document.querySelectorAll('[data-template]').forEach(button=>button.onclick=async()=>{
+     const template=button.dataset.template;
+     closeDialog();try{await addPage(template,template==='blank'?'صفحة بدون عنوان':PAGE_TEMPLATES[template].label);}catch(e){toast(e.message,'error');}
+   });
+ }});
+}
+function showGraph(){
+ const data=graphForSpace(state.pages,state.activeSpace);
+ if(!data.nodes.length){toast('لا توجد صفحات لعرضها','error');return;}
+ const nodes=data.nodes.slice(0,36);
+ const allowed=new Set(nodes.map(p=>p.id));
+ const W=760,H=470,cx=W/2,cy=H/2;
+ const pos=new Map();
+ nodes.forEach((p,i)=>{
+   const angle=(i*2.399963229728653)+Math.PI/4;
+   const radius=nodes.length===1?0:Math.min(200,37+Math.sqrt(i)*31);
+   pos.set(p.id,{x:cx+Math.cos(angle)*radius,y:cy+Math.sin(angle)*radius});
+ });
+ const edges=data.edges.filter(e=>allowed.has(e.source)&&allowed.has(e.target));
+ const svg='<svg class="graph-lines" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'+edges.map(edge=>{
+   const a=pos.get(edge.source),b=pos.get(edge.target);
+   return '<path d="M '+a.x.toFixed(1)+' '+a.y.toFixed(1)+' L '+b.x.toFixed(1)+' '+b.y.toFixed(1)+'" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6"/>';
+ }).join('')+'</svg>';
+ const body='<p class="dialog-description">روابطك من نوع [[اسم الصفحة]] تُكوّن خريطة معرفة محلية. اختر عقدة لفتح صفحتها.</p><div class="knowledge-graph" dir="ltr">'+svg+nodes.map(page=>{
+   const p=pos.get(page.id),active=page.id===state.activePage;
+   return '<button type="button" data-graph-page="'+page.id+'" class="graph-node'+(active?' is-current':'')+'" style="left:'+(p.x/W*100).toFixed(2)+'%;top:'+(p.y/H*100).toFixed(2)+'%" title="'+escapeHtml(page.title)+'">'+escapeHtml(page.title.slice(0,22)||'صفحة')+'</button>';
+ }).join('')+'</div><p class="graph-legend">'+nodes.length+' صفحة · '+edges.length+' روابط</p>';
+ showDialog('خريطة المعرفة',body,{onOpen:()=>{
+   document.querySelectorAll('[data-graph-page]').forEach(button=>button.onclick=async()=>{closeDialog();try{await activatePage(button.dataset.graphPage);}catch(e){toast(e.message,'error');}});
+ }});
+}
+function openQuickSwitcher(){
+ showDialog('انتقل إلى صفحة', '<label class="field-label" for="quick-query">ابحث باسم الصفحة أو نصها أو الوسم</label><input id="quick-query" type="search" class="field-input quick-search" placeholder="ابحث عن أي صفحة..." autocomplete="off"/><div class="quick-results" id="quick-results" role="listbox"></div>',{onOpen:()=>{
+   const field=$('#quick-query'),results=$('#quick-results');
+   const display=()=>{
+     const found=rankPages(state.pages,field.value).slice(0,12);
+     results.innerHTML=found.length?found.map(page=>'<button type="button" role="option" data-quick-page="'+page.id+'" class="quick-item"><span>'+icon('file',17)+'</span><span><b>'+escapeHtml(page.title||'صفحة بدون عنوان')+'</b><small>'+escapeHtml(state.spaces.find(s=>s.id===page.spaceId)?.name||'مساحة')+'</small></span>'+(page.favorite?'★':'')+'</button>').join(''):'<p class="dialog-description">لم تُعثر على صفحات مطابقة.</p>';
+   };
+   results.onclick=async e=>{
+     const button=e.target.closest('[data-quick-page]');if(!button)return;
+     closeDialog();try{await activatePage(button.dataset.quickPage);}catch(error){toast(error.message,'error');}
+   };
+   field.oninput=display;
+   field.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();results.querySelector('[data-quick-page]')?.click();}};
+   display();field.focus();
+ }});
+}
 function pageInstructions(){const p=getPage();const space=getSpace();showDialog('تعليمات الصفحة',`<p class="dialog-description">تُرسل هذه التعليمات مع طلبات الذكاء الاصطناعي لهذه الصفحة فقط. ضع أسلوبك أو قواعد الرواية هنا.</p><label class="field-label" for="space-instructions">تعليمات المساحة (تنطبق على كل صفحاتها)</label><textarea id="space-instructions" class="dialog-textarea" placeholder="مثال: لا تختلق أي معلومة، حافظ على جميع قرارات المشروع...">${escapeHtml(space.instructions||'')}</textarea><label class="field-label" for="page-instructions">تعليمات خاصة بهذه الصفحة</label><textarea id="page-instructions" class="dialog-textarea" placeholder="مثال: لا تغير الحوارات، راجع تسلسل الأحداث...">${escapeHtml(p.instructions||'')}</textarea><div class="dialog-actions"><button id="instructions-save" class="run-btn">حفظ التعليمات</button></div>`,{onOpen:()=>$('#instructions-save').onclick=async()=>{space.instructions=$('#space-instructions').value.slice(0,1500);p.instructions=$('#page-instructions').value.slice(0,1500);await Promise.all([put('spaces',{...space}),put('pages',{...p})]);closeDialog();toast('تم حفظ التعليمات');}});}
 function settings(){showDialog('إعدادات USPACE',`<p class="dialog-description">الصفحات تُحفظ محليًا عبر IndexedDB. لا توجد مزامنة سحابية حاليًا؛ نزّل نسخة احتياطية باستمرار.</p><div class="info-row">${icon('shield',20)}<span>يمكن إدخال مفتاح DeepSeek من لوحة المساعد دون وضعه في GitHub. افتراضيًا يبقى في ذاكرة الصفحة، مع حفظ محلي مشفر اختياري.</span></div><div class="info-row">${icon('book',20)}<span>يمكن تصدير واستيراد ملفات Markdown.</span></div><div class="dialog-actions"><button class="quiet-btn bordered" id="export-backup-modal">تصدير نسخة احتياطية</button></div>`,{onOpen:()=>$('#export-backup-modal').onclick=()=>{closeDialog();backup();}});}
 function download(name,content,type='text/plain;charset=utf-8'){
@@ -640,6 +740,15 @@ function bind(){
  $('#add-page').onclick=()=>addPage().catch(e=>toast(e.message,'error'));
  $('#spaces-list').onclick=e=>{const el=e.target.closest('[data-space]');if(el)activateSpace(el.dataset.space).catch(err=>toast(err.message,'error'));};
  $('#pages-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
+ $('#favorite-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
+ $('#recent-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
+ $('#favorite-btn').onclick=()=>toggleFavoritePage().catch(e=>toast(e.message,'error'));
+ $('#theme-btn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+ $('#quick-switch-btn').onclick=openQuickSwitcher;
+ $('#daily-note-btn').onclick=()=>createDailyNote().catch(e=>toast(e.message,'error'));
+ $('#templates-btn').onclick=showTemplates;
+ $('#graph-btn').onclick=showGraph;
+ setTheme(localStorage.getItem('uspace-theme'));
  $('#editor').oninput=()=>{
    if(state.sourceMode&&!state.sourceEdited&&getPage()?.richDoc){snapshot().catch(e=>toast(e.message,'error'));}
    state.sourceEdited=true;queueSave();
@@ -704,7 +813,7 @@ function bind(){
  await saveCurrent();updateStats();toast('تم استيراد الملف');e.target.value='';};
  $('#more-btn').onclick=()=>showDialog('إدارة الصفحة',`<p class="dialog-description">نسخ واسترجاع أو حذف الصفحة الحالية.</p><div class="dialog-actions"><button id="history-btn" class="quiet-btn bordered">${icon('history',17)} سجل النسخ</button><button id="delete-page-btn" class="danger-btn">${icon('trash',17)} حذف الصفحة</button></div>`,{onOpen:()=>{$('#history-btn').onclick=()=>{closeDialog();showHistory();};$('#delete-page-btn').onclick=()=>{closeDialog();deleteCurrent();};}});
  $('#open-sidebar').onclick=()=>toggleSidebar(true);$('#close-sidebar').onclick=()=>toggleSidebar(false);$('#scrim').onclick=()=>toggleSidebar(false);
- document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();toggleSidebar(true);$('#search').focus();}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
+ document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();openQuickSwitcher();}if(cmd&&e.shiftKey&&e.key.toLowerCase()==='n'){e.preventDefault();addPage().catch(err=>toast(err.message,'error'));}if(cmd&&e.shiftKey&&e.key.toLowerCase()==='d'){e.preventDefault();createDailyNote().catch(err=>toast(err.message,'error'));}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
  window.addEventListener('pagehide',()=>{if(saveTimer){clearTimeout(saveTimer);const p=getPage();if(p){p.body=currentDocumentBody();if(!state.sourceMode&&state.richChanged)p.richDoc=richJSON(richEditor);if(state.sourceMode&&state.sourceEdited)p.richDoc=null;p.title=$('#page-title').value||'صفحة بدون عنوان';put('pages',{...p});}}});
 }
 async function start(){

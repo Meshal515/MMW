@@ -51,7 +51,7 @@ function renderShell(){
  $('#app').innerHTML=`<div class="shell">
   <div class="scrim" id="scrim"></div><div class="panel-scrim" id="panel-scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/logo-animated.gif" alt="شعار USPACE المتحرك" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
+    <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/icons/icon.svg" alt="شعار USPACE الثابت" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
     <div class="sidebar-utility" aria-label="أدوات المعرفة">

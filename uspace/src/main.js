@@ -222,40 +222,97 @@ function renderEditorTypography(){
 }
 function applyFormat(kind){
  if(state.preview){state.preview=false;syncPreview();}
+ if(!state.sourceMode){
+   if(kind==='table'){
+     const colsRaw=prompt('عدد الأعمدة من 1 إلى 20','3');
+     if(colsRaw===null)return;
+     const rowsRaw=prompt('عدد الصفوف من 1 إلى 100','3');
+     if(rowsRaw===null)return;
+     const cols=Number(colsRaw),rows=Number(rowsRaw);
+     if(!Number.isInteger(cols)||cols<1||cols>20||!Number.isInteger(rows)||rows<1||rows>100){toast('أدخل أعدادًا صحيحة ضمن الحدود','error');return;}
+     richAction(richEditor,'table',{cols,rows});
+   }else if(kind==='link'){
+     const input=prompt('رابط HTTPS أو HTTP أو mailto','https://');
+     if(input===null)return;
+     try{
+       const value=new URL(input.trim());
+       if(!['https:','http:','mailto:'].includes(value.protocol))throw Error('Invalid scheme');
+       richAction(richEditor,'link',{href:value.href});
+     }catch{toast('الرابط غير صالح أو بروتوكوله غير مسموح','error');}
+   }else if(!richAction(richEditor,kind)){
+     if(!['undo','redo','merge','split','row-remove','col-remove','table-remove'].includes(kind))toast('حدّد الموضع المناسب أولًا','error');
+   }
+   updateRichToolbar();return;
+ }
  const field=$('#editor'),start=field.selectionStart,end=field.selectionEnd;
- const selected=field.value.slice(start,end);let content=selected;
+ const selected=field.value.slice(start,end);
+ let content=selected;
  switch(kind){
   case 'bold':content='**'+(selected||'نص عريض')+'**';break;
   case 'italic':content='*'+(selected||'نص مائل')+'*';break;
-  case 'code':content='`'+(selected||'code')+'`';break;
-  case 'heading':content='## '+(selected||'عنوان فرعي');break;
+  case 'underline':content='<u>'+(selected||'نص مسطر')+'</u>';break;
+  case 'strike':content='~~'+(selected||'نص مشطوب')+'~~';break;
+  case 'code':content=String.fromCharCode(96)+(selected||'code')+String.fromCharCode(96);break;
+  case 'codeblock':content='~~~\n'+(selected||'code')+'\n~~~';break;
+  case 'heading':case 'h2':content='## '+(selected||'عنوان فرعي');break;
+  case 'h1':content='# '+(selected||'عنوان رئيسي');break;
+  case 'h3':content='### '+(selected||'عنوان ثالث');break;
   case 'list':content=(selected||'عنصر جديد').split('\n').map(x=>'- '+x).join('\n');break;
+  case 'ordered':content=(selected||'عنصر جديد').split('\n').map((x,i)=>(i+1)+'. '+x).join('\n');break;
+  case 'checklist':content=(selected||'عنصر جديد').split('\n').map(x=>'- [ ] '+x).join('\n');break;
   case 'quote':content=(selected||'نص مقتبس').split('\n').map(x=>'> '+x).join('\n');break;
+  case 'hr':content='\n---\n';break;
   case 'table':{
-   const c=Math.min(12,Math.max(1,Number(prompt('عدد أعمدة الجدول (1-12)','3'))||3));
-   const r=Math.min(30,Math.max(1,Number(prompt('عدد صفوف البيانات (1-30)','3'))||3));
+   const c=Number(prompt('عدد الأعمدة من 1 إلى 20','3'));
+   if(!Number.isInteger(c)||c<1||c>20)return;
+   const r=Number(prompt('عدد صفوف البيانات من 1 إلى 100','3'));
+   if(!Number.isInteger(r)||r<1||r>100)return;
    const cols=Array.from({length:c},(_,i)=>'عمود '+(i+1));
    content='| '+cols.join(' | ')+' |\n| '+cols.map(()=>'---').join(' | ')+' |\n'+Array.from({length:r},()=> '| '+cols.map(()=>' ').join(' | ')+' |').join('\n');
    break;
   }
-  default:return;
+  case 'link':{
+    const address=prompt('الرابط (HTTPS)','https://');if(!address)return;
+    let url;try{url=new URL(address);if(!['https:','http:','mailto:'].includes(url.protocol))return;}catch{return;}
+    content='['+(selected||'عنوان الرابط')+']('+url.href+')';break;
+  }
+  case 'undo':case 'redo':toast('استخدم اختصار التراجع أو الإعادة في وضع Markdown');return;
+  default:toast('هذا التنسيق متاح من المحرر المرئي');return;
  }
  field.setRangeText(content,start,end,'end');
- field.focus();queueSave();
+ field.focus();state.sourceEdited=true;queueSave();
 }
-function updateStats(){const c=countText($('#editor').value);$('#word-count').textContent=c.words.toLocaleString('ar-SA')+' كلمة';$('#char-count').textContent=`${c.chars.toLocaleString('ar-SA')} حرف · ${c.charsNoSpace.toLocaleString('ar-SA')} بلا مسافات`;$('#sentence-count').textContent=c.sentences.toLocaleString('ar-SA')+' جملة';}
+function updateStats(){
+ const c=countText(currentDocumentBody());
+ $('#word-count').textContent=c.words.toLocaleString('ar-SA')+' كلمة';
+ $('#char-count').textContent=c.chars.toLocaleString('ar-SA')+' حرف · '+c.charsNoSpace.toLocaleString('ar-SA')+' بلا مسافات';
+ $('#sentence-count').textContent=c.sentences.toLocaleString('ar-SA')+' جملة';
+}
 function markUnsaved(){$('#save-status').innerHTML='● جارِ الحفظ...';$('#save-status').classList.add('pending');}
+let editVersion=0;
 async function saveCurrent(){
- clearTimeout(saveTimer);
+ clearTimeout(saveTimer);saveTimer=null;
  const p=getPage();if(!p)return;
- p.title=$('#page-title').value.trim()||'صفحة بدون عنوان';p.body=$('#editor').value;p.updatedAt=Date.now();
+ const v=editVersion;
+ const body=currentDocumentBody();
+ const documentJSON=state.sourceMode?(state.sourceEdited?null:p.richDoc):(state.richChanged?richJSON(richEditor):p.richDoc);
+ p.title=$('#page-title').value.trim()||'صفحة بدون عنوان';
+ p.body=body;p.richDoc=documentJSON;p.updatedAt=Date.now();
  await put('pages',{...p});
- $('#save-status').innerHTML=`${icon('check',15)} محفوظ`;
- $('#save-status').classList.remove('pending');
+ if(state.activePage!==p.id)return;
+ if(v===editVersion){
+   state.sourceEdited=false;state.richChanged=false;
+   $('#save-status').innerHTML=icon('check',15)+' محفوظ';
+   $('#save-status').classList.remove('pending');
+ }
  $('#crumb-page').textContent=p.title;
  renderNav();
 }
-function queueSave(){markUnsaved();updateStats();clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveCurrent().catch(e=>toast('تعذر الحفظ: '+e.message,'error')),SAVE_DELAY);}
+function queueSave(){
+ editVersion++;markUnsaved();updateStats();
+ clearTimeout(saveTimer);
+ saveTimer=setTimeout(()=>saveCurrent().catch(e=>toast('تعذر الحفظ: '+e.message,'error')),SAVE_DELAY);
+}
 async function flush(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;await saveCurrent();}}
 async function activatePage(pid){await flush();state.activePage=pid;localStorage.setItem('uspace-active-page',pid);renderNav();renderCurrent();toggleSidebar(false);}
 async function activateSpace(sid){await flush();state.activeSpace=sid;state.activePage=state.pages.filter(p=>p.spaceId===sid).sort((a,b)=>b.updatedAt-a.updatedAt)[0]?.id || null; if(!state.activePage)await addPage(); localStorage.setItem('uspace-active-space',sid);renderNav();renderCurrent();toggleSidebar(false);}

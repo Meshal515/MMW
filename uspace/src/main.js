@@ -366,11 +366,35 @@ function showHistory(){
 }
 function renderAIResult(){
  const target=$('#ai-results'),a=state.ai;if(!a){target.innerHTML='';return;}
- const isStruct=a.mode==='structure',isImprove=a.mode==='improve';
+ const isStruct=a.mode==='structure',isReview=a.mode==='review';
  const body=isStruct?a.formatted:(a.result?.text||'');
- target.innerHTML=`<div class="result-head"><strong>${isStruct?'ترتيب مقترح':isImprove?'نسخة محسنة':'تقرير المراجعة'}</strong><span class="result-badge">${icon('check',13)} ${isStruct?'الأصل محفوظ حرفيًا':'مقترح فقط'}</span></div>${isStruct&&a.result.summary?`<p class="result-summary">${escapeHtml(a.result.summary)}</p>`:''}<div class="result-content" dir="auto">${escapeHtml(body)}</div><div class="result-actions"><button class="quiet-btn bordered" id="copy-result">${icon('copy',16)} نسخ</button>${a.mode!=='review'?`<button class="run-btn" id="apply-result">${icon('check',16)} اعتماد التعديل</button>`:''}</div>`;
+ const labels={structure:'ترتيب مقترح',improve:'نسخة محسنة',proofread:'تصحيح إملائي',prompt:'برومبت احترافي',review:'تقرير المراجعة'};
+ target.innerHTML='<div class="result-head"><strong>'+escapeHtml(labels[a.mode]||'نتيجة المساعد')+
+  '</strong><span class="result-badge">'+icon('check',13)+' '+(isStruct?'الأصل محفوظ حرفيًا':'مقترح للمراجعة')+
+  '</span></div>'+(isStruct&&a.result.summary?'<p class="result-summary">'+escapeHtml(a.result.summary)+'</p>':'')+
+  '<div class="result-content" dir="auto">'+escapeHtml(body)+'</div>'+
+  '<div class="result-actions"><button class="quiet-btn bordered" id="copy-result">'+icon('copy',16)+' نسخ</button>'+
+  (!isReview?'<button class="run-btn" id="apply-result">'+icon('check',16)+' اعتماد التعديل</button>':'')+'</div>';
  $('#copy-result').onclick=()=>navigator.clipboard.writeText(body).then(()=>toast('تم النسخ')).catch(()=>toast('تعذر النسخ','error'));
- if(a.mode!=='review')$('#apply-result').onclick=async()=>{const p=getPage();if(!p||p.id!==a.pageId||$('#editor').value!==a.original){toast('تغيّر النص بعد التحليل. أعد التحليل أولًا.','error');return;}await flush();await snapshot();$('#editor').value=body;queueSave();await flush();syncPreview();state.ai=null;target.innerHTML='<div class="ai-success">'+icon('check',20)+' تم اعتماد التعديل مع حفظ نسخة سابقة.</div>';toast('تم حفظ التعديل');};
+ if(!isReview)$('#apply-result').onclick=async()=>{
+   const p=getPage();
+   if(!p||p.id!==a.pageId||currentDocumentBody()!==a.original){
+     toast('تغيّر النص بعد التحليل. أعد التحليل أولًا.','error');return;
+   }
+   await flush();await snapshot();
+   p.body=body;p.richDoc=null;
+   $('#editor').value=body;
+   state.sourceEdited=false;state.richChanged=false;
+   if(!state.sourceMode){
+     loadingRich=true;
+     try{loadRichDocument(richEditor,p);}finally{loadingRich=false;}
+   }
+   editVersion++;
+   await saveCurrent();
+   syncPreview();updateStats();
+   state.ai=null;target.innerHTML='<div class="ai-success">'+icon('check',20)+' تم اعتماد التعديل وحفظ نسخة سابقة.</div>';
+   toast('تم حفظ التعديل');
+ };
 }
 async function runAI(){
  if(state.busy)return;

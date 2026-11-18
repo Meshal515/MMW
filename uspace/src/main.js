@@ -1,5 +1,6 @@
 import './style.css';
 import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import { validateBackup } from './backup.js';
 import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, richAction, selectionFormatting } from './rich-editor.js';
 import { bootstrap, list, put, remove, clearPage } from './storage.js';
@@ -169,7 +170,7 @@ function syncPreview(){
  $('#rich-editor').classList.toggle('hidden',state.sourceMode||state.preview);
  $('#preview').classList.toggle('hidden',!state.preview);
  if(state.preview){
-   const html=state.sourceMode?markdownToHtml($('#editor').value):richHTML(richEditor);
+   const html=state.sourceMode?marked.parse($('#editor').value,{gfm:true,breaks:false}):richHTML(richEditor);
    $('#preview').innerHTML=DOMPurify.sanitize(html,{USE_PROFILES:{html:true}});
  }
  $('#source-btn').classList.toggle('is-active',state.sourceMode);
@@ -491,7 +492,7 @@ function bind(){
  $('#export-md-btn').onclick=async()=>{await flush();const p=getPage();download(`${fileName(p.title)}.md`,p.body,'text/markdown;charset=utf-8');toast('تم تنزيل Markdown');};
  $('#export-html-btn').onclick=async()=>{
    await flush();const p=getPage();
-   const content=DOMPurify.sanitize(state.sourceMode?markdownToHtml(p.body):richHTML(richEditor),{USE_PROFILES:{html:true}});
+   const content=DOMPurify.sanitize(state.sourceMode?marked.parse(p.body,{gfm:true,breaks:false}):richHTML(richEditor),{USE_PROFILES:{html:true}});
    const html='<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>'+escapeHtml(p.title)+'</title></head><body>'+content+'</body></html>';
    download(`${fileName(p.title)}.html`,html,'text/html;charset=utf-8');toast('تم تنزيل HTML');
  };

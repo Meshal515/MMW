@@ -33,6 +33,8 @@ jobs:
           node uspace/scripts/build.mjs
           test -s uspace/dist/assets/app.js
           test -s uspace/dist/index.html
+          test -s uspace/dist/icons/icon-192.png
+          test -s uspace/dist/icons/icon-512.png
       - name: Validate credentials
         shell: bash
         run: |

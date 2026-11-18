@@ -73,7 +73,7 @@ test('templates and daily note title are available offline',()=>{
  assert.ok(PAGE_TEMPLATES.note.body.includes('مهام'));
  assert.match(dailyTitle(new Date(2026,10,18)),/2026/);
 });
-test('new workspace components are wired and GIF logo is valid',()=>{
+test('new workspace components are wired and static logo is valid',()=>{
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const style=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
  const iconSvg=readFileSync(new URL('../public/icons/icon.svg',import.meta.url),'utf8');

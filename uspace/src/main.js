@@ -82,6 +82,7 @@ function renderShell(){
       <button type="button" data-format="align-center" title="توسيط">↔</button>
       <button type="button" data-format="align-left" title="محاذاة يسار">⇥</button>
       <button type="button" data-format="link" title="إضافة رابط">🔗</button>
+      <button type="button" data-format="image" title="إضافة صورة من رابط HTTPS">صورة</button>
       <select id="selection-font" aria-label="خط النص المحدد" title="خط التحديد"><option value="">خط التحديد</option><option value="Tahoma">Tahoma</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Courier New">Mono</option></select>
       <select id="selection-size" aria-label="حجم النص المحدد" title="حجم التحديد"><option value="">حجم التحديد</option><option value="12">12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option><option value="28">28</option><option value="32">32</option><option value="40">40</option></select>
       <label class="toolbar-color" title="لون الخط"><span>لون</span><input id="selection-color" type="color" value="#263a33" aria-label="لون النص المحدد"/></label>
@@ -231,6 +232,15 @@ function applyFormat(kind){
      const cols=Number(colsRaw),rows=Number(rowsRaw);
      if(!Number.isInteger(cols)||cols<1||cols>20||!Number.isInteger(rows)||rows<1||rows>100){toast('أدخل أعدادًا صحيحة ضمن الحدود','error');return;}
      richAction(richEditor,'table',{cols,rows});
+   }else if(kind==='image'){
+     const input=prompt('رابط الصورة HTTPS','https://');
+     if(input===null)return;
+     try{
+       const url=new URL(input.trim());
+       if(url.protocol!=='https:')throw Error('Only HTTPS');
+       const alt=prompt('وصف الصورة لسهولة الوصول','')||'';
+       richAction(richEditor,'image',{src:url.href,alt});
+     }catch{toast('أدخل رابط صورة HTTPS صالح','error');}
    }else if(kind==='link'){
      const input=prompt('رابط HTTPS أو HTTP أو mailto','https://');
      if(input===null)return;
@@ -270,6 +280,12 @@ function applyFormat(kind){
    const cols=Array.from({length:c},(_,i)=>'عمود '+(i+1));
    content='| '+cols.join(' | ')+' |\n| '+cols.map(()=>'---').join(' | ')+' |\n'+Array.from({length:r},()=> '| '+cols.map(()=>' ').join(' | ')+' |').join('\n');
    break;
+  }
+  case 'image':{
+    const address=prompt('رابط الصورة HTTPS','https://');if(!address)return;
+    let url;try{url=new URL(address);if(url.protocol!=='https:')return;}catch{return;}
+    const alt=prompt('وصف الصورة','')||'';
+    content='!['+alt.replaceAll(']','')+']('+url.href+')';break;
   }
   case 'link':{
     const address=prompt('الرابط (HTTPS)','https://');if(!address)return;

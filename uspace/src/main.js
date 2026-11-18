@@ -136,21 +136,72 @@ function renderNav(){
  $('#pages-list').innerHTML=shown.length?shown.map(p=>`<button data-page="${p.id}" class="page-option ${p.id===state.activePage?'active':''}"><span class="page-line">${icon('file',17)}<span class="page-item-title">${escapeHtml(p.title||'صفحة بدون عنوان')}</span></span><span class="page-date">${fmtDate(p.updatedAt)}</span></button>`).join(''):'<p class="empty-nav">ما فيه صفحات تطابق بحثك.</p>';
  $('#crumb-space').textContent=getSpace()?.name||'مساحتي';
 }
+function currentDocumentBody(){
+ const p=getPage();
+ if(state.sourceMode)return $('#editor').value;
+ if(state.richChanged && richEditor)return richMarkdown(richEditor);
+ return p?.body || '';
+}
 function renderCurrent(){
  const p=getPage();if(!p)return;
- renderEditorTypography();
  $('#page-title').value=p.title==='صفحة بدون عنوان'?'':p.title;
  $('#editor').value=p.body||'';
+ loadingRich=true;
+ try{
+   loadRichDocument(richEditor,p);
+   state.sourceMode=false;
+ }catch(e){
+   state.sourceMode=true;
+   toast('تعذر عرض المستند بصيغة Rich Text؛ محفوظ أصله في Markdown','error');
+ }finally{loadingRich=false;}
+ state.sourceEdited=false;state.richChanged=false;state.preview=false;
+ renderEditorTypography();
  $('#crumb-page').textContent=p.title||'صفحة بدون عنوان';
  $('#modified-label').textContent='آخر تعديل '+fmtDate(p.updatedAt);
- state.preview=false;syncPreview();updateStats();
+ syncPreview();updateStats();updateRichToolbar();
  $('#ai-results').innerHTML='';state.ai=null;
 }
 function syncPreview(){
- $('#editor').classList.toggle('hidden',state.preview);
+ const source=state.sourceMode&&!state.preview;
+ $('#editor').classList.toggle('hidden',!source);
+ $('#rich-editor').classList.toggle('hidden',state.sourceMode||state.preview);
  $('#preview').classList.toggle('hidden',!state.preview);
- if(state.preview)$('#preview').innerHTML=markdownToHtml($('#editor').value);
- $('#preview-btn').innerHTML=state.preview?`${icon('edit',17)}<span>تحرير</span>`:`${icon('eye',17)}<span>معاينة</span>`;
+ if(state.preview){
+   const html=state.sourceMode?markdownToHtml($('#editor').value):richHTML(richEditor);
+   $('#preview').innerHTML=DOMPurify.sanitize(html,{USE_PROFILES:{html:true}});
+ }
+ $('#source-btn').classList.toggle('is-active',state.sourceMode);
+ $('#source-btn').setAttribute('aria-pressed',String(state.sourceMode));
+ $('#preview-btn').innerHTML=state.preview?icon('edit',17)+'<span>تحرير</span>':icon('eye',17)+'<span>معاينة</span>';
+ updateRichToolbar();
+}
+async function toggleMarkdownSource(){
+ await flush();
+ if(!state.sourceMode){
+   state.sourceMode=true;state.sourceEdited=false;
+   $('#editor').value=getPage()?.body||'';
+ }else{
+   if(state.sourceEdited){
+     loadingRich=true;
+     try{loadRichDocument(richEditor,{body:$('#editor').value});}
+     catch(e){toast('Markdown غير قابل للتحويل. راجع المصدر قبل الرجوع.','error');return;}
+     finally{loadingRich=false;}
+   }
+   state.sourceMode=false;state.sourceEdited=false;state.richChanged=false;
+ }
+ state.preview=false;syncPreview();updateStats();
+}
+function updateRichToolbar(){
+ if(!$('#table-tools'))return;
+ const richActive=!state.sourceMode&&!state.preview&&Boolean(richEditor);
+ const marks=richActive?selectionFormatting(richEditor):{};
+ $('#table-tools').classList.toggle('hidden',!richActive||!marks.table);
+ document.querySelectorAll('[data-format]').forEach(button=>{
+   const key=button.dataset.format;
+   const active={bold:marks.bold,italic:marks.italic,underline:marks.underline,strike:marks.strike,code:marks.code,list:marks.bullet,ordered:marks.ordered,checklist:marks.task,quote:marks.quote};
+   button.classList.toggle('is-active',Boolean(active[key]));
+   if(key in active)button.setAttribute('aria-pressed',String(Boolean(active[key])));
+ });
 }
 function activateEnteredProviderKey(){
  const field=$('#provider-key');

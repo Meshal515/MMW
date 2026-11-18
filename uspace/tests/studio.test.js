@@ -82,7 +82,7 @@ test('new workspace components are wired and static logo is valid',()=>{
  assert.match(iconSvg,/id="silver"/);
  assert.ok(!main.includes('logo-animated.gif'));
  assert.match(main,/src="\/icons\/icon.svg"/);
- for(const id of ['quick-switch-btn','daily-note-btn','templates-btn','graph-btn','favorite-btn','theme-btn','doc-context','ai-results','ai-depth','ai-command','selected-mode-count']){
+ for(const id of ['settings-quick','settings-daily','settings-templates','settings-graph','favorite-btn','theme-btn','doc-context','ai-results','ai-depth','ai-command','selected-mode-count']){
   assert.ok(main.includes('id="'+id+'"'),'missing '+id);
  }
  assert.match(main,/data-ai-tab/);
@@ -90,4 +90,19 @@ test('new workspace components are wired and static logo is valid',()=>{
  assert.match(main,/new Intl\.DateTimeFormat|dailyTitle\(/);
  assert.match(style,/html\[data-theme="dark"\]/);
  assert.match(style,/\.mode-checkbox-mark/);
+});
+
+test('sidebar keeps original simple spaces / pages / search / backup layout',()=>{
+ const src=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const start=src.indexOf('function renderShell(){'),end=src.indexOf('</aside>',start);
+ assert.ok(start>=0 && end>start);
+ const sidebar=src.slice(start,end);
+ for(const id of ['spaces-list','pages-list','search','add-space','add-page','backup-btn','import-btn','restore-backup-btn','settings-btn']){
+  assert.ok(sidebar.includes('id="'+id+'"'),'sidebar missing '+id);
+ }
+ for(const id of ['quick-switch-btn','daily-note-btn','templates-btn','graph-btn','favorite-list','recent-list']){
+  assert.ok(!sidebar.includes('id="'+id+'"'),'sidebar has cluttering '+id);
+ }
+ assert.ok(src.includes('function openQuickSwitcher()'),'quick switcher remains available using Ctrl+K');
+ assert.ok(src.includes('function showGraph()'),'knowledge graph remains accessible under Settings');
 });

@@ -1,0 +1,26 @@
+name: Validate USPACE pull requests
+on:
+  pull_request:
+    paths:
+      - 'uspace/**'
+      - '.github/workflows/test-uspace-pr.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run USPACE tests
+        run: node --test uspace/tests/*.test.js
+      - name: Build and check syntax
+        run: |
+          node uspace/scripts/build.mjs
+          node --check uspace/dist/assets/app.js
+          node --check uspace/worker/index.js
+          test -s uspace/dist/assets/app.css
+          test -s uspace/dist/index.html

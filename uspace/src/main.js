@@ -350,11 +350,18 @@ async function activatePage(pid){await flush();state.activePage=pid;localStorage
 async function activateSpace(sid){await flush();state.activeSpace=sid;state.activePage=state.pages.filter(p=>p.spaceId===sid).sort((a,b)=>b.updatedAt-a.updatedAt)[0]?.id || null; if(!state.activePage)await addPage(); localStorage.setItem('uspace-active-space',sid);renderNav();renderCurrent();toggleSidebar(false);}
 async function addSpace(){const name=prompt('اسم المساحة الجديدة؟','مشروعي الجديد');if(!name?.trim())return;const s={id:id(),name:name.trim().slice(0,70),instructions:'',createdAt:Date.now(),updatedAt:Date.now()};await put('spaces',s);state.spaces.push(s);await activateSpace(s.id);toast('تم إنشاء المساحة');}
 async function addPage(){await flush();const now=Date.now();const p={id:id(),spaceId:state.activeSpace,title:'صفحة بدون عنوان',body:'',instructions:'',createdAt:now,updatedAt:now};await put('pages',p);state.pages.push(p);await activatePage(p.id);$('#page-title').focus();}
-function toggleSidebar(value){state.sidebarOpen=value;$('#sidebar').classList.toggle('open',value);$('#scrim').classList.toggle('show',value);}
+function toggleSidebar(value){
+ if(value&&state.panelOpen)togglePanel(false);
+ state.sidebarOpen=value;
+ $('#sidebar').classList.toggle('open',value);
+ $('#scrim').classList.toggle('show',value);
+}
 function togglePanel(value){
+   if(value&&state.sidebarOpen)toggleSidebar(false);
    state.panelOpen=value;
    $('#right-panel').classList.toggle('open',value);
    $('#panel-scrim').classList.toggle('show',value);
+   $('#assistant-btn').setAttribute('aria-expanded',String(value));
    if(value)renderModes();
  }
 function renderModes(){

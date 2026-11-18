@@ -20,7 +20,7 @@ function validateAttributes(attrs, image=false){
  for(const [key,value] of Object.entries(attrs)){
    if(!/^[a-zA-Z][a-zA-Z0-9]*$/.test(key)||key.length>70)throw Error('اسم خاصية غير صالح.');
    if(typeof value==='string'){
-     if(value.length>2200||/[\\u0000-\\u001f]/.test(value))throw Error('قيمة خاصية غير صالحة.');
+     if(value.length>2200||/[\u0000-\u001f]/.test(value))throw Error('قيمة خاصية غير صالحة.');
      if((key==='href'||key==='src')&&!safeUrl(value,key==='src'||image))throw Error('رابط غير آمن في النسخة الاحتياطية.');
      if(/(?:expression\s*\(|url\s*\(|javascript\s*:)/i.test(value))throw Error('تنسيق غير آمن في النسخة الاحتياطية.');
    }

@@ -20,8 +20,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      AI_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      USPACE_GATE_KEY: ${{ secrets.USPACE_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,13 +67,6 @@ jobs:
           fi
           test -n "$PROJECT"
           echo "USPACE_PROJECT=${PROJECT}" >> "$GITHUB_ENV"
-      - name: Install USPACE AI secrets if available
-        if: ${{ env.AI_API_KEY != '' && env.USPACE_GATE_KEY != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$AI_API_KEY" | npx --yes wrangler@latest pages secret put DEEPSEEK_API_KEY --project-name="$USPACE_PROJECT"
-          printf '%s' "$USPACE_GATE_KEY" | npx --yes wrangler@latest pages secret put APP_ACCESS_KEY --project-name="$USPACE_PROJECT"
       - name: Deploy USPACE only
         shell: bash
         run: |

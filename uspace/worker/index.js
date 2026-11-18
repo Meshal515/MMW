@@ -28,7 +28,7 @@ export default {
     // Legacy Cloudflare Secrets mode remains available for existing private deployments.
     const hasUserKey = request.headers.has('X-Provider-Key');
     const suppliedKey = request.headers.get('X-Provider-Key') || '';
-    if (hasUserKey && (suppliedKey.length < 20 || suppliedKey.length > 512 || !/^[\\x21-\\x7e]+$/.test(suppliedKey))) {
+    if (hasUserKey && (suppliedKey.length < 20 || suppliedKey.length > 512 || !/^[!-~]+$/.test(suppliedKey))) {
       return json({error:'مفتاح DeepSeek غير صالح.'},400);
     }
     if (!hasUserKey) {

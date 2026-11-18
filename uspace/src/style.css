@@ -255,3 +255,58 @@ body{background:var(--us-bg);color:var(--us-ink);font-variant-numeric:tabular-nu
  .sidebar{width:min(310px,89vw)}
 }
 @media(prefers-reduced-motion:reduce){.panel-scrim,.right-panel,.mode-btn{transition:none}}
+
+/* USPACE Arabic font picker + mobile column regression fix (v0.2.1). */
+.editor-paper[data-font] .tiptap,
+.editor-paper[data-font] .markdown-preview,
+.editor-paper[data-font] #editor{
+  font-family:var(--editor-font-family,'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif);
+}
+#editor-font,#selection-font{min-width:148px;max-width:205px}
+.format-toolbar select#editor-font,.format-toolbar select#selection-font{max-width:205px}
+@media(max-width:719px){
+  /* The late desktop .shell declaration was overriding the earlier mobile grid. */
+  .shell{
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+  .sidebar{position:fixed;grid-column:auto}
+  .main{
+    grid-column:1;
+    grid-row:1;
+    width:100%;
+    min-width:0;
+    max-width:100%;
+  }
+  .editor-scroll{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
+  .editor-paper{
+    width:100%;max-width:100%;
+    padding:22px 16px 48px;
+    margin:0;
+  }
+  .topbar{display:flex;min-width:0;width:100%;padding:0 9px;gap:4px}
+  .breadcrumbs{min-width:0;max-width:none;overflow:hidden;flex:1}
+  .top-actions{flex:0 0 auto;gap:2px}
+  .top-actions #preview-btn span{display:none}
+  .top-actions .quiet-btn{padding:7px;min-width:35px;justify-content:center}
+  .top-actions #source-btn{min-width:34px}
+  .page-meta{flex-wrap:wrap;gap:4px 8px;line-height:1.6}
+  .format-toolbar{min-width:0;width:calc(100% + 8px);max-width:calc(100% + 8px);margin:0 -4px 12px;overflow-x:auto;overscroll-behavior-x:contain}
+  .format-toolbar select#editor-font,.format-toolbar select#selection-font{max-width:180px;min-width:152px}
+  .editor-footer{
+    display:flex;flex-direction:column;align-items:stretch;justify-content:center;
+    gap:3px;min-height:64px;padding:6px 12px;
+    width:100%;max-width:100%;
+  }
+  .count-line{width:100%;flex-wrap:wrap;gap:4px 10px;white-space:normal;font-size:10px;line-height:1.45}
+  .footer-tools{
+    display:flex;align-items:center;justify-content:flex-start;
+    margin:0;width:100%;max-width:100%;
+    min-width:0;gap:5px;overflow-x:auto;white-space:nowrap;
+    scrollbar-width:none;
+  }
+  .footer-tools::-webkit-scrollbar{display:none}
+  .footer-tools .text-btn{flex:none;padding:6px 8px;min-height:33px}
+}

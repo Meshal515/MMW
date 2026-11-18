@@ -6,7 +6,7 @@ const URL = 'https://uspace.example/api/ai';
 const makeRequest = (headers = {}, body = {}) => new Request(URL, {
   method:'POST',
   headers:{Origin:'https://uspace.example','Content-Type':'application/json',...headers},
-  body:JSON.stringify({mode:'proofread',model:'deepseek-v4-flash',title:'ملاحظة',text:'فكرة مهمة',instructions:'',...body})
+  body:JSON.stringify({mode:'proofread',model:'deepseek-flash',title:'ملاحظة',text:'فكرة مهمة',instructions:'',...body})
 });
 
 test('BYOK sends the visitor key only to the fixed DeepSeek endpoint',async()=>{
@@ -25,7 +25,7 @@ test('BYOK sends the visitor key only to the fixed DeepSeek endpoint',async()=>{
     assert.equal(calls.length,1);
     assert.equal(calls[0].url,'https://api.deepseek.com/chat/completions');
     assert.equal(calls[0].auth,'Bearer '+key);
-    assert.equal(calls[0].body.model,'deepseek-v4-flash');
+    assert.equal(calls[0].body.model,'deepseek-flash');
     assert.ok(!JSON.stringify(payload).includes(key));
   } finally { globalThis.fetch=original; }
 });

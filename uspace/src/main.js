@@ -181,6 +181,10 @@ function syncPreview(){
 async function toggleMarkdownSource(){
  await flush();
  if(!state.sourceMode){
+   if(getPage()?.richDoc){
+     await snapshot();
+     toast('Markdown لا يستطيع حفظ دمج الخلايا والألوان. حُفظت نسخة Rich Text للاسترجاع.');
+   }
    state.sourceMode=true;state.sourceEdited=false;
    $('#editor').value=getPage()?.body||'';
  }else{
@@ -476,6 +480,7 @@ function bind(){
   $('#editor-font').onchange=e=>{const p=getPage();if(p){p.fontFamily=e.target.value;renderEditorTypography();queueSave();}};
   $('#editor-size').onchange=e=>{const p=getPage();if(p){p.fontSize=Number(e.target.value);renderEditorTypography();queueSave();}};
   $('.format-toolbar').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
+ $('.format-toolbar').addEventListener('mousedown',e=>{if(e.target.closest('button[data-format]'))e.preventDefault();});
  $('#table-tools').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
  $('#selection-font').onchange=e=>{if(!state.sourceMode && e.target.value){richAction(richEditor,'set-font',{value:e.target.value});e.target.value='';}};
  $('#selection-size').onchange=e=>{if(!state.sourceMode && e.target.value){richAction(richEditor,'set-size',{value:e.target.value});e.target.value='';}};

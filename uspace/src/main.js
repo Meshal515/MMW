@@ -10,6 +10,7 @@ const $ = sel => document.querySelector(sel);
 const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-v4-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
 const SAVE_DELAY = 450;
 let saveTimer, revisionTimer, richEditor, loadingRich=false;
+let richSnapshotPage=null, richSnapshotAt=0, pendingRichSnapshot=Promise.resolve(), lastSnapshotError=null;
 const modes = {structure:{name:'ترتيب دون تحريف',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'مراجعة ونقد',description:'أرصد الغموض والتناقضات ونقاط الضعف، دون أن أغيّر أي كلمة.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت احترافي',description:'أرتب أفكارك في تعليمات Markdown دون حذف متطلباتك.'}};
 
 function id(){return crypto.randomUUID();}
@@ -127,7 +128,13 @@ function renderShell(){
   </div>`;
  if(richEditor)richEditor.destroy();
  richEditor=mountRichEditor($('#rich-editor'),()=>{
-   if(!loadingRich && !state.sourceMode){state.richChanged=true;queueSave();}
+   if(loadingRich || state.sourceMode)return;
+   const p=getPage(),now=Date.now();
+   if(p && (richSnapshotPage!==p.id || now-richSnapshotAt>60000)){
+     richSnapshotPage=p.id;richSnapshotAt=now;lastSnapshotError=null;
+     pendingRichSnapshot=snapshot().catch(e=>{lastSnapshotError=e;toast('تعذر حفظ نسخة قبل التعديل','error');});
+   }
+   state.richChanged=true;queueSave();
  },()=>updateRichToolbar());
  bind();renderNav();renderCurrent();renderModes();
 }
@@ -147,6 +154,7 @@ function currentDocumentBody(){
 }
 function renderCurrent(){
  const p=getPage();if(!p)return;
+ richSnapshotPage=null;richSnapshotAt=0;lastSnapshotError=null;pendingRichSnapshot=Promise.resolve();
  $('#page-title').value=p.title==='صفحة بدون عنوان'?'':p.title;
  $('#editor').value=p.body||'';
  loadingRich=true;
@@ -315,6 +323,8 @@ let editVersion=0;
 async function saveCurrent(){
  clearTimeout(saveTimer);saveTimer=null;
  const p=getPage();if(!p)return;
+ await pendingRichSnapshot;
+ if(lastSnapshotError)throw new Error('تعذر حفظ نسخة سابقة، لم يُحفظ التعديل لحماية بياناتك.');
  const v=editVersion;
  const body=currentDocumentBody();
  const documentJSON=state.sourceMode?(state.sourceEdited?null:p.richDoc):(state.richChanged?richJSON(richEditor):p.richDoc);

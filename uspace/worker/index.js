@@ -1,5 +1,5 @@
 const MAX_CONTENT = 40000;
-export const MODES = new Set(['structure','improve','review','prompt','proofread','analyze','custom']);
+export const MODES = new Set(['ideas','structure','improve','review','prompt','proofread','analyze','custom']);
 export const DEPTHS = new Set(['quick','standard','deep']);
 const MODELS = new Set(['deepseek-flash','deepseek-v4-pro']);
 const json = (data, status=200) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -25,10 +25,11 @@ const POLICY = [
 ].join('\n');
 
 const MODE_POLICY = {
+  ideas: 'أعد ترتيب أفكار المستخدم في Markdown واضح بعناوين ## و### وقوائم نقطية أو مرقمة وفقرات قصيرة. أهم شرط: النص يبقى بصوت المستخدم وكلماته ولهجته الأصلية قدر الإمكان، لا تحول الأفكار إلى خطة هندسية من عندك، ولا تضف أفكارًا أو أسبابًا أو متطلبات ولا تحذف أي مشكلة أو رقم أو مثال. قدّم عنوانًا مناسبًا وأقسامًا مثل "المشاكل" و"الهدف" و"القيود" فقط عندما توجد في النص. إذا كان النص عفويًا طويلًا، قسّمه منطقيًا مع الحفاظ على كل المعاني والتفاصيل. صحح الإملاء البسيط فقط دون فصحنة كلام المستخدم أو تغيير صيغته. أعد Markdown المنظم فقط من دون مقدمة أو أسئلة.',
   structure: 'ترتيب فقط: أعد JSON فقط بالشكل {"headings":[{"line":1,"title":"..."}],"suggestedTitle":"...","summary":"..."}. أرقام الأسطر من 1. أضف عناوين دون إعادة كتابة النص أو إضافة معلومة؛ حد أقصى 10 عناوين. لا تتجاوز النص.',
   improve: 'حسّن النص لغويًا وأسلوبيًا دون تغيير القرار أو الوقائع أو الطلب أو المصطلحات أو الأرقام. لا تضف مزايا أو متطلبات جديدة. أرجع النص المعدّل فقط.',
   proofread: 'صحّح النحو والإملاء وعلامات الترقيم الضرورية فقط مع إبقاء اللهجة والمصطلحات والترتيب والمعنى كما هي. لا تضف أفكارًا. أرجع النص المصحح فقط.',
-  review: 'قدّم مراجعة نقدية تفيد العمل: أولًا أكبر المخاطر أو التناقضات مع دليلها من النص، ثم أثرها، ثم كيفية إصلاحها أو اختبارها. ميّز بين خطأ مثبت واحتمال. لا تكتفِ بإعادة صياغة النص أو بسرد أسئلة.',
+  review: 'أخرج JSON صالحًا فقط بالشكل {"critique":"Markdown نقد محدد مع المشكلة وأثرها وسبل الإصلاح","revisedText":"النص الأصلي كاملًا بعد تصحيح جميع المشاكل التي أثبتها النقد"}. أولًا حلّل النص واكشف العيوب الفعلية والتناقضات والغموض ثم قدّم في revisedText نسخة مصححة ومتكاملة قابلة للاستخدام، لا مجرد توصيات. لا تضف ميزات أو ادعاءات غير مدعومة ولا تحذف أي قرار أو اسم أو رقم أو قيد. إذا كان النقد يتطلب معلومات خارج النص، لا تخترعها بل ضع افتراضًا صريحًا أو اترك العبارة للتحقق. اكتب النقد والنص المصحح بالعربية وصُن أسلوب المستخدم ما أمكن.',
   analyze: 'حلّل الهدف ثم اقترح خطة تقنية أو عملية قابلة للتنفيذ. استخدم: فهم الهدف والقيود، فرضيات أو أسباب جذرية تستحق الفحص، خطوات مرتبة بالأولوية مع مسؤولية كل طبقة، اختبارات منع التراجع ومعايير قبول قابلة للقياس، مخاطر وبدائل. لا تخترع ملفًا أو خطأً مثبتًا أو نتيجة اختبار. إذا كانت المعطيات لا تسمح بتشخيص محدد فضع خطة فحص محددة لا تخمينًا قاطعًا. لا تقترح ميزات خارج النطاق.',
   prompt: 'حوّل الأفكار إلى برومبت تنفيذي عالي الجودة يصلح لمساعد برمجي أو متخصص. افهم المعنى والسياق قبل الصياغة: المجاز الهندسي مثل "قاعدة مرنة/أرض رطبة" يعني قابلية التطوير وصيانة الكود، لا تكرار اللفظ حرفيًا ولا إدراجه كسؤال. اجعل البرومبت يشمل النتيجة المطلوبة، السياق الموثوق، نطاق العمل، القيود الصريحة، آلية التشخيص والتنفيذ، اختبارات تحقق ومعايير قبول مستمدة من الغرض. لا تخترع تقنيات أو ملفات أو عيوبًا مثبتة؛ اسمح بخطوات فحص عامة على أنها طلب تنفيذ، لا حقائق واقعة. لا تضع "أسئلة توضيحية" لمجرد وجود استعارة قابلة للفهم. احفظ المنع الصريح لإضافة مزايا أو تعديل الواجهة. أعد برومبت Markdown مباشرة، وليس تلخيصًا أو نقدًا للطلب.',
   custom: 'نفّذ توجيه المستخدم الوارد في <run_command> فعليًا على المستند، حسب ما تسمح به المعلومات المتاحة. إن طلب خطة فاجعلها تنفيذية؛ إن طلب برومبت فأنتج برومبت؛ إن طلب شرحًا فاشرح بعمق مناسب؛ لا تستبدل الطلب بملخص. لا تدّعِ تعديل نظام خارجي أو تشغيل اختبار فعلي.'
@@ -55,14 +56,15 @@ export function promptFor(mode,payload) {
 
 export function providerRequestFor(data) {
   const depth=data.depth || 'standard';
-  const thinking = depth==='deep' && data.mode!=='structure' && data.mode!=='proofread';
+  const structured = data.mode==='structure'||data.mode==='review';
+  const thinking = depth==='deep' && !structured && data.mode!=='proofread';
   return {
     model:data.model,
     messages:promptFor(data.mode,data),
     thinking:{type:thinking?'enabled':'disabled'},
     ...(thinking?{reasoning_effort:'high'}:{temperature:0.25}),
-    max_tokens:data.mode==='structure'?2600:thinking?24000:depth==='quick'?2800:depth==='standard'?7800:10000,
-    ...(data.mode==='structure'?{response_format:{type:'json_object'}}:{})
+    max_tokens:data.mode==='structure'?2600:data.mode==='review'?10000:thinking?24000:depth==='quick'?2800:depth==='standard'?7800:10000,
+    ...(structured?{response_format:{type:'json_object'}}:{})
   };
 }
 export default {
@@ -121,6 +123,12 @@ export default {
         try {structured=JSON.parse(answer);} catch {return json({error:'تعذر قراءة اقتراح ترتيب النص.'},502);}
         if (!Array.isArray(structured.headings)) return json({error:'اقتراح الترتيب غير صالح.'},502);
         return json({ok:true, mode:data.mode, result:{headings:structured.headings,suggestedTitle:String(structured.suggestedTitle||'').slice(0,120),summary:String(structured.summary||'').slice(0,800)}});
+      }
+      if (data.mode==='review') {
+        let revised;
+        try {revised=JSON.parse(answer);}catch{return json({error:'تعذر قراءة النقد والنسخة المصححة. حاول مجددًا.'},502);}
+        if (typeof revised.critique!=='string' || !revised.critique.trim() || typeof revised.revisedText!=='string' || !revised.revisedText.trim()) return json({error:'النقد لم يتضمن النص المصحح. أعد المحاولة.'},502);
+        return json({ok:true,mode:data.mode,result:{text:revised.critique,critique:revised.critique,revisedText:revised.revisedText},finishReason:result?.choices?.[0]?.finish_reason||null});
       }
       return json({ok:true, mode:data.mode, result:{text:answer}, finishReason:result?.choices?.[0]?.finish_reason||null, usage:result?.usage?{promptTokens:result.usage.prompt_tokens||0,completionTokens:result.usage.completion_tokens||0}:null});
     } catch(e) {return json({error:e.name==='AbortError'?'انتهت مهلة النموذج.':'فشل الاتصال بخدمة AI.'},504);} finally {clearTimeout(timer);}

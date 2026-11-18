@@ -1,4 +1,4 @@
-const CACHE = 'uspace-cache-rich-v2';
+const CACHE = 'uspace-cache-studio-static-v5';
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(['/', '/manifest.webmanifest', '/icons/icon.svg'])).then(() => self.skipWaiting()));
 });

@@ -1,1 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#182522"/><path d="M35 86V42h33c20 0 29 11 29 25S87 93 69 93H53" fill="none" stroke="#decba4" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="68" cy="67" r="8" fill="#decba4"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="uspace-title">
+<title id="uspace-title">USPACE — شعار ثابت</title>
+<defs>
+  <linearGradient id="background" x1="18" y1="10" x2="240" y2="258" gradientUnits="userSpaceOnUse"><stop stop-color="#18142F"/><stop offset=".55" stop-color="#151129"/><stop offset="1" stop-color="#29205B"/></linearGradient>
+  <linearGradient id="silver" x1="65" y1="72" x2="188" y2="193" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".35" stop-color="#D5D3EA"/><stop offset=".7" stop-color="#FEFCFF"/><stop offset="1" stop-color="#A59FC9"/></linearGradient>
+  <linearGradient id="orbit" x1="26" y1="85" x2="225" y2="204" gradientUnits="userSpaceOnUse"><stop stop-color="#6244DF"/><stop offset=".32" stop-color="#C788FF"/><stop offset=".66" stop-color="#7659F0"/><stop offset="1" stop-color="#A962FF"/></linearGradient>
+  <linearGradient id="star" x1="193" y1="41" x2="229" y2="83" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".62" stop-color="#E6DAFF"/><stop offset="1" stop-color="#9560FC"/></linearGradient>
+  <filter id="glow" x="-35%" y="-35%" width="170%" height="170%"><feGaussianBlur stdDeviation="5"/></filter>
+  <filter id="star-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>
+  <clipPath id="card"><rect x="6" y="6" width="244" height="244" rx="56"/></clipPath>
+</defs>
+<g clip-path="url(#card)">
+  <rect x="6" y="6" width="244" height="244" rx="56" fill="url(#background)"/>
+  <circle cx="128" cy="131" r="101" fill="none" stroke="#8D64E8" stroke-opacity=".17" stroke-width="2"/>
+  <path d="M26 169 C36 97 111 62 185 73 C202 76 212 83 223 91" fill="none" stroke="#9E5DFD" stroke-opacity=".45" stroke-width="15" filter="url(#glow)"/>
+  <path d="M28 169 C49 117 101 86 164 74 C186 70 204 75 220 86 C176 64 113 87 78 117 C57 134 43 153 28 169Z" fill="url(#orbit)"/>
+  <path d="M82 82 L82 149 C82 179 99 196 127 196 C155 196 173 178 173 149 L173 81" fill="none" stroke="#19152F" stroke-width="47" stroke-linecap="round" stroke-linejoin="round" opacity=".33"/>
+  <path d="M84 85 L84 149 C84 178 98 192 127 192 C155 192 170 176 170 149 L170 85" fill="none" stroke="url(#silver)" stroke-width="33" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M80 85 L80 148 C80 181 97 199 127 199" fill="none" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 189 C87 233 187 222 229 138 C228 181 194 210 153 220 C104 234 52 218 22 189Z" fill="url(#orbit)"/>
+  <path d="M35 195 C96 227 183 214 220 158" fill="none" stroke="#DFC5FF" stroke-opacity=".46" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M207 46 C211 61 215 66 229 70 C215 74 211 79 207 94 C203 79 199 74 185 70 C199 66 203 61 207 46Z" fill="#9D64FC" opacity=".72" filter="url(#star-glow)"/>
+  <path d="M207 47 C211 61 215 66 229 70 C215 74 211 79 207 93 C203 79 199 74 185 70 C199 66 203 61 207 47Z" fill="url(#star)"/>
+</g>
+<rect x="6.7" y="6.7" width="242.6" height="242.6" rx="55" fill="none" stroke="#AF87FF" stroke-opacity=".34" stroke-width="1.5"/>
+</svg>

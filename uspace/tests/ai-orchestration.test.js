@@ -86,7 +86,9 @@ test('AI UI exposes a command composer and does not overwrite pages for analyses
  assert.match(main,/id="ai-depth"/);
  assert.match(main,/data-ai-preset="root"/);
  assert.match(main,/body:JSON\.stringify\(\{mode,model,text,title:p\.title,instructions,command,depth\}\)/);
- assert.match(main,/const canApply=\['structure','improve','proofread'\]/);
- assert.match(main,/id="save-ai-page"/);
- assert.match(main,/DOMPurify\.sanitize\(marked\.parse\(body/);
+ assert.match(main,/state\.selectedModes/);
+ assert.match(main,/const selected=MODE_ORDER\.filter/);
+ assert.match(main,/\['ideas','structure','improve','proofread','review'\]/);
+ assert.match(main,/data-ai-save/);
+ assert.match(main,/DOMPurify\.sanitize\(marked\.parse/);
 });

@@ -6,14 +6,16 @@ import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, ri
 import { bootstrap, list, put, remove, clearPage, importBackupRows } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 import {fontOptionsHtml, pageFontFamily, fontStack, loadArabicFont, loadDocumentFonts} from './fonts.js';
+import {MODE_ORDER,normalizeModeSelection,preservationReport,labelForMode} from './ai-operations.js';
+import {extractTags,extractWikiLinks,linkedPageIds,backlinksFor,rankPages,graphForSpace,dailyTitle,PAGE_TEMPLATES} from './knowledge.js';
 import {providerKey, setProviderKey, lockProviderKey, savedProviderKeyExists, saveEncryptedProviderKey, unlockProviderKey, forgetProviderKey} from './keyring.js';
 
 const $ = sel => document.querySelector(sel);
-const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
+const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'ideas', selectedModes:['ideas'], aiBatch:null, aiAbort:null, model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
 const SAVE_DELAY = 450;
 let saveTimer, revisionTimer, richEditor, loadingRich=false;
 let richSnapshotPage=null, richSnapshotAt=0, pendingRichSnapshot=Promise.resolve(), lastSnapshotError=null;
-const modes = {structure:{name:'ترتيب دون تحريف',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'مراجعة ونقد',description:'أرصد الغموض والتناقضات ونقاط الضعف، دون أن أغيّر أي كلمة.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت تنفيذي',description:'أحوّل فكرتك لأمر قابل للتنفيذ مع خطة ومعايير قبول، لا مجرد تلخيص.'},analyze:{name:'تحليل هندسي',description:'أستخرج الأسباب المحتملة والأولويات وخطوات التنفيذ واختبارات منع التراجع.'},custom:{name:'نفّذ طلبي',description:'اكتب أمرك الخاص وسأنفّذه على الصفحة دون إجابة نمطية.'}};
+const modes = {ideas:{name:'ترتيب الأفكار',description:'أرتّب كلامك أنت بعناوين هاشتاق وفقرات وقوائم من دون إضافة أفكار أو تغيير أسلوبك.'},structure:{name:'عناوين فقط',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'نقد + نسخة مصححة',description:'أكشف المشاكل أولًا ثم أعطيك النص كاملًا بعد إصلاح ما كشفه النقد.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت تنفيذي',description:'أحوّل فكرتك لأمر قابل للتنفيذ مع خطة ومعايير قبول، لا مجرد تلخيص.'},analyze:{name:'تحليل هندسي',description:'أستخرج الأسباب المحتملة والأولويات وخطوات التنفيذ واختبارات منع التراجع.'},custom:{name:'نفّذ طلبي',description:'اكتب أمرك الخاص وسأنفّذه على الصفحة دون إجابة نمطية.'}};
 
 function id(){return crypto.randomUUID();}
 function icon(name, size=19){
@@ -49,18 +51,28 @@ function renderShell(){
  $('#app').innerHTML=`<div class="shell">
   <div class="scrim" id="scrim"></div><div class="panel-scrim" id="panel-scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark" aria-label="USPACE"><span aria-hidden="true">U</span></div><div class="brand-title"><b>USPACE</b><span>YOUR SPACE TO THINK · v0.3</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
+    <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/icons/icon.svg" alt="شعار USPACE الثابت" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
+    <div class="sidebar-utility" aria-label="أدوات المعرفة">
+      <button type="button" class="quick-launch" id="quick-switch-btn">${icon('search',16)} بحث وتنقل سريع <span>Ctrl K</span></button>
+      <div class="sidebar-quick-row">
+        <button type="button" id="daily-note-btn" title="إنشاء أو فتح مذكّرة اليوم">${icon('edit',16)} اليوميّة</button>
+        <button type="button" id="templates-btn" title="مستند من قالب">${icon('file',16)} قوالب</button>
+        <button type="button" id="graph-btn" title="خريطة الروابط">${icon('book',16)} الخريطة</button>
+      </div>
+    </div>
     <div class="sidebar-separator"></div>
     <div class="pages-head"><span>الصفحات <b id="page-count">0</b></span><button class="icon-btn small" id="add-page" title="صفحة جديدة">${icon('plus',17)}</button></div>
     <label class="search-wrap">${icon('search',17)}<input id="search" type="search" placeholder="ابحث في صفحاتك..." autocomplete="off" aria-label="البحث في الصفحات"/><span>⌘K</span></label>
+    <div id="favorite-list" class="favorites-list" aria-label="الصفحات المثبتة"></div>
+    <div id="recent-list" class="recent-list" aria-label="الصفحات الأخيرة"></div>
     <div class="pages-list" id="pages-list"></div>
     <div class="sidebar-foot"><div class="local-status"><span class="local-dot"></span>محفوظ على هذا الجهاز</div><button class="sidebar-action" id="backup-btn">${icon('download',17)} تصدير نسخة احتياطية</button><button class="sidebar-action" id="import-btn">${icon('upload',17)} استيراد Markdown</button><button class="sidebar-action" id="restore-backup-btn">${icon('history',17)} استعادة نسخة JSON</button><button class="sidebar-action" id="settings-btn">${icon('settings',17)} الإعدادات والاتصال</button></div>
   </aside>
   <main class="main">
     <header class="topbar"><div class="breadcrumbs"><button class="icon-btn mobile-menu" id="open-sidebar" title="القائمة">${icon('menu')}</button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
-      <div class="top-actions"><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
+      <div class="top-actions"><button type="button" class="icon-btn theme-switch" id="theme-btn" title="تبديل الوضع الفاتح والداكن" aria-label="تبديل السمة">☾</button><button type="button" class="icon-btn favorite-switch" id="favorite-btn" title="تثبيت الصفحة في المفضلة" aria-label="تثبيت الصفحة">☆</button><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
     <div class="editor-scroll"><article class="editor-paper"><div class="eyebrow">مساحة للكتابة والتفكير</div><input id="page-title" class="page-title" aria-label="عنوان الصفحة" placeholder="صفحة بدون عنوان" maxlength="200"/><div class="page-meta"><span id="modified-label">آخر تعديل الآن</span><span class="meta-circle">●</span><span>Markdown</span><span class="meta-circle">●</span><span>خصوصي على جهازك</span></div>
     <div class="editor-rule"></div><div class="format-toolbar" role="toolbar" aria-label="تنسيق المستند">
       <select id="editor-font" aria-label="خط المستند" title="خط المستند">${fontOptionsHtml()}</select>
@@ -108,12 +120,12 @@ function renderShell(){
       <button type="button" data-format="table-remove" class="danger-action">حذف الجدول</button>
     </div>
     <div id="rich-editor" class="rich-editor-host" aria-label="المحرر المرئي"></div>
-    <textarea id="editor" class="hidden" spellcheck="true" dir="auto" aria-label="مصدر Markdown" placeholder="اكتب Markdown هنا..."></textarea><div id="preview" class="markdown-preview hidden"></div>
+    <textarea id="editor" class="hidden" spellcheck="true" dir="auto" aria-label="مصدر Markdown" placeholder="اكتب Markdown هنا..."></textarea><div id="preview" class="markdown-preview hidden"></div><section id="doc-context" class="doc-context" aria-label="روابط ووسوم المستند"></section>
     </article></div>
     <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="text-btn" id="export-html-btn">${icon('download',16)} HTML</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
   </main>
   <aside class="right-panel" id="right-panel"><div class="panel-header"><div><span class="panel-kicker">USPACE INTELLIGENCE</span><h2>${icon('spark',22)} مساعد الكتابة</h2></div><button class="icon-btn" id="close-panel" aria-label="إغلاق المساعد">${icon('close')}</button></div>
-  <div class="panel-body"><div class="panel-note">حدد هدفك بدقة. المساعد يفرّق بين التنسيق والتحليل والتنفيذ، ولا يغير مستندك تلقائيًا.</div><label class="field-label">نوع العملية</label><div class="mode-options" id="modes"></div>
+  <div class="panel-body"><div class="panel-note">مساحتك للتفكير والتنظيم. اختر عملية واحدة أو عدة عمليات، وسأعطيك نتائج مستقلة مع الحفاظ على مستندك.</div><div class="mode-choice-head"><label class="field-label" id="modes-label">اختر أكثر من عملية</label><span class="selected-mode-count" id="selected-mode-count">عملية واحدة</span></div><div class="mode-options" id="modes" role="group" aria-labelledby="modes-label"></div><p class="mode-cost-hint" id="mode-cost-hint">تُرسل كل عملية كطلب منفصل إلى DeepSeek.</p>
   <label class="field-label" id="ai-command-label" for="ai-command">أمرك للمساعد في هذه العملية (اختياري)</label>
   <textarea id="ai-command" class="ai-command-input" rows="4" maxlength="3000" dir="auto" spellcheck="true" placeholder="مثال: حلل خطة فانتارا هندسيًا وقدم معالجة للأسباب الجذرية واختبارات قبول واضحة دون إضافة أي مزايا."></textarea>
   <div class="command-presets" aria-label="أوامر جاهزة"><button type="button" data-ai-preset="root">أسباب جذرية</button><button type="button" data-ai-preset="plan">خطة تنفيذ واختبار</button><button type="button" data-ai-preset="constraints">التزم بالقيود</button></div>
@@ -135,7 +147,7 @@ function renderShell(){
     <div class="key-buttons"><button class="quiet-btn bordered" type="button" id="remember-provider-key">حفظ مشفر</button><button class="quiet-btn bordered" type="button" id="unlock-provider-key">فتح الخزنة</button><button class="quiet-btn bordered" type="button" id="forget-provider-key">حذف المفتاح</button></div>
   </details>
   <details class="vault-details"><summary>اتصال Cloudflare القديم</summary><label class="field-label" for="access-key">رمز دخول Worker</label><input class="field-input" id="access-key" type="password" autocomplete="off" placeholder="رمز وصول Worker"/><p class="field-help">للوضع القديم فقط، عندما يكون مفتاح DeepSeek محفوظًا في Cloudflare Secrets.</p></details>
-  <button class="run-btn" id="run-ai">${icon('spark',18)} <span>نفّذ العملية</span></button><div id="ai-results" class="ai-results" aria-live="polite"></div></div></aside>
+  <div class="ai-run-actions"><button class="run-btn" id="run-ai">${icon('spark',18)} <span>نفّذ العمليات المختارة</span></button><button class="quiet-btn bordered hidden" type="button" id="cancel-ai">إيقاف</button></div><div id="ai-results" class="ai-results" aria-live="polite"></div></div></aside>
   <div id="dialog-root"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden/><input id="backup-input" type="file" accept=".json,application/json" hidden/>
   </div>`;
  if(richEditor)richEditor.destroy();
@@ -151,11 +163,18 @@ function renderShell(){
  bind();renderNav();renderCurrent();renderModes();
 }
 function renderNav(){
- const s=$('#spaces-list');s.innerHTML=state.spaces.map(sp=>`<button data-space="${sp.id}" class="space-option ${sp.id===state.activeSpace?'selected':''}"><span class="space-icon">${icon('book',17)}</span><span>${escapeHtml(sp.name)}</span>${sp.id===state.activeSpace?icon('chevron',16):''}</button>`).join('');
- const term=state.search.toLowerCase();const currentPages=state.pages.filter(p=>p.spaceId===state.activeSpace).sort((a,b)=>b.updatedAt-a.updatedAt);
- $('#page-count').textContent=currentPages.length;
- const shown=currentPages.filter(p=>`${p.title} ${p.body}`.toLowerCase().includes(term));
- $('#pages-list').innerHTML=shown.length?shown.map(p=>`<button data-page="${p.id}" class="page-option ${p.id===state.activePage?'active':''}"><span class="page-line">${icon('file',17)}<span class="page-item-title">${escapeHtml(p.title||'صفحة بدون عنوان')}</span></span><span class="page-date">${fmtDate(p.updatedAt)}</span></button>`).join(''):'<p class="empty-nav">ما فيه صفحات تطابق بحثك.</p>';
+ const s=$('#spaces-list');
+ s.innerHTML=state.spaces.map(sp=>'<button type="button" data-space="'+sp.id+'" class="space-option'+(sp.id===state.activeSpace?' selected':'')+'"><span class="space-icon">'+icon('book',17)+'</span><span>'+escapeHtml(sp.name)+'</span>'+(sp.id===state.activeSpace?icon('chevron',16):'')+'</button>').join('');
+ const term=state.search.trim();
+ const currentPages=state.pages.filter(p=>p.spaceId===state.activeSpace);
+ const shown=rankPages(state.pages,term,term?null:state.activeSpace);
+ $('#page-count').textContent=term?shown.length:currentPages.length;
+ const pageRow=p=>'<button type="button" data-page="'+p.id+'" class="page-option'+(p.id===state.activePage?' active':'')+'" title="'+escapeHtml(p.title||'بدون عنوان')+'"><span class="page-line">'+(p.favorite?'★ ':icon('file',16))+'<span class="page-item-title">'+escapeHtml(p.title||'صفحة بدون عنوان')+'</span></span><span class="page-date">'+fmtDate(p.updatedAt)+'</span></button>';
+ $('#pages-list').innerHTML=shown.length?shown.map(pageRow).join(''):'<p class="empty-nav">لا توجد صفحات مطابقة.</p>';
+ const favorites=currentPages.filter(p=>p.favorite).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,6);
+ $('#favorite-list').innerHTML=favorites.length?'<div class="nav-section-title">★ المفضلة</div>'+favorites.map(pageRow).join(''):'';
+ const recent=currentPages.filter(p=>p.id!==state.activePage&&!p.favorite).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,3);
+ $('#recent-list').innerHTML=recent.length?'<div class="nav-section-title">مؤخرًا</div>'+recent.map(pageRow).join(''):'';
  $('#crumb-space').textContent=getSpace()?.name||'مساحتي';
 }
 function currentDocumentBody(){
@@ -182,7 +201,8 @@ function renderCurrent(){
  $('#crumb-page').textContent=p.title||'صفحة بدون عنوان';
  $('#modified-label').textContent='آخر تعديل '+fmtDate(p.updatedAt);
  syncPreview();updateStats();updateRichToolbar();
- $('#ai-results').innerHTML='';state.ai=null;
+ $('#ai-results').innerHTML='';state.ai=null;state.aiBatch=null;
+ renderKnowledgeContext();updateFavoriteButton();
 }
 function syncPreview(){
  const source=state.sourceMode&&!state.preview;
@@ -355,7 +375,7 @@ async function saveCurrent(){
    $('#save-status').classList.remove('pending');
  }
  $('#crumb-page').textContent=p.title;
- renderNav();
+ renderNav();renderKnowledgeContext();
 }
 function queueSave(){
  editVersion++;markUnsaved();updateStats();
@@ -363,10 +383,10 @@ function queueSave(){
  saveTimer=setTimeout(()=>saveCurrent().catch(e=>toast('تعذر الحفظ: '+e.message,'error')),SAVE_DELAY);
 }
 async function flush(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;await saveCurrent();}}
-async function activatePage(pid){await flush();state.activePage=pid;localStorage.setItem('uspace-active-page',pid);renderNav();renderCurrent();toggleSidebar(false);}
+async function activatePage(pid){await flush();const page=state.pages.find(p=>p.id===pid);if(!page)throw Error('الصفحة غير موجودة');state.activePage=pid;if(state.activeSpace!==page.spaceId){state.activeSpace=page.spaceId;localStorage.setItem('uspace-active-space',page.spaceId);}localStorage.setItem('uspace-active-page',pid);renderNav();renderCurrent();toggleSidebar(false);}
 async function activateSpace(sid){await flush();state.activeSpace=sid;state.activePage=state.pages.filter(p=>p.spaceId===sid).sort((a,b)=>b.updatedAt-a.updatedAt)[0]?.id || null; if(!state.activePage)await addPage(); localStorage.setItem('uspace-active-space',sid);renderNav();renderCurrent();toggleSidebar(false);}
 async function addSpace(){const name=prompt('اسم المساحة الجديدة؟','مشروعي الجديد');if(!name?.trim())return;const s={id:id(),name:name.trim().slice(0,70),instructions:'',createdAt:Date.now(),updatedAt:Date.now()};await put('spaces',s);state.spaces.push(s);await activateSpace(s.id);toast('تم إنشاء المساحة');}
-async function addPage(){await flush();const now=Date.now();const p={id:id(),spaceId:state.activeSpace,title:'صفحة بدون عنوان',body:'',instructions:'',createdAt:now,updatedAt:now};await put('pages',p);state.pages.push(p);await activatePage(p.id);$('#page-title').focus();}
+async function addPage(template='blank',customTitle='صفحة بدون عنوان'){await flush();const now=Date.now();const body=PAGE_TEMPLATES[template]?.body||'';const p={id:id(),spaceId:state.activeSpace,title:customTitle,body,richDoc:null,instructions:'',favorite:false,createdAt:now,updatedAt:now};await put('pages',p);state.pages.push(p);await activatePage(p.id);if(template==='blank')$('#page-title').focus();}
 function toggleSidebar(value){
  if(value&&state.panelOpen)togglePanel(false);
  state.sidebarOpen=value;
@@ -382,13 +402,24 @@ function togglePanel(value){
    if(value)renderModes();
  }
 function renderModes(){
- $('#modes').innerHTML=Object.entries(modes).map(([key,m])=>`<button type="button" class="mode-btn ${state.mode===key?'chosen':''}" data-mode="${key}" aria-pressed="${state.mode===key}"><span class="mode-radio"></span><span><b>${m.name}</b><small>${m.description}</small></span></button>`).join('');
- const command=$('#ai-command'),label=$('#ai-command-label');
- if(command && label){
-   label.textContent=state.mode==='custom'?'ما الأمر الذي تريد تنفيذه؟ (مطلوب)':'أمرك الخاص لهذه العملية (اختياري)';
-   command.setAttribute('aria-required',String(state.mode==='custom'));
-   command.toggleAttribute('required',state.mode==='custom');
+ const current=new Set(state.selectedModes);
+ $('#modes').innerHTML=MODE_ORDER.map(key=>{
+   const m=modes[key];
+   if(!m)return '';
+   const checked=current.has(key);
+   return '<label class="mode-btn mode-multi'+(checked?' chosen':'')+'" data-option="'+key+'"><input type="checkbox" class="mode-checkbox" data-mode="'+key+'" value="'+key+'" '+(checked?'checked':'')+' aria-label="'+escapeHtml(m.name)+'"/><span class="mode-checkbox-mark" aria-hidden="true">'+(checked?icon('check',14):'')+'</span><span><b>'+escapeHtml(m.name)+'</b><small>'+escapeHtml(m.description)+'</small></span></label>';
+ }).join('');
+ const command=$('#ai-command'),label=$('#ai-command-label'),custom=current.has('custom');
+ if(command&&label){
+   label.textContent=custom?'ما الأمر الذي تريد تنفيذه؟ (مطلوب)':'أمرك الخاص لهذه العمليات (اختياري)';
+   command.setAttribute('aria-required',String(custom));
+   command.toggleAttribute('required',custom);
  }
+ const n=current.size;
+ $('#selected-mode-count').textContent=n===0?'لم تحدد عملية':n===1?'عملية واحدة':n+' عمليات';
+ $('#mode-cost-hint').textContent=n>1?'سيُرسل '+n+' طلبات منفصلة إلى DeepSeek، كل عملية بنتيجتها وتكلفتها.':'كل عملية تستخدم طلب DeepSeek واحدًا؛ يبقى المستند دون تغيير حتى توافق.';
+ const button=$('#run-ai');
+ if(button&&!state.busy)button.disabled=n===0;
 }
 function showDialog(title, content, opts={}){
  const root=$('#dialog-root');root.innerHTML=`<div class="modal-backdrop" id="dialog-backdrop"><section role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}" class="modal"><div class="modal-top"><h2>${escapeHtml(title)}</h2><button id="dialog-close" class="icon-btn" title="إغلاق">${icon('close')}</button></div><div class="modal-content">${content}</div></section></div>`;
@@ -396,6 +427,106 @@ function showDialog(title, content, opts={}){
  opts.onOpen?.();
 }
 function closeDialog(){$('#dialog-root').innerHTML='';}
+function updateFavoriteButton(){
+ const p=getPage(),button=$('#favorite-btn');
+ if(!button)return;
+ const marked=Boolean(p?.favorite);
+ button.textContent=marked?'★':'☆';
+ button.title=marked?'إزالة من المفضلة':'إضافة للمفضلة';
+ button.setAttribute('aria-label',button.title);
+ button.setAttribute('aria-pressed',String(marked));
+ button.classList.toggle('is-active',marked);
+}
+async function toggleFavoritePage(){
+ const p=getPage();if(!p)return;
+ p.favorite=!p.favorite;
+ await put('pages',{...p});
+ renderNav();updateFavoriteButton();
+ toast(p.favorite?'تم تثبيت الصفحة في المفضلة':'أُزيلت الصفحة من المفضلة');
+}
+function renderKnowledgeContext(){
+ const root=$('#doc-context'),p=getPage();if(!root||!p)return;
+ const body=currentDocumentBody(),tags=extractTags(body),titles=extractWikiLinks(body);
+ const inLinks=backlinksFor(p,state.pages).slice(0,8);
+ const linked=state.pages.filter(page=>page.spaceId===p.spaceId);
+ const targetByTitle=new Map(linked.map(page=>[(page.title||'').trim().toLowerCase(),page]));
+ const links=titles.map(title=>({title,page:targetByTitle.get(title.toLowerCase())}));
+ root.innerHTML='<div class="knowledge-head">'+icon('book',16)+'<span>معرفة مرتبطة</span><small>الوسوم · الروابط · الإشارات</small></div>'+
+  '<div class="knowledge-row"><b>الوسوم</b><div class="knowledge-chips">'+(tags.length?tags.map(tag=>'<button type="button" data-tag-filter="'+escapeHtml(tag)+'" class="knowledge-chip tag">#'+escapeHtml(tag)+'</button>').join(''):'<span class="knowledge-empty">اكتب #وسم داخل الصفحة</span>')+'</div></div>'+
+  '<div class="knowledge-row"><b>الروابط</b><div class="knowledge-chips">'+(links.length?links.map(link=>'<button type="button" class="knowledge-chip'+(link.page?'':' unlinked')+'" '+(link.page?'data-open-page="'+link.page.id+'"':'data-create-wikilink="'+escapeHtml(link.title)+'"')+'>'+icon('file',13)+escapeHtml(link.title)+(link.page?'':' +')+'</button>').join(''):'<span class="knowledge-empty">اربط الصفحات بـ [[اسم الصفحة]]</span>')+'</div></div>'+
+  (inLinks.length?'<div class="knowledge-row"><b>يشير إلى هذه الصفحة</b><div class="knowledge-chips">'+inLinks.map(page=>'<button type="button" class="knowledge-chip" data-open-page="'+page.id+'">'+icon('file',13)+escapeHtml(page.title)+'</button>').join('')+'</div></div>':'');
+ root.onclick=async e=>{
+   const target=e.target.closest('[data-open-page],[data-create-wikilink],[data-tag-filter]');
+   if(!target)return;
+   try{
+     if(target.dataset.openPage)await activatePage(target.dataset.openPage);
+     else if(target.dataset.createWikilink)await addPage('blank',target.dataset.createWikilink.slice(0,190));
+     else if(target.dataset.tagFilter){state.search='#'+target.dataset.tagFilter;$('#search').value=state.search;renderNav();toggleSidebar(true);}
+   }catch(error){toast(error.message,'error');}
+ };
+}
+function setTheme(next){
+ const theme=next==='dark'?'dark':'light';
+ document.documentElement.dataset.theme=theme;
+ try{localStorage.setItem('uspace-theme',theme);}catch{}
+ const button=$('#theme-btn');
+ if(button){button.textContent=theme==='dark'?'☀':'☾';button.setAttribute('aria-label',theme==='dark'?'تفعيل الوضع الفاتح':'تفعيل الوضع الداكن');button.title=button.getAttribute('aria-label');}
+}
+async function createDailyNote(){
+ const title=dailyTitle();
+ const page=state.pages.find(p=>p.spaceId===state.activeSpace&&p.title===title);
+ if(page)await activatePage(page.id);else await addPage('note',title);
+}
+function showTemplates(){
+ const html='<p class="dialog-description">اختر قالبًا لصفحة جديدة. كل شيء محفوظ محليًا ويمكن تعديله بعد الإنشاء.</p><div class="template-gallery">'+Object.entries(PAGE_TEMPLATES).map(([key,t])=>'<button type="button" data-template="'+key+'" class="template-card"><span>'+icon('file',21)+'</span><strong>'+escapeHtml(t.label)+'</strong><small>'+escapeHtml((t.body||'صفحة فارغة').replace(/[#\n*-]/g,' ').trim().slice(0,85))+'</small></button>').join('')+'</div>';
+ showDialog('قوالب USPACE',html,{onOpen:()=>{
+   document.querySelectorAll('[data-template]').forEach(button=>button.onclick=async()=>{
+     const template=button.dataset.template;
+     closeDialog();try{await addPage(template,template==='blank'?'صفحة بدون عنوان':PAGE_TEMPLATES[template].label);}catch(e){toast(e.message,'error');}
+   });
+ }});
+}
+function showGraph(){
+ const data=graphForSpace(state.pages,state.activeSpace);
+ if(!data.nodes.length){toast('لا توجد صفحات لعرضها','error');return;}
+ const nodes=data.nodes.slice(0,36);
+ const allowed=new Set(nodes.map(p=>p.id));
+ const W=760,H=470,cx=W/2,cy=H/2;
+ const pos=new Map();
+ nodes.forEach((p,i)=>{
+   const angle=(i*2.399963229728653)+Math.PI/4;
+   const radius=nodes.length===1?0:Math.min(200,37+Math.sqrt(i)*31);
+   pos.set(p.id,{x:cx+Math.cos(angle)*radius,y:cy+Math.sin(angle)*radius});
+ });
+ const edges=data.edges.filter(e=>allowed.has(e.source)&&allowed.has(e.target));
+ const svg='<svg class="graph-lines" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'+edges.map(edge=>{
+   const a=pos.get(edge.source),b=pos.get(edge.target);
+   return '<path d="M '+a.x.toFixed(1)+' '+a.y.toFixed(1)+' L '+b.x.toFixed(1)+' '+b.y.toFixed(1)+'" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6"/>';
+ }).join('')+'</svg>';
+ const body='<p class="dialog-description">روابطك من نوع [[اسم الصفحة]] تُكوّن خريطة معرفة محلية. اختر عقدة لفتح صفحتها.</p><div class="knowledge-graph" dir="ltr">'+svg+nodes.map(page=>{
+   const p=pos.get(page.id),active=page.id===state.activePage;
+   return '<button type="button" data-graph-page="'+page.id+'" class="graph-node'+(active?' is-current':'')+'" style="left:'+(p.x/W*100).toFixed(2)+'%;top:'+(p.y/H*100).toFixed(2)+'%" title="'+escapeHtml(page.title)+'">'+escapeHtml(page.title.slice(0,22)||'صفحة')+'</button>';
+ }).join('')+'</div><p class="graph-legend">'+nodes.length+' صفحة · '+edges.length+' روابط</p>';
+ showDialog('خريطة المعرفة',body,{onOpen:()=>{
+   document.querySelectorAll('[data-graph-page]').forEach(button=>button.onclick=async()=>{closeDialog();try{await activatePage(button.dataset.graphPage);}catch(e){toast(e.message,'error');}});
+ }});
+}
+function openQuickSwitcher(){
+ showDialog('انتقل إلى صفحة', '<label class="field-label" for="quick-query">ابحث باسم الصفحة أو نصها أو الوسم</label><input id="quick-query" type="search" class="field-input quick-search" placeholder="ابحث عن أي صفحة..." autocomplete="off"/><div class="quick-results" id="quick-results" role="listbox"></div>',{onOpen:()=>{
+   const field=$('#quick-query'),results=$('#quick-results');
+   const display=()=>{
+     const found=rankPages(state.pages,field.value).slice(0,12);
+     results.innerHTML=found.length?found.map(page=>'<button type="button" role="option" data-quick-page="'+page.id+'" class="quick-item"><span>'+icon('file',17)+'</span><span><b>'+escapeHtml(page.title||'صفحة بدون عنوان')+'</b><small>'+escapeHtml(state.spaces.find(s=>s.id===page.spaceId)?.name||'مساحة')+'</small></span>'+(page.favorite?'★':'')+'</button>').join(''):'<p class="dialog-description">لم تُعثر على صفحات مطابقة.</p>';
+   };
+   results.onclick=async e=>{
+     const button=e.target.closest('[data-quick-page]');if(!button)return;
+     closeDialog();try{await activatePage(button.dataset.quickPage);}catch(error){toast(error.message,'error');}
+   };
+   field.oninput=display;
+   field.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();results.querySelector('[data-quick-page]')?.click();}};
+   display();field.focus();
+ }});
+}
 function pageInstructions(){const p=getPage();const space=getSpace();showDialog('تعليمات الصفحة',`<p class="dialog-description">تُرسل هذه التعليمات مع طلبات الذكاء الاصطناعي لهذه الصفحة فقط. ضع أسلوبك أو قواعد الرواية هنا.</p><label class="field-label" for="space-instructions">تعليمات المساحة (تنطبق على كل صفحاتها)</label><textarea id="space-instructions" class="dialog-textarea" placeholder="مثال: لا تختلق أي معلومة، حافظ على جميع قرارات المشروع...">${escapeHtml(space.instructions||'')}</textarea><label class="field-label" for="page-instructions">تعليمات خاصة بهذه الصفحة</label><textarea id="page-instructions" class="dialog-textarea" placeholder="مثال: لا تغير الحوارات، راجع تسلسل الأحداث...">${escapeHtml(p.instructions||'')}</textarea><div class="dialog-actions"><button id="instructions-save" class="run-btn">حفظ التعليمات</button></div>`,{onOpen:()=>$('#instructions-save').onclick=async()=>{space.instructions=$('#space-instructions').value.slice(0,1500);p.instructions=$('#page-instructions').value.slice(0,1500);await Promise.all([put('spaces',{...space}),put('pages',{...p})]);closeDialog();toast('تم حفظ التعليمات');}});}
 function settings(){showDialog('إعدادات USPACE',`<p class="dialog-description">الصفحات تُحفظ محليًا عبر IndexedDB. لا توجد مزامنة سحابية حاليًا؛ نزّل نسخة احتياطية باستمرار.</p><div class="info-row">${icon('shield',20)}<span>يمكن إدخال مفتاح DeepSeek من لوحة المساعد دون وضعه في GitHub. افتراضيًا يبقى في ذاكرة الصفحة، مع حفظ محلي مشفر اختياري.</span></div><div class="info-row">${icon('book',20)}<span>يمكن تصدير واستيراد ملفات Markdown.</span></div><div class="dialog-actions"><button class="quiet-btn bordered" id="export-backup-modal">تصدير نسخة احتياطية</button></div>`,{onOpen:()=>$('#export-backup-modal').onclick=()=>{closeDialog();backup();}});}
 function download(name,content,type='text/plain;charset=utf-8'){
@@ -456,88 +587,152 @@ function showHistory(){
    })});
  }).catch(e=>toast(e.message,'error'));
 }
+function safeAIHtml(text){
+ return DOMPurify.sanitize(marked.parse(String(text||''),{gfm:true,breaks:false}),{USE_PROFILES:{html:true}});
+}
 function renderAIResult(){
- const target=$('#ai-results'),a=state.ai;if(!a){target.innerHTML='';return;}
- const isStruct=a.mode==='structure';
- const canApply=['structure','improve','proofread'].includes(a.mode);
- const body=isStruct?a.formatted:(a.result?.text||'');
- const labels={structure:'ترتيب مقترح',improve:'نسخة محسنة',proofread:'تصحيح إملائي',prompt:'برومبت تنفيذي',review:'تقرير المراجعة',analyze:'تحليل وخطة قابلة للتنفيذ',custom:'نتيجة تنفيذ الأمر'};
- const html=DOMPurify.sanitize(marked.parse(body,{gfm:true,breaks:false}),{USE_PROFILES:{html:true}});
- const usage=a.usage?.completionTokens?'<p class="ai-usage">استهلاك الاستجابة: '+a.usage.completionTokens.toLocaleString('ar-SA')+' رمز إخراج (يشمل التفكير إن فُعل)</p>':'';
- target.innerHTML='<div class="result-head"><strong>'+escapeHtml(labels[a.mode]||'نتيجة المساعد')+'</strong><span class="result-badge">'+icon('check',13)+' '+(canApply?'اقتراح لا يغيّر الأصل':'نتيجة مستقلة عن المستند')+'</span></div>'+
-  (isStruct&&a.result.summary?'<p class="result-summary">'+escapeHtml(a.result.summary)+'</p>':'')+
-  (a.finishReason==='length'?'<p class="ai-error">بلغ النموذج الحد المسموح للإخراج. قد تكون النتيجة غير مكتملة؛ يمكنك إعادة المحاولة بعمق أو نطاق مختلف.</p>':'')+
-  '<div class="result-content ai-markdown" dir="auto">'+html+'</div>'+usage+
-  '<div class="result-actions"><button class="quiet-btn bordered" id="copy-result">'+icon('copy',16)+' نسخ النتيجة</button>'+
-  (canApply?'<button class="run-btn" id="apply-result">'+icon('check',16)+' اعتماد التعديل</button>':'<button class="quiet-btn bordered" id="save-ai-page">'+icon('file',16)+' حفظ في صفحة جديدة</button>')+'</div>';
- $('#copy-result').onclick=()=>navigator.clipboard.writeText(body).then(()=>toast('تم نسخ النتيجة')).catch(()=>toast('تعذر النسخ','error'));
- if(!canApply){
-   $('#save-ai-page').onclick=async()=>{
-     const result=a;
-     try{
-       const page=getPage(),spaceId=page?.spaceId||state.activeSpace;
-       const now=Date.now();
-       const title=(labels[result.mode]||'نتيجة AI')+' — '+(page?.title||'مستند');
-       const newPage={id:id(),spaceId,title:title.slice(0,190),body,richDoc:null,instructions:'',createdAt:now,updatedAt:now};
-       await put('pages',newPage);state.pages.push(newPage);await activatePage(newPage.id);
-       togglePanel(false);toast('تم حفظ النتيجة في صفحة جديدة دون تغيير الأصل');
-     }catch(e){toast('تعذر حفظ النتيجة: '+e.message,'error');}
-   };
-   return;
+ const target=$('#ai-results'),batch=state.aiBatch;
+ if(!batch){target.innerHTML='';return;}
+ const progress=batch.results.filter(x=>x.status==='complete').length;
+ const all=batch.results.length;
+ const tabs='<div class="ai-result-tabs" role="tablist" aria-label="نتائج العمليات">'+batch.results.map((item,i)=>{
+   const active=batch.activeIndex===i;
+   const status=item.status==='complete'?'✓':item.status==='error'?'!':item.status==='running'?'◌':item.status==='cancelled'?'—':'·';
+   return '<button type="button" role="tab" aria-selected="'+active+'" data-ai-tab="'+i+'" class="ai-result-tab'+(active?' active':'')+'" title="'+escapeHtml(labelForMode(item.mode))+'">'+status+' '+escapeHtml(labelForMode(item.mode))+'</button>';
+ }).join('')+'</div>';
+ const current=batch.results[batch.activeIndex]||batch.results[0];
+ const title=current?labelForMode(current.mode):'النتائج';
+ let body='';
+ if(!current)body='';
+ else if(current.status==='waiting')body='<p class="ai-wait">في الانتظار — هذه العملية لم تبدأ بعد.</p>';
+ else if(current.status==='running')body='<p class="ai-wait"><span class="spin"></span> أعمل الآن على '+escapeHtml(title)+'...</p>';
+ else if(current.status==='cancelled')body='<p class="ai-wait">أُوقفت هذه العملية دون نتيجة.</p>';
+ else if(current.status==='error')body='<p class="ai-error">'+escapeHtml(current.error||'تعذر تنفيذ العملية')+'</p>';
+ else if(current.status==='complete'){
+   const mode=current.mode;
+   const edited=mode==='review'?current.result.revisedText:mode==='structure'?current.formatted:(current.result.text||'');
+   const canApply=['ideas','structure','improve','proofread','review'].includes(mode);
+   const tokenWarning=current.finishReason==='length'?'<p class="ai-error">النتيجة غير مكتملة بسبب بلوغ حد الإخراج. لا تعتمدها قبل إعادة المحاولة.</p>':'';
+   const coverage=mode==='ideas'?preservationReport(batch.original,edited):null;
+   const preservation=coverage?'<div class="ai-source-integrity '+(coverage.passes?'ok':'warn')+'">'+(coverage.passes?'✓':'!')+' الحفاظ على كلمات الأصل: '+Math.round(coverage.coverage*100)+'٪'+(coverage.passes?'':' — يبدو أن أجزاء من كلامك فُقدت. امنع الاستبدال واحتفظ بالنص الأصلي.')+'</div>':'';
+   const report=mode==='review'?'<section class="ai-review-section"><h4>ملاحظات النقد والإصلاح</h4><div class="result-content ai-markdown" dir="auto">'+safeAIHtml(current.result.critique||current.result.text)+'</div></section><section class="ai-review-section ai-fixed-draft"><h4>النص بعد تصحيح النقد</h4><div class="result-content ai-markdown" dir="auto">'+safeAIHtml(current.result.revisedText)+'</div></section>':'<div class="result-content ai-markdown" dir="auto">'+safeAIHtml(edited)+'</div>';
+   const usage=current.usage?.completionTokens?'<p class="ai-usage">رموز الإخراج: '+Number(current.usage.completionTokens).toLocaleString('ar-SA')+'</p>':'';
+   const safeToApply=canApply&&current.finishReason!=='length'&&(!coverage||coverage.passes);
+   body='<div class="result-head"><strong>'+escapeHtml(title)+'</strong><span class="result-badge">'+(canApply?'مراجعة قبل الاعتماد':'نتيجة مستقلة')+'</span></div>'+
+     tokenWarning+preservation+report+usage+
+     '<div class="result-actions"><button type="button" class="quiet-btn bordered" data-ai-copy="main">نسخ النتيجة</button>'+
+     (mode==='review'?'<button type="button" class="quiet-btn bordered" data-ai-copy="corrected">نسخ النص المصحح</button>':'')+
+     '<button type="button" class="quiet-btn bordered" data-ai-save="new">حفظ في صفحة جديدة</button>'+
+     (canApply?'<button type="button" class="run-btn" data-ai-apply="yes" '+(!safeToApply?'disabled title="النتيجة غير مكتملة أو لا تحفظ النص الأصلي"':'')+'>'+(mode==='review'?'اعتماد النسخة المصححة':'اعتماد النص المرتب')+'</button>':'')+'</div>';
  }
- $('#apply-result').onclick=async()=>{
-   const p=getPage();
-   if(!p||p.id!==a.pageId||currentDocumentBody()!==a.original){
-     toast('تغيّر النص بعد التحليل. أعد العملية أولًا.','error');return;
+ const runningNote=batch.running?'<div class="ai-batch-progress"><span>'+progress+' من '+all+' عمليات اكتملت</span><div class="ai-batch-track"><span style="width:'+Math.round(progress/Math.max(1,all)*100)+'%"></span></div></div>':'';
+ target.innerHTML=runningNote+tabs+'<div class="ai-result-panel" role="tabpanel">'+body+'</div>';
+ target.onclick=async event=>{
+   const tab=event.target.closest('[data-ai-tab]');
+   if(tab){batch.activeIndex=Number(tab.dataset.aiTab);renderAIResult();return;}
+   const item=batch.results[batch.activeIndex];
+   if(!item||item.status!=='complete')return;
+   const mode=item.mode;
+   const edited=mode==='review'?item.result.revisedText:mode==='structure'?item.formatted:item.result.text;
+   const copy=event.target.closest('[data-ai-copy]');
+   if(copy){
+     const text=copy.dataset.aiCopy==='corrected'?item.result.revisedText:mode==='review'?item.result.critique||item.result.text:edited;
+     try{await navigator.clipboard.writeText(text);toast('تم نسخ النص');}catch{toast('تعذر النسخ','error');}
+     return;
    }
-   if(!confirm('اعتماد هذا النص بدل المستند الحالي؟ ستُحفظ نسخة من الأصل للاسترجاع.'))return;
-   try{
-     await flush();await snapshot();
-     p.body=body;p.richDoc=null;
-     $('#editor').value=body;
-     state.sourceEdited=false;state.richChanged=false;
-     if(!state.sourceMode){
-       loadingRich=true;
-       try{loadRichDocument(richEditor,p);}finally{loadingRich=false;}
-     }
-     editVersion++;
-     await saveCurrent();
-     syncPreview();updateStats();
-     state.ai=null;target.innerHTML='<div class="ai-success">'+icon('check',20)+' تم اعتماد التعديل وحفظ نسخة من الأصل.</div>';
-     toast('تم حفظ التعديل');
-   }catch(e){toast('تعذر تطبيق التعديل: '+e.message,'error');}
+   if(event.target.closest('[data-ai-save]')){
+     try{
+       await flush();
+       const page=getPage(),now=Date.now();
+       const text=mode==='review'?'# النقد\n\n'+item.result.critique+'\n\n# النص المصحح\n\n'+item.result.revisedText:edited;
+       const title=(labelForMode(mode)+' — '+(page?.title||batch.title)).slice(0,190);
+       const newPage={id:id(),spaceId:page?.spaceId||state.activeSpace,title,body:text,richDoc:null,instructions:'',createdAt:now,updatedAt:now};
+       await put('pages',newPage);state.pages.push(newPage);await activatePage(newPage.id);togglePanel(false);
+       toast('حُفظت النتيجة في صفحة منفصلة');
+     }catch(e){toast('تعذر الحفظ: '+e.message,'error');}
+     return;
+   }
+   if(event.target.closest('[data-ai-apply]')){
+     if(!['ideas','structure','improve','proofread','review'].includes(mode))return;
+     if(item.finishReason==='length'||(mode==='ideas'&&!preservationReport(batch.original,edited).passes))return;
+     const page=getPage();
+     if(!page||page.id!==batch.pageId||currentDocumentBody()!==batch.original){toast('تغيّر المستند بعد بدء العملية. أعِد التحليل أولًا.','error');return;}
+     if(!confirm('اعتماد النص الجديد بدل الحالي؟ سنحفظ نسخة سابقة ويمكن استرجاعها.'))return;
+     try{
+       await flush();await snapshot();
+       page.body=edited;page.richDoc=null;
+       $('#editor').value=edited;
+       state.sourceEdited=false;state.richChanged=false;
+       if(!state.sourceMode){loadingRich=true;try{loadRichDocument(richEditor,page);}finally{loadingRich=false;}}
+       editVersion++;await saveCurrent();
+       syncPreview();updateStats();state.aiBatch=null;target.innerHTML='';
+       toast('تم اعتماد النتيجة وحفظ نسخة من المستند الأصلي');
+     }catch(e){toast('تعذر اعتماد النص: '+e.message,'error');}
+   }
  };
 }
 async function runAI(){
  if(state.busy)return;
- const mode=state.mode,command=$('#ai-command').value.trim(),depth=$('#ai-depth').value;
- if(mode==='custom'&&!command){toast('اكتب الأمر الذي تريد تنفيذه أولًا','error');$('#ai-command').focus();return;}
+ const selected=MODE_ORDER.filter(mode=>state.selectedModes.includes(mode));
+ const command=$('#ai-command').value.trim(),depth=$('#ai-depth').value;
+ if(!selected.length){toast('اختر عملية واحدة على الأقل','error');return;}
+ if(selected.includes('custom')&&!command){toast('اكتب الأمر الخاص بك أولًا','error');$('#ai-command').focus();return;}
  try{await flush();}catch(e){toast('تعذر حفظ الصفحة قبل التحليل: '+e.message,'error');return;}
  const p=getPage();if(!p)return;
  const text=currentDocumentBody();
- if(!text.trim()&&!command){toast('اكتب نصًا أو أمرًا للمساعد أولًا','error');return;}
+ if(!text.trim()&&!command){toast('اكتب نصًا أو أمرًا أولًا','error');return;}
  try{activateEnteredProviderKey();}catch(e){toast(e.message,'error');return;}
  const key=providerKey(),password=$('#access-key').value.trim();
- if(!key&&!password){toast('أدخل مفتاح DeepSeek API أو رمز Worker','error');$('#provider-key').focus();return;}
+ if(!key&&!password){toast('فعّل مفتاح DeepSeek أو رمز Worker','error');$('#provider-key').focus();return;}
  const model=$('#model').value;
- state.model=model;state.busy=true;
- const btn=$('#run-ai');btn.disabled=true;
- btn.innerHTML='<span class="spin"></span> جاري تنفيذ الأمر...';
- $('#ai-results').innerHTML='<p class="ai-wait">أحلل الطلب والقيود وأجهّز إجابة مناسبة'+(depth==='deep'?' باستخدام التفكير العميق':'')+'...</p>';
  const instructions=[getSpace()?.instructions,p.instructions].filter(Boolean).join('\n');
+ const controller=new AbortController();
+ state.aiAbort=controller;state.busy=true;state.model=model;
+ state.aiBatch={pageId:p.id,title:p.title,original:text,running:true,activeIndex:0,results:selected.map(mode=>({mode,status:'waiting'}))};
+ const btn=$('#run-ai');
+ btn.disabled=true;btn.innerHTML='<span class="spin"></span> تنفيذ '+selected.length+' عمليات...';
+ $('#cancel-ai').classList.remove('hidden');
+ document.querySelectorAll('.mode-checkbox').forEach(input=>input.disabled=true);
+ renderAIResult();
  try{
-   const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json',...(key?{'X-Provider-Key':key}:{'X-Access-Key':password})},body:JSON.stringify({mode,model,text,title:p.title,instructions,command,depth})});
-   const data=await res.json().catch(()=>({error:'رد غير مفهوم من الخادم'}));
-   if(!res.ok||!data.ok)throw Error(data.error||'خطأ '+res.status);
-   let formatted='';
-   if(mode==='structure')formatted=insertHeadings(text,data.result.headings);
-   state.ai={mode,original:text,pageId:p.id,formatted,result:data.result,usage:data.usage,finishReason:data.finishReason};
-   renderAIResult();
- }catch(e){
-   $('#ai-results').innerHTML='<p class="ai-error">'+escapeHtml(e.message)+'</p>';
+   for(let i=0;i<selected.length;i++){
+     if(controller.signal.aborted)break;
+     const mode=selected[i],item=state.aiBatch.results[i];
+     item.status='running';state.aiBatch.activeIndex=i;renderAIResult();
+     try{
+       const res=await fetch('/api/ai',{
+         method:'POST',signal:controller.signal,
+         headers:{'Content-Type':'application/json',...(key?{'X-Provider-Key':key}:{'X-Access-Key':password})},
+         body:JSON.stringify({mode,model,text,title:p.title,instructions,command,depth})
+       });
+       const data=await res.json().catch(()=>({error:'استجابة غير مفهومة من الخادم'}));
+       if(!res.ok||!data.ok){
+         item.status='error';item.error=data.error||'فشل الطلب ('+res.status+')';
+         if([401,402,403,429].includes(data.providerStatus)||[401,503].includes(res.status))break;
+       }else{
+         item.status='complete';item.result=data.result;
+         item.formatted=mode==='structure'?insertHeadings(text,data.result.headings):'';
+         item.finishReason=data.finishReason||null;item.usage=data.usage||null;
+       }
+     }catch(error){
+       if(controller.signal.aborted){item.status='cancelled';break;}
+       item.status='error';item.error=error.message||'حدث خطأ غير متوقع';
+     }
+     renderAIResult();
+   }
  }finally{
-   state.busy=false;btn.disabled=false;
-   btn.innerHTML=icon('spark',18)+' <span>نفّذ العملية</span>';
+   const batch=state.aiBatch;
+   if(batch){
+     batch.running=false;
+     for(const item of batch.results)if(item.status==='waiting'||item.status==='running')item.status='cancelled';
+     const successful=batch.results.findIndex(item=>item.status==='complete');
+     if(successful>=0)batch.activeIndex=successful;
+   }
+   state.aiAbort=null;state.busy=false;
+   btn.disabled=!state.selectedModes.length;btn.innerHTML=icon('spark',18)+' <span>نفّذ العمليات المختارة</span>';
+   $('#cancel-ai').classList.add('hidden');
+   document.querySelectorAll('.mode-checkbox').forEach(input=>input.disabled=false);
+   renderAIResult();
  }
 }
 function bind(){
@@ -545,6 +740,15 @@ function bind(){
  $('#add-page').onclick=()=>addPage().catch(e=>toast(e.message,'error'));
  $('#spaces-list').onclick=e=>{const el=e.target.closest('[data-space]');if(el)activateSpace(el.dataset.space).catch(err=>toast(err.message,'error'));};
  $('#pages-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
+ $('#favorite-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
+ $('#recent-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
+ $('#favorite-btn').onclick=()=>toggleFavoritePage().catch(e=>toast(e.message,'error'));
+ $('#theme-btn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+ $('#quick-switch-btn').onclick=openQuickSwitcher;
+ $('#daily-note-btn').onclick=()=>createDailyNote().catch(e=>toast(e.message,'error'));
+ $('#templates-btn').onclick=showTemplates;
+ $('#graph-btn').onclick=showGraph;
+ setTheme(localStorage.getItem('uspace-theme'));
  $('#editor').oninput=()=>{
    if(state.sourceMode&&!state.sourceEdited&&getPage()?.richDoc){snapshot().catch(e=>toast(e.message,'error'));}
    state.sourceEdited=true;queueSave();
@@ -554,7 +758,15 @@ function bind(){
  $('#preview-btn').onclick=()=>{state.preview=!state.preview;syncPreview();};
  $('#source-btn').onclick=()=>toggleMarkdownSource().catch(e=>toast(e.message,'error'));
  $('#assistant-btn').onclick=()=>togglePanel(true);$('#close-panel').onclick=()=>togglePanel(false);$('#panel-scrim').onclick=()=>togglePanel(false);
- $('#modes').onclick=e=>{const el=e.target.closest('[data-mode]');if(el&&!state.busy){state.mode=el.dataset.mode;renderModes();}};
+ $('#modes').onchange=e=>{
+   const input=e.target.closest('input[data-mode]');if(!input||state.busy)return;
+   const chosen=new Set(state.selectedModes);
+   if(input.checked)chosen.add(input.dataset.mode);else chosen.delete(input.dataset.mode);
+   state.selectedModes=MODE_ORDER.filter(mode=>chosen.has(mode));
+   state.mode=state.selectedModes[0]||'ideas';
+   renderModes();
+ };
+ $('#cancel-ai').onclick=()=>{if(state.aiAbort){state.aiAbort.abort();toast('تم إيقاف العمليات المتبقية');}};
  const presets={
   root:'شخّص الأسباب الجذرية المحتملة في خطة المشروع، ميّز ما يحتاج فحصًا عما هو مؤكد، واقترح خطة إصلاح واختبارات منع تراجع دون إضافة مزايا.',
   plan:'حوّل هذا المستند إلى خطة تنفيذ مرتبة بالأولوية والاعتماديات مع خطوات عملية ومعايير قبول واختبارات واضحة.',
@@ -601,7 +813,7 @@ function bind(){
  await saveCurrent();updateStats();toast('تم استيراد الملف');e.target.value='';};
  $('#more-btn').onclick=()=>showDialog('إدارة الصفحة',`<p class="dialog-description">نسخ واسترجاع أو حذف الصفحة الحالية.</p><div class="dialog-actions"><button id="history-btn" class="quiet-btn bordered">${icon('history',17)} سجل النسخ</button><button id="delete-page-btn" class="danger-btn">${icon('trash',17)} حذف الصفحة</button></div>`,{onOpen:()=>{$('#history-btn').onclick=()=>{closeDialog();showHistory();};$('#delete-page-btn').onclick=()=>{closeDialog();deleteCurrent();};}});
  $('#open-sidebar').onclick=()=>toggleSidebar(true);$('#close-sidebar').onclick=()=>toggleSidebar(false);$('#scrim').onclick=()=>toggleSidebar(false);
- document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();toggleSidebar(true);$('#search').focus();}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
+ document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();openQuickSwitcher();}if(cmd&&e.shiftKey&&e.key.toLowerCase()==='n'){e.preventDefault();addPage().catch(err=>toast(err.message,'error'));}if(cmd&&e.shiftKey&&e.key.toLowerCase()==='d'){e.preventDefault();createDailyNote().catch(err=>toast(err.message,'error'));}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
  window.addEventListener('pagehide',()=>{if(saveTimer){clearTimeout(saveTimer);const p=getPage();if(p){p.body=currentDocumentBody();if(!state.sourceMode&&state.richChanged)p.richDoc=richJSON(richEditor);if(state.sourceMode&&state.sourceEdited)p.richDoc=null;p.title=$('#page-title').value||'صفحة بدون عنوان';put('pages',{...p});}}});
 }
 async function start(){

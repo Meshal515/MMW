@@ -7,7 +7,7 @@ import { bootstrap, list, put, remove, clearPage, importBackupRows } from './sto
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 
 const $ = sel => document.querySelector(sel);
-const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-v4-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
+const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
 const SAVE_DELAY = 450;
 let saveTimer, revisionTimer, richEditor, loadingRich=false;
 let richSnapshotPage=null, richSnapshotAt=0, pendingRichSnapshot=Promise.resolve(), lastSnapshotError=null;
@@ -112,7 +112,7 @@ function renderShell(){
   </main>
   <aside class="right-panel" id="right-panel"><div class="panel-header"><div><span class="panel-kicker">USPACE INTELLIGENCE</span><h2>${icon('spark',22)} مساعد الكتابة</h2></div><button class="icon-btn" id="close-panel" aria-label="إغلاق المساعد">${icon('close')}</button></div>
   <div class="panel-body"><div class="panel-note">أفكارك تبقى لك. أي اقتراح يظهر أولًا للمراجعة، ولا يُستبدل نصك تلقائيًا.</div><label class="field-label">ماذا تريد أن أفعل؟</label><div class="mode-options" id="modes"></div>
-  <label class="field-label" for="model">النموذج</label><select id="model" class="field-input"><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select>
+  <label class="field-label" for="model">النموذج</label><select id="model" class="field-input"><option value="deepseek-flash">DeepSeek V4.1 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select>
   <label class="field-label" for="provider-key">مفتاح DeepSeek API الخاص بك</label>
   <input class="field-input" id="provider-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="sk-..."/>
   <div class="field-help">يُستخدم من ذاكرة الصفحة ولا يضاف إلى GitHub أو قاعدة بيانات الخادم. يمر عبر Cloudflare Worker أثناء الطلب فقط.</div>

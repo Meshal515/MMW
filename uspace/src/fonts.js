@@ -65,7 +65,7 @@ export function loadArabicFont(name) {
   if(name==='serif')name='Noto Naskh Arabic';
   if(!isArabicFont(name)||loaded.has(name)||typeof document==='undefined')return;
   loaded.add(name);
-  const href='https://fonts.googleapis.com/css2?family='+encodeURIComponent(name)+':wght@400;500;600;700;800&display=swap';
+  const href='https://fonts.googleapis.com/css2?family='+encodeURIComponent(name)+':wght@400;700&display=swap';
   const link=document.createElement('link');
   link.rel='stylesheet';
   link.href=href;

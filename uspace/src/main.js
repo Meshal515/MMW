@@ -104,7 +104,7 @@ function renderShell(){
     <div id="rich-editor" class="rich-editor-host" aria-label="المحرر المرئي"></div>
     <textarea id="editor" class="hidden" spellcheck="true" dir="auto" aria-label="مصدر Markdown" placeholder="اكتب Markdown هنا..."></textarea><div id="preview" class="markdown-preview hidden"></div>
     </article></div>
-    <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
+    <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="text-btn" id="export-html-btn">${icon('download',16)} HTML</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
   </main>
   <aside class="right-panel" id="right-panel"><div class="panel-header"><div><span class="panel-kicker">USPACE INTELLIGENCE</span><h2>${icon('spark',22)} مساعد الكتابة</h2></div><button class="icon-btn" id="close-panel" aria-label="إغلاق المساعد">${icon('close')}</button></div>
   <div class="panel-body"><div class="panel-note">أفكارك تبقى لك. أي اقتراح يظهر أولًا للمراجعة، ولا يُستبدل نصك تلقائيًا.</div><label class="field-label">ماذا تريد أن أفعل؟</label><div class="mode-options" id="modes"></div>
@@ -418,9 +418,14 @@ function bind(){
  $('#add-page').onclick=()=>addPage().catch(e=>toast(e.message,'error'));
  $('#spaces-list').onclick=e=>{const el=e.target.closest('[data-space]');if(el)activateSpace(el.dataset.space).catch(err=>toast(err.message,'error'));};
  $('#pages-list').onclick=e=>{const el=e.target.closest('[data-page]');if(el)activatePage(el.dataset.page).catch(err=>toast(err.message,'error'));};
- $('#editor').oninput=queueSave;$('#page-title').oninput=queueSave;
+ $('#editor').oninput=()=>{
+   if(state.sourceMode&&!state.sourceEdited&&getPage()?.richDoc){snapshot().catch(e=>toast(e.message,'error'));}
+   state.sourceEdited=true;queueSave();
+ };
+ $('#page-title').oninput=queueSave;
  $('#search').oninput=e=>{state.search=e.target.value;renderNav();};
  $('#preview-btn').onclick=()=>{state.preview=!state.preview;syncPreview();};
+ $('#source-btn').onclick=()=>toggleMarkdownSource().catch(e=>toast(e.message,'error'));
  $('#assistant-btn').onclick=()=>togglePanel(true);$('#close-panel').onclick=()=>togglePanel(false);
  $('#modes').onclick=e=>{const el=e.target.closest('[data-mode]');if(el){state.mode=el.dataset.mode;renderModes();}};
  $('#model').onchange=e=>state.model=e.target.value;
@@ -429,6 +434,10 @@ function bind(){
   $('#editor-font').onchange=e=>{const p=getPage();if(p){p.fontFamily=e.target.value;renderEditorTypography();queueSave();}};
   $('#editor-size').onchange=e=>{const p=getPage();if(p){p.fontSize=Number(e.target.value);renderEditorTypography();queueSave();}};
   $('.format-toolbar').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
+ $('#table-tools').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
+ $('#selection-font').onchange=e=>{if(!state.sourceMode && e.target.value){richAction(richEditor,'set-font',{value:e.target.value});e.target.value='';}};
+ $('#selection-size').onchange=e=>{if(!state.sourceMode && e.target.value){richAction(richEditor,'set-size',{value:e.target.value});e.target.value='';}};
+ $('#selection-color').oninput=e=>{if(!state.sourceMode)richAction(richEditor,'set-color',{value:e.target.value});};
   $('#activate-provider-key').onclick=()=>{try{activateEnteredProviderKey();toast('تم تفعيل المفتاح');}catch(e){toast(e.message,'error');}};
   $('#lock-provider-key').onclick=()=>{lockProviderKey();$('#provider-key').value='';refreshProviderKeyStatus();toast('تم قفل المفتاح');};
   $('#remember-provider-key').onclick=async()=>{try{activateEnteredProviderKey();await saveEncryptedProviderKey($('#key-passphrase').value);$('#key-passphrase').value='';await refreshProviderKeyStatus();toast('تم حفظ المفتاح مشفرًا على جهازك');}catch(e){toast(e.message,'error');}};
@@ -439,12 +448,22 @@ function bind(){
  $('#settings-btn').onclick=settings;
  $('#backup-btn').onclick=()=>backup().catch(e=>toast(e.message,'error'));
  $('#export-md-btn').onclick=async()=>{await flush();const p=getPage();download(`${fileName(p.title)}.md`,p.body,'text/markdown;charset=utf-8');toast('تم تنزيل Markdown');};
+ $('#export-html-btn').onclick=async()=>{
+   await flush();const p=getPage();
+   const content=DOMPurify.sanitize(richHTML(richEditor),{USE_PROFILES:{html:true}});
+   const html='<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>'+escapeHtml(p.title)+'</title></head><body>'+content+'</body></html>';
+   download(`${fileName(p.title)}.html`,html,'text/html;charset=utf-8');toast('تم تنزيل HTML');
+ };
  $('#import-btn').onclick=()=>$('#file-input').click();
- $('#file-input').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2_000_000){toast('الحد الأقصى للملف 2 ميغابايت','error');e.target.value='';return;}const body=await f.text();await addPage();$('#page-title').value=f.name.replace(/\.(md|markdown|txt)$/i,'');$('#editor').value=body;await saveCurrent();updateStats();toast('تم استيراد الملف');e.target.value='';};
+ $('#file-input').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2_000_000){toast('الحد الأقصى للملف 2 ميغابايت','error');e.target.value='';return;}const body=await f.text();await addPage();$('#page-title').value=f.name.replace(/\.(md|markdown|txt)$/i,'');const page=getPage();page.body=body;page.richDoc=null;
+ $('#editor').value=body;
+ loadingRich=true;try{loadRichDocument(richEditor,page);}finally{loadingRich=false;}
+ state.richChanged=false;state.sourceEdited=false;
+ await saveCurrent();updateStats();toast('تم استيراد الملف');e.target.value='';};
  $('#more-btn').onclick=()=>showDialog('إدارة الصفحة',`<p class="dialog-description">نسخ واسترجاع أو حذف الصفحة الحالية.</p><div class="dialog-actions"><button id="history-btn" class="quiet-btn bordered">${icon('history',17)} سجل النسخ</button><button id="delete-page-btn" class="danger-btn">${icon('trash',17)} حذف الصفحة</button></div>`,{onOpen:()=>{$('#history-btn').onclick=()=>{closeDialog();showHistory();};$('#delete-page-btn').onclick=()=>{closeDialog();deleteCurrent();};}});
  $('#open-sidebar').onclick=()=>toggleSidebar(true);$('#close-sidebar').onclick=()=>toggleSidebar(false);$('#scrim').onclick=()=>toggleSidebar(false);
  document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();toggleSidebar(true);$('#search').focus();}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
- window.addEventListener('pagehide',()=>{if(saveTimer){clearTimeout(saveTimer);const p=getPage();if(p){p.body=$('#editor').value;p.title=$('#page-title').value||'صفحة بدون عنوان';put('pages',{...p});}}});
+ window.addEventListener('pagehide',()=>{if(saveTimer){clearTimeout(saveTimer);const p=getPage();if(p){p.body=currentDocumentBody();if(!state.sourceMode&&state.richChanged)p.richDoc=richJSON(richEditor);if(state.sourceMode&&state.sourceEdited)p.richDoc=null;p.title=$('#page-title').value||'صفحة بدون عنوان';put('pages',{...p});}}});
 }
 async function start(){
  try{

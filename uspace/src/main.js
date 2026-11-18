@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { validateBackup } from './backup.js';
 import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, richAction, selectionFormatting } from './rich-editor.js';
-import { bootstrap, list, put, remove, clearPage } from './storage.js';
+import { bootstrap, list, put, remove, clearPage, importBackupRows } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 
 const $ = sel => document.querySelector(sel);
@@ -367,7 +367,7 @@ async function restoreBackup(file){
  for(const item of parsed.spaces){
   const space={id:id(),name:item.name,instructions:item.instructions,createdAt:item.createdAt,updatedAt:Date.now()};
   mapping.set(item.originalId,space.id);
-  await put('spaces',space);addedSpaces.push(space);
+  addedSpaces.push(space);
  }
  for(const item of parsed.pages){
   const page={
@@ -375,8 +375,9 @@ async function restoreBackup(file){
    richDoc:item.richDoc,instructions:item.instructions,fontFamily:item.fontFamily,fontSize:item.fontSize,
    createdAt:item.createdAt,updatedAt:Date.now()
   };
-  await put('pages',page);addedPages.push(page);
+  addedPages.push(page);
  }
+ await importBackupRows(addedSpaces,addedPages);
  state.spaces.push(...addedSpaces);state.pages.push(...addedPages);
  await activateSpace(addedSpaces[0].id);
  toast('تم استيراد النسخة دون حذف الملفات الحالية');

@@ -181,7 +181,7 @@ async function toggleMarkdownSource(){
    state.sourceMode=true;state.sourceEdited=false;
    $('#editor').value=getPage()?.body||'';
  }else{
-   if(state.sourceEdited){
+   if(state.sourceEdited||!getPage()?.richDoc){
      loadingRich=true;
      try{loadRichDocument(richEditor,{body:$('#editor').value});}
      catch(e){toast('Markdown غير قابل للتحويل. راجع المصدر قبل الرجوع.','error');return;}
@@ -336,8 +336,34 @@ function download(name,content,type='text/plain;charset=utf-8'){
 }
 async function backup(){await flush();const payload={format:'uspace-backup-v1',exportedAt:new Date().toISOString(),spaces:state.spaces,pages:state.pages};download(`USPACE-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(payload,null,2),'application/json');toast('تم تنزيل النسخة الاحتياطية');}
 async function deleteCurrent(){const p=getPage();if(!confirm(`هل تريد حذف الصفحة «${p.title}» نهائيًا؟ نزّل نسخة احتياطية قبل الحذف إن لزم.`))return;clearTimeout(saveTimer);await clearPage(p.id);state.pages=state.pages.filter(x=>x.id!==p.id);const next=state.pages.find(x=>x.spaceId===state.activeSpace);state.activePage=next?.id||null;if(!next)await addPage();else await activatePage(next.id);toast('تم حذف الصفحة');}
-async function snapshot(){const p=getPage();await put('revisions',{id:id(),pageId:p.id,title:p.title,body:p.body,createdAt:Date.now()});}
-function showHistory(){const p=getPage();list('revisions').then(revs=>{const r=revs.filter(x=>x.pageId===p.id).sort((a,b)=>b.createdAt-a.createdAt).slice(0,20);showDialog('سجل النسخ السابقة',r.length?`<p class="dialog-description">يمكنك استرجاع نسخة محفوظة قبل أحد تعديلات الذكاء الاصطناعي.</p>${r.map((x,i)=>`<button class="history-item" data-rev="${x.id}"><span>${new Date(x.createdAt).toLocaleString('ar-SA')}</span><small>${escapeHtml(x.title)} · ${countText(x.body).words} كلمة</small></button>`).join('')}`:'<p class="dialog-description">لا توجد نسخ سابقة بعد. تُنشأ نسخة قبل كل تعديل يعتمد من الذكاء الاصطناعي.</p>',{onOpen:()=>{document.querySelectorAll('[data-rev]').forEach(el=>el.onclick=async()=>{const item=r.find(x=>x.id===el.dataset.rev);if(!confirm('استرجاع هذه النسخة؟ سيتم حفظ النسخة الحالية أولًا.'))return;await flush();await snapshot();$('#editor').value=item.body;$('#page-title').value=item.title;await saveCurrent();updateStats();syncPreview();closeDialog();toast('تم الاسترجاع');});}});}).catch(e=>toast(e.message,'error'));}
+async function snapshot(){
+ const p=getPage();if(!p)return;
+ await put('revisions',{id:id(),pageId:p.id,title:p.title,body:p.body,richDoc:p.richDoc?structuredClone(p.richDoc):null,createdAt:Date.now()});
+}
+function showHistory(){
+ const p=getPage();
+ list('revisions').then(revs=>{
+  const revisions=revs.filter(x=>x.pageId===p.id).sort((a,b)=>b.createdAt-a.createdAt).slice(0,40);
+  showDialog('سجل النسخ السابقة',revisions.length
+   ?'<p class="dialog-description">يمكن استرجاع Markdown والتنسيقات المرئية من النسخة المختارة. تُحفظ النسخة الحالية قبل الاسترجاع.</p>'+
+    revisions.map(x=>'<button class="history-item" data-rev="'+x.id+'"><span>'+new Date(x.createdAt).toLocaleString('ar-SA')+
+     '</span><small>'+escapeHtml(x.title)+' · '+countText(x.body).words+' كلمة'+(x.richDoc?' · Rich Text':'')+'</small></button>').join('')
+   :'<p class="dialog-description">لا توجد نسخ سابقة بعد.</p>',
+   {onOpen:()=>document.querySelectorAll('[data-rev]').forEach(el=>el.onclick=async()=>{
+     const item=revisions.find(x=>x.id===el.dataset.rev);if(!item)return;
+     if(!confirm('استرجاع هذه النسخة مع الاحتفاظ بالنسخة الحالية؟'))return;
+     await flush();await snapshot();
+     p.title=item.title;p.body=item.body;p.richDoc=item.richDoc||null;
+     state.sourceEdited=false;state.richChanged=false;
+     $('#page-title').value=p.title;
+     $('#editor').value=p.body;
+     loadingRich=true;
+     try{loadRichDocument(richEditor,p);}
+     finally{loadingRich=false;}
+     await saveCurrent();syncPreview();updateStats();closeDialog();toast('تم الاسترجاع مع حفظ النسخة السابقة');
+   })});
+ }).catch(e=>toast(e.message,'error'));
+}
 function renderAIResult(){
  const target=$('#ai-results'),a=state.ai;if(!a){target.innerHTML='';return;}
  const isStruct=a.mode==='structure',isImprove=a.mode==='improve';

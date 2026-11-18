@@ -21,8 +21,8 @@ test('unknown fonts cannot become CSS font tokens',()=>{
 test('mobile responsive grid wins over desktop workspace grid',()=>{
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
   const desktop=css.lastIndexOf('.shell{background:var(--us-bg);grid-template-columns:268px minmax(0,1fr)}');
-  const mobile=css.lastIndexOf('@media(max-width:719px)');
+  const mobile=css.indexOf('@media(max-width:719px)',desktop);
   assert.ok(desktop>=0&&mobile>desktop,'mobile grid override must come after desktop shell declaration');
-  assert.ok(css.slice(mobile).includes('grid-template-columns:minmax(0,1fr)'));
+  assert.match(css.slice(mobile),/\.shell\s*\{[\s\S]*?grid-template-columns\s*:\s*minmax\(0\s*,\s*1fr\)/,'mobile breakpoint must restore the single-column editor');
   assert.ok(css.includes('--editor-font-family'));
 });

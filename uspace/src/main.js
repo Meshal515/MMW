@@ -3,10 +3,10 @@ import { bootstrap, list, put, remove, clearPage } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 
 const $ = sel => document.querySelector(sel);
-const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-flash', preview:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
+const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-v4-flash', preview:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
 const SAVE_DELAY = 450;
 let saveTimer, revisionTimer;
-const modes = {structure:{name:'ترتيب دون تحريف',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'مراجعة ونقد',description:'أرصد الغموض والتناقضات ونقاط الضعف، دون أن أغيّر أي كلمة.'}};
+const modes = {structure:{name:'ترتيب دون تحريف',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'مراجعة ونقد',description:'أرصد الغموض والتناقضات ونقاط الضعف، دون أن أغيّر أي كلمة.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت احترافي',description:'أرتب أفكارك في تعليمات Markdown دون حذف متطلباتك.'}};
 
 function id(){return crypto.randomUUID();}
 function icon(name, size=19){
@@ -57,8 +57,17 @@ function renderShell(){
   </main>
   <aside class="right-panel" id="right-panel"><div class="panel-header"><div><span class="panel-kicker">USPACE INTELLIGENCE</span><h2>${icon('spark',22)} مساعد الكتابة</h2></div><button class="icon-btn" id="close-panel" aria-label="إغلاق المساعد">${icon('close')}</button></div>
   <div class="panel-body"><div class="panel-note">أفكارك تبقى لك. أي اقتراح يظهر أولًا للمراجعة، ولا يُستبدل نصك تلقائيًا.</div><label class="field-label">ماذا تريد أن أفعل؟</label><div class="mode-options" id="modes"></div>
-  <label class="field-label" for="model">النموذج</label><select id="model" class="field-input"><option value="deepseek-flash">DeepSeek Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select>
-  <label class="field-label" for="access-key">رمز الدخول الشخصي</label><input class="field-input" id="access-key" type="password" autocomplete="off" placeholder="رمز وصول Worker"/><div class="field-help">يُحفظ مؤقتًا لهذه الجلسة فقط؛ ليس مفتاح DeepSeek ولا Cloudflare.</div>
+  <label class="field-label" for="model">النموذج</label><select id="model" class="field-input"><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select>
+  <label class="field-label" for="provider-key">مفتاح DeepSeek API الخاص بك</label>
+  <input class="field-input" id="provider-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="sk-..."/>
+  <div class="field-help">يُستخدم من ذاكرة الصفحة ولا يضاف إلى GitHub أو قاعدة بيانات الخادم. يمر عبر Cloudflare Worker أثناء الطلب فقط.</div>
+  <div class="key-buttons"><button class="quiet-btn bordered" type="button" id="activate-provider-key">تفعيل المفتاح</button><button class="quiet-btn bordered" type="button" id="lock-provider-key">قفل</button></div>
+  <div class="field-help key-status" id="provider-key-status" role="status" aria-live="polite">المفتاح غير مفعّل</div>
+  <details class="vault-details"><summary>الحفظ المحلي المشفر (اختياري)</summary><p class="field-help">احفظ المفتاح مشفرًا بعبارة مرور من اختيارك. لن تُحفظ عبارة المرور، وستحتاجها بعد إعادة فتح الصفحة.</p>
+    <label class="field-label" for="key-passphrase">عبارة مرور 12 حرفًا على الأقل</label><input class="field-input" id="key-passphrase" type="password" autocomplete="off"/>
+    <div class="key-buttons"><button class="quiet-btn bordered" type="button" id="remember-provider-key">حفظ مشفر</button><button class="quiet-btn bordered" type="button" id="unlock-provider-key">فتح الخزنة</button><button class="quiet-btn bordered" type="button" id="forget-provider-key">حذف المفتاح</button></div>
+  </details>
+  <details class="vault-details"><summary>اتصال Cloudflare القديم</summary><label class="field-label" for="access-key">رمز دخول Worker</label><input class="field-input" id="access-key" type="password" autocomplete="off" placeholder="رمز وصول Worker"/><p class="field-help">للوضع القديم فقط، عندما يكون مفتاح DeepSeek محفوظًا في Cloudflare Secrets.</p></details>
   <button class="run-btn" id="run-ai">${icon('spark',18)} <span>تحليل الصفحة</span></button><div id="ai-results" class="ai-results"></div></div></aside>
   <div id="dialog-root"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden/>
   </div>`;
@@ -86,6 +95,16 @@ function syncPreview(){
  $('#preview').classList.toggle('hidden',!state.preview);
  if(state.preview)$('#preview').innerHTML=markdownToHtml($('#editor').value);
  $('#preview-btn').innerHTML=state.preview?`${icon('edit',17)}<span>تحرير</span>`:`${icon('eye',17)}<span>معاينة</span>`;
+}
+function activateEnteredProviderKey(){
+ const field=$('#provider-key');
+ if(field.value.trim()){setProviderKey(field.value);field.value='';}
+ refreshProviderKeyStatus();
+}
+async function refreshProviderKeyStatus(){
+ const node=$('#provider-key-status');if(!node)return;
+ let saved=false;try{saved=await savedProviderKeyExists();}catch{}
+ node.textContent=providerKey()?'مفتاح نشط في ذاكرة الصفحة'+(saved?' • نسخة مشفرة محفوظة':''):saved?'يوجد مفتاح مشفر — افتح الخزنة بعبارة المرور':'لا يوجد مفتاح مفعل';
 }
 function updateStats(){const c=countText($('#editor').value);$('#word-count').textContent=c.words.toLocaleString('ar-SA')+' كلمة';$('#char-count').textContent=`${c.chars.toLocaleString('ar-SA')} حرف · ${c.charsNoSpace.toLocaleString('ar-SA')} بلا مسافات`;$('#sentence-count').textContent=c.sentences.toLocaleString('ar-SA')+' جملة';}
 function markUnsaved(){$('#save-status').innerHTML='● جارِ الحفظ...';$('#save-status').classList.add('pending');}
@@ -117,7 +136,7 @@ function showDialog(title, content, opts={}){
 }
 function closeDialog(){$('#dialog-root').innerHTML='';}
 function pageInstructions(){const p=getPage();const space=getSpace();showDialog('تعليمات الصفحة',`<p class="dialog-description">تُرسل هذه التعليمات مع طلبات الذكاء الاصطناعي لهذه الصفحة فقط. ضع أسلوبك أو قواعد الرواية هنا.</p><label class="field-label" for="space-instructions">تعليمات المساحة (تنطبق على كل صفحاتها)</label><textarea id="space-instructions" class="dialog-textarea" placeholder="مثال: لا تختلق أي معلومة، حافظ على جميع قرارات المشروع...">${escapeHtml(space.instructions||'')}</textarea><label class="field-label" for="page-instructions">تعليمات خاصة بهذه الصفحة</label><textarea id="page-instructions" class="dialog-textarea" placeholder="مثال: لا تغير الحوارات، راجع تسلسل الأحداث...">${escapeHtml(p.instructions||'')}</textarea><div class="dialog-actions"><button id="instructions-save" class="run-btn">حفظ التعليمات</button></div>`,{onOpen:()=>$('#instructions-save').onclick=async()=>{space.instructions=$('#space-instructions').value.slice(0,1500);p.instructions=$('#page-instructions').value.slice(0,1500);await Promise.all([put('spaces',{...space}),put('pages',{...p})]);closeDialog();toast('تم حفظ التعليمات');}});}
-function settings(){showDialog('إعدادات USPACE',`<p class="dialog-description">الصفحات تُحفظ على جهازك عبر IndexedDB. لا توجد مزامنة سحابية في هذه النسخة. أنشئ نسخة احتياطية باستمرار.</p><div class="info-row">${icon('shield',20)}<span>مفتاح DeepSeek يبقى في Cloudflare Secrets، ولا يوضع هنا.</span></div><div class="info-row">${icon('book',20)}<span>ملفات Markdown متاحة للتصدير، وتستطيع استيراد ملفاتك.</span></div><div class="info-row">${icon('spark',20)}<span>لتشغيل المساعد: اضبط DEEPSEEK_API_KEY وAPP_ACCESS_KEY في Cloudflare Pages Secrets، ثم أدخل رمز الوصول في نافذة المساعد.</span></div><div class="dialog-actions"><button class="quiet-btn bordered" id="export-backup-modal">تصدير نسخة احتياطية</button></div>`,{onOpen:()=>$('#export-backup-modal').onclick=()=>{closeDialog();backup();}});}
+function settings(){showDialog('إعدادات USPACE',`<p class="dialog-description">الصفحات تُحفظ محليًا عبر IndexedDB. لا توجد مزامنة سحابية حاليًا؛ نزّل نسخة احتياطية باستمرار.</p><div class="info-row">${icon('shield',20)}<span>يمكن إدخال مفتاح DeepSeek من لوحة المساعد دون وضعه في GitHub. افتراضيًا يبقى في ذاكرة الصفحة، مع حفظ محلي مشفر اختياري.</span></div><div class="info-row">${icon('book',20)}<span>يمكن تصدير واستيراد ملفات Markdown.</span></div><div class="dialog-actions"><button class="quiet-btn bordered" id="export-backup-modal">تصدير نسخة احتياطية</button></div>`,{onOpen:()=>$('#export-backup-modal').onclick=()=>{closeDialog();backup();}});}
 function download(name,content,type='text/plain;charset=utf-8'){
  const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
@@ -136,12 +155,13 @@ function renderAIResult(){
 async function runAI(){
  if(state.busy)return;
  await flush();const p=getPage();if(!p?.body.trim()){toast('اكتب نصًا أولًا قبل التحليل','error');return;}
- const password=$('#access-key').value.trim();if(!password){toast('أدخل رمز الدخول الشخصي أولًا','error');$('#access-key').focus();return;}
- sessionStorage.setItem('uspace-access',password);state.model=$('#model').value;
+ try{activateEnteredProviderKey();}catch(e){toast(e.message,'error');return;}
+  const key=providerKey(),password=$('#access-key').value.trim();if(!key&&!password){toast('أدخل مفتاح DeepSeek API أو رمز Worker','error');$('#provider-key').focus();return;}
+ state.model=$('#model').value;
  state.busy=true;const btn=$('#run-ai');btn.disabled=true;btn.innerHTML='<span class="spin"></span> جاري التحليل...';$('#ai-results').innerHTML='<p class="ai-wait">أراجع النص وأحافظ على الأصل كما هو...</p>';
  const instructions=[getSpace()?.instructions,p.instructions].filter(Boolean).join('\n');
  try{
-  const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json','X-Access-Key':password},body:JSON.stringify({mode:state.mode,model:state.model,text:p.body,title:p.title,instructions})});
+  const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json',...(key?{'X-Provider-Key':key}:{'X-Access-Key':password})},body:JSON.stringify({mode:state.mode,model:state.model,text:p.body,title:p.title,instructions})});
   const data=await res.json().catch(()=>({error:'رد غير مفهوم من الخادم'}));
   if(!res.ok||!data.ok)throw Error(data.error||`خطأ ${res.status}`);
   let formatted='';if(state.mode==='structure')formatted=insertHeadings(p.body,data.result.headings);
@@ -160,8 +180,14 @@ function bind(){
  $('#assistant-btn').onclick=()=>togglePanel(true);$('#close-panel').onclick=()=>togglePanel(false);
  $('#modes').onclick=e=>{const el=e.target.closest('[data-mode]');if(el){state.mode=el.dataset.mode;renderModes();}};
  $('#model').onchange=e=>state.model=e.target.value;
- $('#access-key').value=sessionStorage.getItem('uspace-access')||'';
+ $('#access-key').value='';
  $('#run-ai').onclick=()=>runAI();
+  $('#activate-provider-key').onclick=()=>{try{activateEnteredProviderKey();toast('تم تفعيل المفتاح');}catch(e){toast(e.message,'error');}};
+  $('#lock-provider-key').onclick=()=>{lockProviderKey();$('#provider-key').value='';refreshProviderKeyStatus();toast('تم قفل المفتاح');};
+  $('#remember-provider-key').onclick=async()=>{try{activateEnteredProviderKey();await saveEncryptedProviderKey($('#key-passphrase').value);$('#key-passphrase').value='';await refreshProviderKeyStatus();toast('تم حفظ المفتاح مشفرًا على جهازك');}catch(e){toast(e.message,'error');}};
+  $('#unlock-provider-key').onclick=async()=>{try{await unlockProviderKey($('#key-passphrase').value);$('#key-passphrase').value='';await refreshProviderKeyStatus();toast('تم فتح الخزنة');}catch(e){toast(e.message,'error');}};
+  $('#forget-provider-key').onclick=async()=>{if(!confirm('حذف المفتاح المحفوظ وقفل المفتاح النشط؟'))return;try{await forgetProviderKey();$('#provider-key').value='';$('#key-passphrase').value='';await refreshProviderKeyStatus();toast('تم حذف المفتاح المحلي');}catch(e){toast(e.message,'error');}};
+  refreshProviderKeyStatus();
  $('#instructions-btn').onclick=pageInstructions;
  $('#settings-btn').onclick=settings;
  $('#backup-btn').onclick=()=>backup().catch(e=>toast(e.message,'error'));

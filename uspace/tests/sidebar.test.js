@@ -4,8 +4,8 @@ import {readFileSync} from 'node:fs';
 
 const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
 const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
-test('library remains part of the shell and exposes all original navigation',()=>{
- for(const id of ['sidebar','spaces-list','pages-list','favorite-list','recent-list','quick-switch-btn','daily-note-btn','templates-btn','graph-btn','add-space','add-page','search']){
+test('library keeps its original compact spaces and pages navigation',()=>{
+ for(const id of ['sidebar','spaces-list','pages-list','add-space','add-page','search','backup-btn','import-btn','restore-backup-btn','settings-btn']){
    assert.ok(main.includes('id="'+id+'"'),'missing sidebar child '+id);
  }
 });

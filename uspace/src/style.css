@@ -627,7 +627,5 @@ html[data-theme="dark"] .ai-error{background:#4b283a;color:#ffb6c5}
 html[data-theme="dark"] .toast{background:#3a346a;color:#fff}
 html[data-theme="dark"] .page-meta,html[data-theme="dark"] .count-line,html[data-theme="dark"] .field-help{color:var(--studio-muted)}
 @media(prefers-reduced-motion:reduce){
- .brand-logo{display:none}
- .brand-mark::after{content:"✧";color:var(--studio-accent);font-size:31px}
  button{transition:none!important}
 }

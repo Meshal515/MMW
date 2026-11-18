@@ -51,7 +51,18 @@ function renderShell(){
     <header class="topbar"><div class="breadcrumbs"><button class="icon-btn mobile-menu" id="open-sidebar" title="القائمة">${icon('menu')}</button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
       <div class="top-actions"><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
     <div class="editor-scroll"><article class="editor-paper"><div class="eyebrow">مساحة للكتابة والتفكير</div><input id="page-title" class="page-title" aria-label="عنوان الصفحة" placeholder="صفحة بدون عنوان" maxlength="200"/><div class="page-meta"><span id="modified-label">آخر تعديل الآن</span><span class="meta-circle">●</span><span>Markdown</span><span class="meta-circle">●</span><span>خصوصي على جهازك</span></div>
-    <div class="editor-rule"></div><textarea id="editor" spellcheck="true" dir="auto" aria-label="نص الصفحة" placeholder="هنا تبدأ الأفكار...\n\nاكتب بالطريقة اللي تريحك، عامية أو فصحى. ما يحتاج ترتبها من البداية." ></textarea><div id="preview" class="markdown-preview hidden"></div>
+    <div class="editor-rule"></div><div class="format-toolbar" role="toolbar" aria-label="تنسيق المستند">
+    <select id="editor-font" aria-label="نوع الخط" title="نوع الخط"><option value="system">افتراضي</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select>
+    <select id="editor-size" aria-label="حجم الخط" title="حجم الخط"><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option></select>
+    <span class="toolbar-divider"></span>
+    <button type="button" data-format="heading" title="عنوان" aria-label="عنوان">H2</button>
+    <button type="button" data-format="bold" title="خط عريض" aria-label="خط عريض"><b>B</b></button>
+    <button type="button" data-format="italic" title="خط مائل" aria-label="خط مائل"><i>I</i></button>
+    <button type="button" data-format="list" title="قائمة" aria-label="قائمة">☷</button>
+    <button type="button" data-format="quote" title="اقتباس" aria-label="اقتباس">❞</button>
+    <button type="button" data-format="code" title="تنسيق كود" aria-label="تنسيق كود">⌘</button>
+    <button type="button" data-format="table" title="إدراج جدول" aria-label="إدراج جدول">▦ جدول</button>
+  </div><textarea id="editor" spellcheck="true" dir="auto" aria-label="نص الصفحة" placeholder="هنا تبدأ الأفكار...\n\nاكتب بالطريقة اللي تريحك، عامية أو فصحى. ما يحتاج ترتبها من البداية." ></textarea><div id="preview" class="markdown-preview hidden"></div>
     </article></div>
     <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
   </main>
@@ -83,6 +94,7 @@ function renderNav(){
 }
 function renderCurrent(){
  const p=getPage();if(!p)return;
+ renderEditorTypography();
  $('#page-title').value=p.title==='صفحة بدون عنوان'?'':p.title;
  $('#editor').value=p.body||'';
  $('#crumb-page').textContent=p.title||'صفحة بدون عنوان';
@@ -105,6 +117,36 @@ async function refreshProviderKeyStatus(){
  const node=$('#provider-key-status');if(!node)return;
  let saved=false;try{saved=await savedProviderKeyExists();}catch{}
  node.textContent=providerKey()?'مفتاح نشط في ذاكرة الصفحة'+(saved?' • نسخة مشفرة محفوظة':''):saved?'يوجد مفتاح مشفر — افتح الخزنة بعبارة المرور':'لا يوجد مفتاح مفعل';
+}
+function renderEditorTypography(){
+ const p=getPage();if(!p)return;
+ const font=['system','sans','serif','mono'].includes(p.fontFamily)?p.fontFamily:'system';
+ const size=[14,16,18,20,24].includes(Number(p.fontSize))?Number(p.fontSize):16;
+ const paper=$('.editor-paper');paper.dataset.font=font;paper.style.setProperty('--editor-body-size',size+'px');
+ $('#editor-font').value=font;$('#editor-size').value=String(size);
+}
+function applyFormat(kind){
+ if(state.preview){state.preview=false;syncPreview();}
+ const field=$('#editor'),start=field.selectionStart,end=field.selectionEnd;
+ const selected=field.value.slice(start,end);let content=selected;
+ switch(kind){
+  case 'bold':content='**'+(selected||'نص عريض')+'**';break;
+  case 'italic':content='*'+(selected||'نص مائل')+'*';break;
+  case 'code':content='`'+(selected||'code')+'`';break;
+  case 'heading':content='## '+(selected||'عنوان فرعي');break;
+  case 'list':content=(selected||'عنصر جديد').split('\n').map(x=>'- '+x).join('\n');break;
+  case 'quote':content=(selected||'نص مقتبس').split('\n').map(x=>'> '+x).join('\n');break;
+  case 'table':{
+   const c=Math.min(12,Math.max(1,Number(prompt('عدد أعمدة الجدول (1-12)','3'))||3));
+   const r=Math.min(30,Math.max(1,Number(prompt('عدد صفوف البيانات (1-30)','3'))||3));
+   const cols=Array.from({length:c},(_,i)=>'عمود '+(i+1));
+   content='| '+cols.join(' | ')+' |\n| '+cols.map(()=>'---').join(' | ')+' |\n'+Array.from({length:r},()=> '| '+cols.map(()=>' ').join(' | ')+' |').join('\n');
+   break;
+  }
+  default:return;
+ }
+ field.setRangeText(content,start,end,'end');
+ field.focus();queueSave();
 }
 function updateStats(){const c=countText($('#editor').value);$('#word-count').textContent=c.words.toLocaleString('ar-SA')+' كلمة';$('#char-count').textContent=`${c.chars.toLocaleString('ar-SA')} حرف · ${c.charsNoSpace.toLocaleString('ar-SA')} بلا مسافات`;$('#sentence-count').textContent=c.sentences.toLocaleString('ar-SA')+' جملة';}
 function markUnsaved(){$('#save-status').innerHTML='● جارِ الحفظ...';$('#save-status').classList.add('pending');}
@@ -182,6 +224,9 @@ function bind(){
  $('#model').onchange=e=>state.model=e.target.value;
  $('#access-key').value='';
  $('#run-ai').onclick=()=>runAI();
+  $('#editor-font').onchange=e=>{const p=getPage();if(p){p.fontFamily=e.target.value;renderEditorTypography();queueSave();}};
+  $('#editor-size').onchange=e=>{const p=getPage();if(p){p.fontSize=Number(e.target.value);renderEditorTypography();queueSave();}};
+  $('.format-toolbar').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
   $('#activate-provider-key').onclick=()=>{try{activateEnteredProviderKey();toast('تم تفعيل المفتاح');}catch(e){toast(e.message,'error');}};
   $('#lock-provider-key').onclick=()=>{lockProviderKey();$('#provider-key').value='';refreshProviderKeyStatus();toast('تم قفل المفتاح');};
   $('#remember-provider-key').onclick=async()=>{try{activateEnteredProviderKey();await saveEncryptedProviderKey($('#key-passphrase').value);$('#key-passphrase').value='';await refreshProviderKeyStatus();toast('تم حفظ المفتاح مشفرًا على جهازك');}catch(e){toast(e.message,'error');}};
@@ -196,7 +241,7 @@ function bind(){
  $('#file-input').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2_000_000){toast('الحد الأقصى للملف 2 ميغابايت','error');e.target.value='';return;}const body=await f.text();await addPage();$('#page-title').value=f.name.replace(/\.(md|markdown|txt)$/i,'');$('#editor').value=body;await saveCurrent();updateStats();toast('تم استيراد الملف');e.target.value='';};
  $('#more-btn').onclick=()=>showDialog('إدارة الصفحة',`<p class="dialog-description">نسخ واسترجاع أو حذف الصفحة الحالية.</p><div class="dialog-actions"><button id="history-btn" class="quiet-btn bordered">${icon('history',17)} سجل النسخ</button><button id="delete-page-btn" class="danger-btn">${icon('trash',17)} حذف الصفحة</button></div>`,{onOpen:()=>{$('#history-btn').onclick=()=>{closeDialog();showHistory();};$('#delete-page-btn').onclick=()=>{closeDialog();deleteCurrent();};}});
  $('#open-sidebar').onclick=()=>toggleSidebar(true);$('#close-sidebar').onclick=()=>toggleSidebar(false);$('#scrim').onclick=()=>toggleSidebar(false);
- document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();toggleSidebar(true);$('#search').focus();}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
+ document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();toggleSidebar(true);$('#search').focus();}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
  window.addEventListener('pagehide',()=>{if(saveTimer){clearTimeout(saveTimer);const p=getPage();if(p){p.body=$('#editor').value;p.title=$('#page-title').value||'صفحة بدون عنوان';put('pages',{...p});}}});
 }
 async function start(){

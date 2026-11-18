@@ -98,7 +98,21 @@ export default {
         headers:{'Authorization':`Bearer ${apiKey}`,'Content-Type':'application/json'},
         body:JSON.stringify(providerRequestFor(data))
       });
-      if (!response.ok) return json({error:`تعذّر الاتصال بمزود الذكاء (${response.status}).`},502);
+      if (!response.ok) {
+        const reasons={
+          400:'رفض DeepSeek إعدادات الطلب. جرّب وضعًا آخر أو نموذجًا مختلفًا.',
+          401:'مفتاح DeepSeek غير صالح أو انتهت صلاحيته.',
+          402:'رصيد DeepSeek غير كافٍ لإتمام الطلب.',
+          403:'DeepSeek رفض الوصول بهذا المفتاح.',
+          408:'انتهت مهلة الاتصال بمزود الذكاء.',
+          429:'تجاوزت حد طلبات DeepSeek. أعد المحاولة لاحقًا.',
+          500:'خدمة DeepSeek تواجه مشكلة مؤقتة.',
+          502:'تعذر التواصل مع خوادم DeepSeek.',
+          503:'خدمة DeepSeek غير متاحة مؤقتًا.',
+          504:'انتهت مهلة استجابة DeepSeek.'
+        };
+        return json({error:reasons[response.status]||'تعذر إكمال الطلب لدى DeepSeek ('+response.status+').',providerStatus:response.status},502);
+      }
       const result=await response.json();
       const answer=result?.choices?.[0]?.message?.content;
       if (typeof answer !== 'string' || !answer.trim()) return json({error:'رد النموذج كان فارغًا.'},502);

@@ -13,6 +13,7 @@ import { TextStyleKit } from '@tiptap/extension-text-style';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Highlight } from '@tiptap/extension-highlight';
+import { Image } from '@tiptap/extension-image';
 
 export function mountRichEditor(element, onUpdate, onSelection) {
   return new Editor({
@@ -25,7 +26,8 @@ export function mountRichEditor(element, onUpdate, onSelection) {
       TextAlign.configure({types:['paragraph','heading']}),
       TaskList,
       TaskItem.configure({nested:true}),
-      Highlight.configure({multicolor:true})
+      Highlight.configure({multicolor:true}),
+      Image.configure({inline:false,allowBase64:false,HTMLAttributes:{loading:'lazy',referrerpolicy:'no-referrer'},resize:{enabled:true,minWidth:80,minHeight:80}})
     ],
     content:'<p></p>',
     editorProps:{
@@ -95,6 +97,7 @@ export function richAction(editor,action,args={}) {
     case 'set-color':return chain().setColor(args.value).run();
     case 'set-background':return chain().setBackgroundColor(args.value).run();
     case 'unset-format':return chain().unsetAllMarks().run();
+    case 'image':return chain().setImage({src:args.src,alt:args.alt||'',title:args.title||''}).run();
     case 'link':return chain().setLink({href:args.href, target:'_blank', rel:'noopener noreferrer nofollow'}).run();
     case 'unlink':return chain().unsetLink().run();
     case 'table':return chain().insertTable({rows:args.rows||3,cols:args.cols||3,withHeaderRow:true}).run();

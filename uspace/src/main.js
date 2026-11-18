@@ -1,11 +1,13 @@
 import './style.css';
+import DOMPurify from 'dompurify';
+import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, richAction, selectionFormatting } from './rich-editor.js';
 import { bootstrap, list, put, remove, clearPage } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 
 const $ = sel => document.querySelector(sel);
-const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-v4-flash', preview:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
+const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-v4-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
 const SAVE_DELAY = 450;
-let saveTimer, revisionTimer;
+let saveTimer, revisionTimer, richEditor, loadingRich=false;
 const modes = {structure:{name:'ترتيب دون تحريف',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'مراجعة ونقد',description:'أرصد الغموض والتناقضات ونقاط الضعف، دون أن أغيّر أي كلمة.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت احترافي',description:'أرتب أفكارك في تعليمات Markdown دون حذف متطلباتك.'}};
 
 function id(){return crypto.randomUUID();}
@@ -53,20 +55,54 @@ function renderShell(){
   </aside>
   <main class="main">
     <header class="topbar"><div class="breadcrumbs"><button class="icon-btn mobile-menu" id="open-sidebar" title="القائمة">${icon('menu')}</button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
-      <div class="top-actions"><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
+      <div class="top-actions"><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
     <div class="editor-scroll"><article class="editor-paper"><div class="eyebrow">مساحة للكتابة والتفكير</div><input id="page-title" class="page-title" aria-label="عنوان الصفحة" placeholder="صفحة بدون عنوان" maxlength="200"/><div class="page-meta"><span id="modified-label">آخر تعديل الآن</span><span class="meta-circle">●</span><span>Markdown</span><span class="meta-circle">●</span><span>خصوصي على جهازك</span></div>
     <div class="editor-rule"></div><div class="format-toolbar" role="toolbar" aria-label="تنسيق المستند">
-    <select id="editor-font" aria-label="نوع الخط" title="نوع الخط"><option value="system">افتراضي</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select>
-    <select id="editor-size" aria-label="حجم الخط" title="حجم الخط"><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option></select>
-    <span class="toolbar-divider"></span>
-    <button type="button" data-format="heading" title="عنوان" aria-label="عنوان">H2</button>
-    <button type="button" data-format="bold" title="خط عريض" aria-label="خط عريض"><b>B</b></button>
-    <button type="button" data-format="italic" title="خط مائل" aria-label="خط مائل"><i>I</i></button>
-    <button type="button" data-format="list" title="قائمة" aria-label="قائمة">${icon('list',17)}</button>
-    <button type="button" data-format="quote" title="اقتباس" aria-label="اقتباس">${icon('quote',17)}</button>
-    <button type="button" data-format="code" title="تنسيق كود" aria-label="تنسيق كود">${icon('code',17)}</button>
-    <button type="button" data-format="table" title="إدراج جدول" aria-label="إدراج جدول">${icon('table',17)} جدول</button>
-  </div><textarea id="editor" spellcheck="true" dir="auto" aria-label="نص الصفحة" placeholder="هنا تبدأ الأفكار...\n\nاكتب بالطريقة اللي تريحك، عامية أو فصحى. ما يحتاج ترتبها من البداية." ></textarea><div id="preview" class="markdown-preview hidden"></div>
+      <select id="editor-font" aria-label="خط المستند" title="خط المستند"><option value="system">افتراضي</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select>
+      <select id="editor-size" aria-label="حجم الخط الافتراضي" title="حجم خط المستند"><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option></select>
+      <span class="toolbar-divider"></span>
+      <button type="button" data-format="undo" title="تراجع" aria-label="تراجع">↶</button>
+      <button type="button" data-format="redo" title="إعادة" aria-label="إعادة">↷</button>
+      <button type="button" data-format="h1" title="عنوان H1">H1</button>
+      <button type="button" data-format="h2" title="عنوان H2">H2</button>
+      <button type="button" data-format="h3" title="عنوان H3">H3</button>
+      <button type="button" data-format="bold" title="عريض" aria-label="عريض"><b>B</b></button>
+      <button type="button" data-format="italic" title="مائل" aria-label="مائل"><i>I</i></button>
+      <button type="button" data-format="underline" title="تسطير" aria-label="تسطير"><u>U</u></button>
+      <button type="button" data-format="strike" title="شطب" aria-label="شطب"><s>S</s></button>
+      <button type="button" data-format="code" title="كود داخل السطر">${icon('code',17)}</button>
+      <button type="button" data-format="codeblock" title="كتلة كود">{ }</button>
+      <button type="button" data-format="list" title="قائمة نقطية">${icon('list',17)}</button>
+      <button type="button" data-format="ordered" title="قائمة مرقمة">1.</button>
+      <button type="button" data-format="checklist" title="قائمة مهام">☑</button>
+      <button type="button" data-format="quote" title="اقتباس">${icon('quote',17)}</button>
+      <button type="button" data-format="hr" title="فاصل">―</button>
+      <button type="button" data-format="highlight" title="تمييز النص">◉</button>
+      <button type="button" data-format="align-right" title="محاذاة يمين">⇤</button>
+      <button type="button" data-format="align-center" title="توسيط">↔</button>
+      <button type="button" data-format="align-left" title="محاذاة يسار">⇥</button>
+      <button type="button" data-format="link" title="إضافة رابط">🔗</button>
+      <select id="selection-font" aria-label="خط النص المحدد" title="خط التحديد"><option value="">خط التحديد</option><option value="Tahoma">Tahoma</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Courier New">Mono</option></select>
+      <select id="selection-size" aria-label="حجم النص المحدد" title="حجم التحديد"><option value="">حجم التحديد</option><option value="12">12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option><option value="28">28</option><option value="32">32</option><option value="40">40</option></select>
+      <label class="toolbar-color" title="لون الخط"><span>لون</span><input id="selection-color" type="color" value="#263a33" aria-label="لون النص المحدد"/></label>
+      <button type="button" data-format="table" title="إنشاء جدول">${icon('table',17)} جدول</button>
+    </div>
+    <div id="table-tools" class="table-tools hidden" role="toolbar" aria-label="أدوات الجدول">
+      <span>الجدول</span>
+      <button type="button" data-format="row-before">صف قبل</button>
+      <button type="button" data-format="row-after">صف بعد</button>
+      <button type="button" data-format="row-remove">حذف صف</button>
+      <button type="button" data-format="col-before">عمود قبل</button>
+      <button type="button" data-format="col-after">عمود بعد</button>
+      <button type="button" data-format="col-remove">حذف عمود</button>
+      <button type="button" data-format="merge">دمج الخلايا</button>
+      <button type="button" data-format="split">تقسيم خلية</button>
+      <button type="button" data-format="header-row">رأس جدول</button>
+      <button type="button" data-format="header-column">عمود عنوان</button>
+      <button type="button" data-format="table-remove" class="danger-action">حذف الجدول</button>
+    </div>
+    <div id="rich-editor" class="rich-editor-host" aria-label="المحرر المرئي"></div>
+    <textarea id="editor" class="hidden" spellcheck="true" dir="auto" aria-label="مصدر Markdown" placeholder="اكتب Markdown هنا..."></textarea><div id="preview" class="markdown-preview hidden"></div>
     </article></div>
     <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
   </main>
@@ -86,6 +122,10 @@ function renderShell(){
   <button class="run-btn" id="run-ai">${icon('spark',18)} <span>تحليل الصفحة</span></button><div id="ai-results" class="ai-results"></div></div></aside>
   <div id="dialog-root"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden/>
   </div>`;
+ if(richEditor)richEditor.destroy();
+ richEditor=mountRichEditor($('#rich-editor'),()=>{
+   if(!loadingRich && !state.sourceMode){state.richChanged=true;queueSave();}
+ },()=>updateRichToolbar());
  bind();renderNav();renderCurrent();renderModes();
 }
 function renderNav(){

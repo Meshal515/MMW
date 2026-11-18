@@ -65,7 +65,7 @@ test('wiki-links, backlinks and tag extraction preserve Arabic and deduplicate r
  assert.deepEqual(extractTags(pages[0].body),['فانتارا','مهام']);
  assert.deepEqual(linkedPageIds(pages[0],pages),['b']);
  assert.deepEqual(backlinksFor(pages[1],pages).map(x=>x.id),['a']);
- assert.deepEqual(rankPages(pages,'المشاكل').map(x=>x.id).slice(0,2),['b','c']);
+ assert.deepEqual(rankPages(pages,'المشاكل').map(x=>x.id).slice(0,2),['c','b']); // same score: latest updated page first
  assert.deepEqual(graphForSpace(pages,'s').edges,[{source:'a',target:'b'}]);
 });
 test('templates and daily note title are available offline',()=>{

@@ -76,9 +76,12 @@ test('templates and daily note title are available offline',()=>{
 test('new workspace components are wired and GIF logo is valid',()=>{
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const style=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
- const gif=readFileSync(new URL('../public/logo-animated.gif',import.meta.url));
- assert.equal(gif.subarray(0,6).toString(),'GIF89a');
- assert.ok(gif.length>2000);
+ const iconSvg=readFileSync(new URL('../public/icons/icon.svg',import.meta.url),'utf8');
+ assert.match(iconSvg,/<svg[^>]*>/);
+ assert.match(iconSvg,/USPACE/);
+ assert.match(iconSvg,/id="silver"/);
+ assert.ok(!main.includes('logo-animated.gif'));
+ assert.match(main,/src="\/icons\/icon.svg"/);
  for(const id of ['quick-switch-btn','daily-note-btn','templates-btn','graph-btn','favorite-btn','theme-btn','doc-context','ai-results','ai-depth','ai-command','selected-mode-count']){
   assert.ok(main.includes('id="'+id+'"'),'missing '+id);
  }

@@ -678,3 +678,20 @@ html[data-theme="dark"] .page-meta,html[data-theme="dark"] .count-line,html[data
   .sidebar .pages-list{overflow-y:auto;overscroll-behavior:contain}
   .scrim.show{background:rgba(13,18,39,.48)}
 }
+
+/* Restored classic USPACE sidebar: simple workspace > pages > search > backup. */
+.sidebar .sidebar-separator{margin:20px 18px 16px}
+.sidebar .pages-head{margin-top:2px}
+.sidebar .search-wrap{margin-top:1px;margin-bottom:12px}
+.sidebar .pages-list{flex:1 1 auto;min-height:90px;overflow-y:auto;padding-bottom:12px}
+.sidebar .sidebar-foot{margin-top:auto;flex:none;border-top:1px solid var(--studio-border)}
+.sidebar .workspace-label{margin-top:4px}
+.settings-tools{border-top:1px solid var(--studio-border);padding-top:13px;margin-top:20px}
+.settings-tools summary{cursor:pointer;color:var(--studio-muted);font-size:12px;font-weight:650;padding:6px 0}
+.settings-tool-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.settings-tool-actions button{white-space:normal;min-height:39px}
+@media(max-width:719px){
+ .sidebar .sidebar-separator{margin:16px 16px 13px}
+ .sidebar .pages-list{min-height:110px}
+ .sidebar .sidebar-foot{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+}

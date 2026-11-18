@@ -450,7 +450,7 @@ function bind(){
  $('#export-md-btn').onclick=async()=>{await flush();const p=getPage();download(`${fileName(p.title)}.md`,p.body,'text/markdown;charset=utf-8');toast('تم تنزيل Markdown');};
  $('#export-html-btn').onclick=async()=>{
    await flush();const p=getPage();
-   const content=DOMPurify.sanitize(richHTML(richEditor),{USE_PROFILES:{html:true}});
+   const content=DOMPurify.sanitize(state.sourceMode?markdownToHtml(p.body):richHTML(richEditor),{USE_PROFILES:{html:true}});
    const html='<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>'+escapeHtml(p.title)+'</title></head><body>'+content+'</body></html>';
    download(`${fileName(p.title)}.html`,html,'text/html;charset=utf-8');toast('تم تنزيل HTML');
  };

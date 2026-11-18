@@ -1,6 +1,6 @@
 const MAX_CONTENT = 40000;
 const MODES = new Set(['structure','improve','review','prompt','proofread']);
-const MODELS = new Set(['deepseek-v4-flash','deepseek-v4-pro']);
+const MODELS = new Set(['deepseek-flash','deepseek-v4-flash','deepseek-v4-pro']);
 const json = (data, status=200) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 function safeCompare(a,b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;

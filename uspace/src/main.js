@@ -1,5 +1,6 @@
 import './style.css';
 import DOMPurify from 'dompurify';
+import { validateBackup } from './backup.js';
 import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, richAction, selectionFormatting } from './rich-editor.js';
 import { bootstrap, list, put, remove, clearPage } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
@@ -51,7 +52,7 @@ function renderShell(){
     <div class="pages-head"><span>الصفحات <b id="page-count">0</b></span><button class="icon-btn small" id="add-page" title="صفحة جديدة">${icon('plus',17)}</button></div>
     <label class="search-wrap">${icon('search',17)}<input id="search" type="search" placeholder="ابحث في صفحاتك..." autocomplete="off" aria-label="البحث في الصفحات"/><span>⌘K</span></label>
     <div class="pages-list" id="pages-list"></div>
-    <div class="sidebar-foot"><div class="local-status"><span class="local-dot"></span>محفوظ على هذا الجهاز</div><button class="sidebar-action" id="backup-btn">${icon('download',17)} تصدير نسخة احتياطية</button><button class="sidebar-action" id="import-btn">${icon('upload',17)} استيراد ملف Markdown</button><button class="sidebar-action" id="settings-btn">${icon('settings',17)} الإعدادات والاتصال</button></div>
+    <div class="sidebar-foot"><div class="local-status"><span class="local-dot"></span>محفوظ على هذا الجهاز</div><button class="sidebar-action" id="backup-btn">${icon('download',17)} تصدير نسخة احتياطية</button><button class="sidebar-action" id="import-btn">${icon('upload',17)} استيراد Markdown</button><button class="sidebar-action" id="restore-backup-btn">${icon('history',17)} استعادة نسخة JSON</button><button class="sidebar-action" id="settings-btn">${icon('settings',17)} الإعدادات والاتصال</button></div>
   </aside>
   <main class="main">
     <header class="topbar"><div class="breadcrumbs"><button class="icon-btn mobile-menu" id="open-sidebar" title="القائمة">${icon('menu')}</button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
@@ -121,7 +122,7 @@ function renderShell(){
   </details>
   <details class="vault-details"><summary>اتصال Cloudflare القديم</summary><label class="field-label" for="access-key">رمز دخول Worker</label><input class="field-input" id="access-key" type="password" autocomplete="off" placeholder="رمز وصول Worker"/><p class="field-help">للوضع القديم فقط، عندما يكون مفتاح DeepSeek محفوظًا في Cloudflare Secrets.</p></details>
   <button class="run-btn" id="run-ai">${icon('spark',18)} <span>تحليل الصفحة</span></button><div id="ai-results" class="ai-results"></div></div></aside>
-  <div id="dialog-root"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden/>
+  <div id="dialog-root"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden/><input id="backup-input" type="file" accept=".json,application/json" hidden/>
   </div>`;
  if(richEditor)richEditor.destroy();
  richEditor=mountRichEditor($('#rich-editor'),()=>{
@@ -351,6 +352,30 @@ function download(name,content,type='text/plain;charset=utf-8'){
  const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 async function backup(){await flush();const payload={format:'uspace-backup-v1',exportedAt:new Date().toISOString(),spaces:state.spaces,pages:state.pages};download(`USPACE-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(payload,null,2),'application/json');toast('تم تنزيل النسخة الاحتياطية');}
+async function restoreBackup(file){
+ if(!file||file.size>12_000_000)throw Error('حجم النسخة الاحتياطية كبير جدًا.');
+ const parsed=validateBackup(await file.text());
+ if(!parsed.spaces.length)throw Error('النسخة لا تحتوي على مساحات.');
+ if(!confirm('سيتم استيراد '+parsed.spaces.length+' مساحة و'+parsed.pages.length+' صفحة كنسخة جديدة دون حذف صفحاتك الحالية. هل تريد المتابعة؟'))return;
+ await flush();
+ const mapping=new Map(), addedSpaces=[],addedPages=[];
+ for(const item of parsed.spaces){
+  const space={id:id(),name:item.name,instructions:item.instructions,createdAt:item.createdAt,updatedAt:Date.now()};
+  mapping.set(item.originalId,space.id);
+  await put('spaces',space);addedSpaces.push(space);
+ }
+ for(const item of parsed.pages){
+  const page={
+   id:id(),spaceId:mapping.get(item.originalSpaceId),title:item.title,body:item.body,
+   richDoc:item.richDoc,instructions:item.instructions,fontFamily:item.fontFamily,fontSize:item.fontSize,
+   createdAt:item.createdAt,updatedAt:Date.now()
+  };
+  await put('pages',page);addedPages.push(page);
+ }
+ state.spaces.push(...addedSpaces);state.pages.push(...addedPages);
+ await activateSpace(addedSpaces[0].id);
+ toast('تم استيراد النسخة دون حذف الملفات الحالية');
+}
 async function deleteCurrent(){const p=getPage();if(!confirm(`هل تريد حذف الصفحة «${p.title}» نهائيًا؟ نزّل نسخة احتياطية قبل الحذف إن لزم.`))return;clearTimeout(saveTimer);await clearPage(p.id);state.pages=state.pages.filter(x=>x.id!==p.id);const next=state.pages.find(x=>x.spaceId===state.activeSpace);state.activePage=next?.id||null;if(!next)await addPage();else await activatePage(next.id);toast('تم حذف الصفحة');}
 async function snapshot(){
  const p=getPage();if(!p)return;
@@ -471,6 +496,11 @@ function bind(){
    download(`${fileName(p.title)}.html`,html,'text/html;charset=utf-8');toast('تم تنزيل HTML');
  };
  $('#import-btn').onclick=()=>$('#file-input').click();
+ $('#restore-backup-btn').onclick=()=>$('#backup-input').click();
+ $('#backup-input').onchange=async e=>{
+   try{const file=e.target.files?.[0];if(file)await restoreBackup(file);}catch(err){toast(err.message,'error');}
+   e.target.value='';
+ };
  $('#file-input').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2_000_000){toast('الحد الأقصى للملف 2 ميغابايت','error');e.target.value='';return;}const body=await f.text();await addPage();$('#page-title').value=f.name.replace(/\.(md|markdown|txt)$/i,'');const page=getPage();page.body=body;page.richDoc=null;
  $('#editor').value=body;
  loadingRich=true;try{loadRichDocument(richEditor,page);}finally{loadingRich=false;}

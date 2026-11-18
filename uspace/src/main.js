@@ -25,6 +25,10 @@ function icon(name, size=19){
  copy:'<rect x="7" y="7" width="13" height="14" rx="2"/><path d="M4 17V5a2 2 0 0 1 2-2h10"/>',
  dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
  arrow:'<path d="m5 12 14 0m-6-6 6 6-6 6"/>',
+ list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+ quote:'<path d="M3 17h7V9H3v8ZM14 17h7V9h-7v8ZM3 9c0-3 2-5 5-6M14 9c0-3 2-5 5-6"/>',
+ code:'<path d="m8 8-4 4 4 4m8-8 4 4-4 4M14 4l-4 16"/>',
+ table:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/>',
  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
  moon:'<path d="M20 15a8 8 0 0 1-11-11A8 8 0 1 0 20 15Z"/>'
  };
@@ -58,10 +62,10 @@ function renderShell(){
     <button type="button" data-format="heading" title="عنوان" aria-label="عنوان">H2</button>
     <button type="button" data-format="bold" title="خط عريض" aria-label="خط عريض"><b>B</b></button>
     <button type="button" data-format="italic" title="خط مائل" aria-label="خط مائل"><i>I</i></button>
-    <button type="button" data-format="list" title="قائمة" aria-label="قائمة">☷</button>
-    <button type="button" data-format="quote" title="اقتباس" aria-label="اقتباس">❞</button>
-    <button type="button" data-format="code" title="تنسيق كود" aria-label="تنسيق كود">⌘</button>
-    <button type="button" data-format="table" title="إدراج جدول" aria-label="إدراج جدول">▦ جدول</button>
+    <button type="button" data-format="list" title="قائمة" aria-label="قائمة">${icon('list',17)}</button>
+    <button type="button" data-format="quote" title="اقتباس" aria-label="اقتباس">${icon('quote',17)}</button>
+    <button type="button" data-format="code" title="تنسيق كود" aria-label="تنسيق كود">${icon('code',17)}</button>
+    <button type="button" data-format="table" title="إدراج جدول" aria-label="إدراج جدول">${icon('table',17)} جدول</button>
   </div><textarea id="editor" spellcheck="true" dir="auto" aria-label="نص الصفحة" placeholder="هنا تبدأ الأفكار...\n\nاكتب بالطريقة اللي تريحك، عامية أو فصحى. ما يحتاج ترتبها من البداية." ></textarea><div id="preview" class="markdown-preview hidden"></div>
     </article></div>
     <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>

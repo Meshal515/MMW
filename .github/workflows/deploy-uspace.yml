@@ -51,13 +51,13 @@ jobs:
         run: |
           set -euo pipefail
           # This is the already-published user site. Never silently create a different project.
-          PROJECT="uspace-bin"
+          PROJECT="uspace"
           DETAILS="$(mktemp)"
           STATUS="$(curl --retry 3 --retry-all-errors -sS -o "$DETAILS" -w '%{http_code}' \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}")"
-          if [ "$STATUS" != "200" ] || ! jq -e '.success == true and .result.name == "uspace-bin"' "$DETAILS" >/dev/null; then
-            echo "::error::Cloudflare Pages project 'uspace-bin' not accessible. Verify account ID and API token permissions. Deployment aborted without creating an unrelated site."
+          if [ "$STATUS" != "200" ] || ! jq -e '.success == true and .result.name == "uspace"' "$DETAILS" >/dev/null; then
+            echo "::error::Cloudflare Pages project 'uspace' not accessible. Verify account ID and API token permissions. Deployment aborted without creating an unrelated site."
             exit 1
           fi
           echo "USPACE_PROJECT=${PROJECT}" >> "$GITHUB_ENV"

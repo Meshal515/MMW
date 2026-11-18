@@ -5,6 +5,7 @@ import { validateBackup } from './backup.js';
 import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, richAction, selectionFormatting } from './rich-editor.js';
 import { bootstrap, list, put, remove, clearPage, importBackupRows } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
+import {fontOptionsHtml, pageFontFamily, fontStack, loadArabicFont, loadDocumentFonts} from './fonts.js';
 
 const $ = sel => document.querySelector(sel);
 const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
@@ -61,7 +62,7 @@ function renderShell(){
       <div class="top-actions"><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
     <div class="editor-scroll"><article class="editor-paper"><div class="eyebrow">مساحة للكتابة والتفكير</div><input id="page-title" class="page-title" aria-label="عنوان الصفحة" placeholder="صفحة بدون عنوان" maxlength="200"/><div class="page-meta"><span id="modified-label">آخر تعديل الآن</span><span class="meta-circle">●</span><span>Markdown</span><span class="meta-circle">●</span><span>خصوصي على جهازك</span></div>
     <div class="editor-rule"></div><div class="format-toolbar" role="toolbar" aria-label="تنسيق المستند">
-      <select id="editor-font" aria-label="خط المستند" title="خط المستند"><option value="system">افتراضي</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select>
+      <select id="editor-font" aria-label="خط المستند" title="خط المستند">${fontOptionsHtml()}</select>
       <select id="editor-size" aria-label="حجم الخط الافتراضي" title="حجم خط المستند"><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option></select>
       <span class="toolbar-divider"></span>
       <button type="button" data-format="undo" title="تراجع" aria-label="تراجع">↶</button>
@@ -86,7 +87,7 @@ function renderShell(){
       <button type="button" data-format="align-left" title="محاذاة يسار">⇥</button>
       <button type="button" data-format="link" title="إضافة رابط">🔗</button>
       <button type="button" data-format="image" title="إضافة صورة من رابط HTTPS">صورة</button>
-      <select id="selection-font" aria-label="خط النص المحدد" title="خط التحديد"><option value="">خط التحديد</option><option value="Tahoma">Tahoma</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Courier New">Mono</option></select>
+      <select id="selection-font" aria-label="خط النص المحدد" title="خط التحديد">${fontOptionsHtml(true)}</select>
       <select id="selection-size" aria-label="حجم النص المحدد" title="حجم التحديد"><option value="">حجم التحديد</option><option value="12">12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option><option value="28">28</option><option value="32">32</option><option value="40">40</option></select>
       <label class="toolbar-color" title="لون الخط"><span>لون</span><input id="selection-color" type="color" value="#263a33" aria-label="لون النص المحدد"/></label>
       <button type="button" data-format="table" title="إنشاء جدول">${icon('table',17)} جدول</button>
@@ -230,9 +231,14 @@ async function refreshProviderKeyStatus(){
 }
 function renderEditorTypography(){
  const p=getPage();if(!p)return;
- const font=['system','sans','serif','mono'].includes(p.fontFamily)?p.fontFamily:'system';
+ const font=pageFontFamily(p.fontFamily);
  const size=[14,16,18,20,24].includes(Number(p.fontSize))?Number(p.fontSize):16;
- const paper=$('.editor-paper');paper.dataset.font=font;paper.style.setProperty('--editor-body-size',size+'px');
+ const paper=$('.editor-paper');
+ paper.dataset.font=font;
+ paper.style.setProperty('--editor-body-size',size+'px');
+ paper.style.setProperty('--editor-font-family',fontStack(font));
+ loadArabicFont(font);
+ loadDocumentFonts(p.richDoc);
  $('#editor-font').value=font;$('#editor-size').value=String(size);
 }
 function applyFormat(kind){
@@ -505,7 +511,7 @@ function bind(){
   $('.format-toolbar').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
  $('.format-toolbar').addEventListener('mousedown',e=>{if(e.target.closest('button[data-format]'))e.preventDefault();});
  $('#table-tools').onclick=e=>{const button=e.target.closest('[data-format]');if(button)applyFormat(button.dataset.format);};
- $('#selection-font').onchange=e=>{if(!state.sourceMode && e.target.value){richAction(richEditor,'set-font',{value:e.target.value});e.target.value='';}};
+ $('#selection-font').onchange=e=>{if(!state.sourceMode && e.target.value){loadArabicFont(e.target.value);richAction(richEditor,'set-font',{value:e.target.value});e.target.value='';}};
  $('#selection-size').onchange=e=>{if(!state.sourceMode && e.target.value){richAction(richEditor,'set-size',{value:e.target.value});e.target.value='';}};
  $('#selection-color').oninput=e=>{if(!state.sourceMode)richAction(richEditor,'set-color',{value:e.target.value});};
   $('#activate-provider-key').onclick=()=>{try{activateEnteredProviderKey();toast('تم تفعيل المفتاح');}catch(e){toast(e.message,'error');}};

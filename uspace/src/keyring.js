@@ -77,3 +77,6 @@ async function forgetProviderKey() {
   lockProviderKey();
   await keyVaultOperation('readwrite', store => store.delete(USPACE_VAULT_ENTRY));
 }
+
+// Explicit ESM exports: esbuild only bundles functions reached through imports.
+export { providerKey, setProviderKey, lockProviderKey, savedProviderKeyExists, saveEncryptedProviderKey, unlockProviderKey, forgetProviderKey };

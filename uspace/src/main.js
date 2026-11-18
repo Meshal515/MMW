@@ -183,7 +183,7 @@ function renderCurrent(){
  $('#crumb-page').textContent=p.title||'صفحة بدون عنوان';
  $('#modified-label').textContent='آخر تعديل '+fmtDate(p.updatedAt);
  syncPreview();updateStats();updateRichToolbar();
- $('#ai-results').innerHTML='';state.ai=null;
+ $('#ai-results').innerHTML='';state.ai=null;state.aiBatch=null;
 }
 function syncPreview(){
  const source=state.sourceMode&&!state.preview;
@@ -468,88 +468,152 @@ function showHistory(){
    })});
  }).catch(e=>toast(e.message,'error'));
 }
+function safeAIHtml(text){
+ return DOMPurify.sanitize(marked.parse(String(text||''),{gfm:true,breaks:false}),{USE_PROFILES:{html:true}});
+}
 function renderAIResult(){
- const target=$('#ai-results'),a=state.ai;if(!a){target.innerHTML='';return;}
- const isStruct=a.mode==='structure';
- const canApply=['structure','improve','proofread'].includes(a.mode);
- const body=isStruct?a.formatted:(a.result?.text||'');
- const labels={structure:'ترتيب مقترح',improve:'نسخة محسنة',proofread:'تصحيح إملائي',prompt:'برومبت تنفيذي',review:'تقرير المراجعة',analyze:'تحليل وخطة قابلة للتنفيذ',custom:'نتيجة تنفيذ الأمر'};
- const html=DOMPurify.sanitize(marked.parse(body,{gfm:true,breaks:false}),{USE_PROFILES:{html:true}});
- const usage=a.usage?.completionTokens?'<p class="ai-usage">استهلاك الاستجابة: '+a.usage.completionTokens.toLocaleString('ar-SA')+' رمز إخراج (يشمل التفكير إن فُعل)</p>':'';
- target.innerHTML='<div class="result-head"><strong>'+escapeHtml(labels[a.mode]||'نتيجة المساعد')+'</strong><span class="result-badge">'+icon('check',13)+' '+(canApply?'اقتراح لا يغيّر الأصل':'نتيجة مستقلة عن المستند')+'</span></div>'+
-  (isStruct&&a.result.summary?'<p class="result-summary">'+escapeHtml(a.result.summary)+'</p>':'')+
-  (a.finishReason==='length'?'<p class="ai-error">بلغ النموذج الحد المسموح للإخراج. قد تكون النتيجة غير مكتملة؛ يمكنك إعادة المحاولة بعمق أو نطاق مختلف.</p>':'')+
-  '<div class="result-content ai-markdown" dir="auto">'+html+'</div>'+usage+
-  '<div class="result-actions"><button class="quiet-btn bordered" id="copy-result">'+icon('copy',16)+' نسخ النتيجة</button>'+
-  (canApply?'<button class="run-btn" id="apply-result">'+icon('check',16)+' اعتماد التعديل</button>':'<button class="quiet-btn bordered" id="save-ai-page">'+icon('file',16)+' حفظ في صفحة جديدة</button>')+'</div>';
- $('#copy-result').onclick=()=>navigator.clipboard.writeText(body).then(()=>toast('تم نسخ النتيجة')).catch(()=>toast('تعذر النسخ','error'));
- if(!canApply){
-   $('#save-ai-page').onclick=async()=>{
-     const result=a;
-     try{
-       const page=getPage(),spaceId=page?.spaceId||state.activeSpace;
-       const now=Date.now();
-       const title=(labels[result.mode]||'نتيجة AI')+' — '+(page?.title||'مستند');
-       const newPage={id:id(),spaceId,title:title.slice(0,190),body,richDoc:null,instructions:'',createdAt:now,updatedAt:now};
-       await put('pages',newPage);state.pages.push(newPage);await activatePage(newPage.id);
-       togglePanel(false);toast('تم حفظ النتيجة في صفحة جديدة دون تغيير الأصل');
-     }catch(e){toast('تعذر حفظ النتيجة: '+e.message,'error');}
-   };
-   return;
+ const target=$('#ai-results'),batch=state.aiBatch;
+ if(!batch){target.innerHTML='';return;}
+ const progress=batch.results.filter(x=>x.status==='complete').length;
+ const all=batch.results.length;
+ const tabs='<div class="ai-result-tabs" role="tablist" aria-label="نتائج العمليات">'+batch.results.map((item,i)=>{
+   const active=batch.activeIndex===i;
+   const status=item.status==='complete'?'✓':item.status==='error'?'!':item.status==='running'?'◌':item.status==='cancelled'?'—':'·';
+   return '<button type="button" role="tab" aria-selected="'+active+'" data-ai-tab="'+i+'" class="ai-result-tab'+(active?' active':'')+'" title="'+escapeHtml(labelForMode(item.mode))+'">'+status+' '+escapeHtml(labelForMode(item.mode))+'</button>';
+ }).join('')+'</div>';
+ const current=batch.results[batch.activeIndex]||batch.results[0];
+ const title=current?labelForMode(current.mode):'النتائج';
+ let body='';
+ if(!current)body='';
+ else if(current.status==='waiting')body='<p class="ai-wait">في الانتظار — هذه العملية لم تبدأ بعد.</p>';
+ else if(current.status==='running')body='<p class="ai-wait"><span class="spin"></span> أعمل الآن على '+escapeHtml(title)+'...</p>';
+ else if(current.status==='cancelled')body='<p class="ai-wait">أُوقفت هذه العملية دون نتيجة.</p>';
+ else if(current.status==='error')body='<p class="ai-error">'+escapeHtml(current.error||'تعذر تنفيذ العملية')+'</p>';
+ else if(current.status==='complete'){
+   const mode=current.mode;
+   const edited=mode==='review'?current.result.revisedText:mode==='structure'?current.formatted:(current.result.text||'');
+   const canApply=['ideas','structure','improve','proofread','review'].includes(mode);
+   const tokenWarning=current.finishReason==='length'?'<p class="ai-error">النتيجة غير مكتملة بسبب بلوغ حد الإخراج. لا تعتمدها قبل إعادة المحاولة.</p>':'';
+   const coverage=mode==='ideas'?preservationReport(batch.original,edited):null;
+   const preservation=coverage?'<div class="ai-source-integrity '+(coverage.passes?'ok':'warn')+'">'+(coverage.passes?'✓':'!')+' الحفاظ على كلمات الأصل: '+Math.round(coverage.coverage*100)+'٪'+(coverage.passes?'':' — يبدو أن أجزاء من كلامك فُقدت. امنع الاستبدال واحتفظ بالنص الأصلي.')+'</div>':'';
+   const report=mode==='review'?'<section class="ai-review-section"><h4>ملاحظات النقد والإصلاح</h4><div class="result-content ai-markdown" dir="auto">'+safeAIHtml(current.result.critique||current.result.text)+'</div></section><section class="ai-review-section ai-fixed-draft"><h4>النص بعد تصحيح النقد</h4><div class="result-content ai-markdown" dir="auto">'+safeAIHtml(current.result.revisedText)+'</div></section>':'<div class="result-content ai-markdown" dir="auto">'+safeAIHtml(edited)+'</div>';
+   const usage=current.usage?.completionTokens?'<p class="ai-usage">رموز الإخراج: '+Number(current.usage.completionTokens).toLocaleString('ar-SA')+'</p>':'';
+   const safeToApply=canApply&&current.finishReason!=='length'&&(!coverage||coverage.passes);
+   body='<div class="result-head"><strong>'+escapeHtml(title)+'</strong><span class="result-badge">'+(canApply?'مراجعة قبل الاعتماد':'نتيجة مستقلة')+'</span></div>'+
+     tokenWarning+preservation+report+usage+
+     '<div class="result-actions"><button type="button" class="quiet-btn bordered" data-ai-copy="main">نسخ النتيجة</button>'+
+     (mode==='review'?'<button type="button" class="quiet-btn bordered" data-ai-copy="corrected">نسخ النص المصحح</button>':'')+
+     '<button type="button" class="quiet-btn bordered" data-ai-save="new">حفظ في صفحة جديدة</button>'+
+     (canApply?'<button type="button" class="run-btn" data-ai-apply="yes" '+(!safeToApply?'disabled title="النتيجة غير مكتملة أو لا تحفظ النص الأصلي"':'')+'>'+(mode==='review'?'اعتماد النسخة المصححة':'اعتماد النص المرتب')+'</button>':'')+'</div>';
  }
- $('#apply-result').onclick=async()=>{
-   const p=getPage();
-   if(!p||p.id!==a.pageId||currentDocumentBody()!==a.original){
-     toast('تغيّر النص بعد التحليل. أعد العملية أولًا.','error');return;
+ const runningNote=batch.running?'<div class="ai-batch-progress"><span>'+progress+' من '+all+' عمليات اكتملت</span><div class="ai-batch-track"><span style="width:'+Math.round(progress/Math.max(1,all)*100)+'%"></span></div></div>':'';
+ target.innerHTML=runningNote+tabs+'<div class="ai-result-panel" role="tabpanel">'+body+'</div>';
+ target.onclick=async event=>{
+   const tab=event.target.closest('[data-ai-tab]');
+   if(tab){batch.activeIndex=Number(tab.dataset.aiTab);renderAIResult();return;}
+   const item=batch.results[batch.activeIndex];
+   if(!item||item.status!=='complete')return;
+   const mode=item.mode;
+   const edited=mode==='review'?item.result.revisedText:mode==='structure'?item.formatted:item.result.text;
+   const copy=event.target.closest('[data-ai-copy]');
+   if(copy){
+     const text=copy.dataset.aiCopy==='corrected'?item.result.revisedText:mode==='review'?item.result.critique||item.result.text:edited;
+     try{await navigator.clipboard.writeText(text);toast('تم نسخ النص');}catch{toast('تعذر النسخ','error');}
+     return;
    }
-   if(!confirm('اعتماد هذا النص بدل المستند الحالي؟ ستُحفظ نسخة من الأصل للاسترجاع.'))return;
-   try{
-     await flush();await snapshot();
-     p.body=body;p.richDoc=null;
-     $('#editor').value=body;
-     state.sourceEdited=false;state.richChanged=false;
-     if(!state.sourceMode){
-       loadingRich=true;
-       try{loadRichDocument(richEditor,p);}finally{loadingRich=false;}
-     }
-     editVersion++;
-     await saveCurrent();
-     syncPreview();updateStats();
-     state.ai=null;target.innerHTML='<div class="ai-success">'+icon('check',20)+' تم اعتماد التعديل وحفظ نسخة من الأصل.</div>';
-     toast('تم حفظ التعديل');
-   }catch(e){toast('تعذر تطبيق التعديل: '+e.message,'error');}
+   if(event.target.closest('[data-ai-save]')){
+     try{
+       await flush();
+       const page=getPage(),now=Date.now();
+       const text=mode==='review'?'# النقد\n\n'+item.result.critique+'\n\n# النص المصحح\n\n'+item.result.revisedText:edited;
+       const title=(labelForMode(mode)+' — '+(page?.title||batch.title)).slice(0,190);
+       const newPage={id:id(),spaceId:page?.spaceId||state.activeSpace,title,body:text,richDoc:null,instructions:'',createdAt:now,updatedAt:now};
+       await put('pages',newPage);state.pages.push(newPage);await activatePage(newPage.id);togglePanel(false);
+       toast('حُفظت النتيجة في صفحة منفصلة');
+     }catch(e){toast('تعذر الحفظ: '+e.message,'error');}
+     return;
+   }
+   if(event.target.closest('[data-ai-apply]')){
+     if(!['ideas','structure','improve','proofread','review'].includes(mode))return;
+     if(item.finishReason==='length'||(mode==='ideas'&&!preservationReport(batch.original,edited).passes))return;
+     const page=getPage();
+     if(!page||page.id!==batch.pageId||currentDocumentBody()!==batch.original){toast('تغيّر المستند بعد بدء العملية. أعِد التحليل أولًا.','error');return;}
+     if(!confirm('اعتماد النص الجديد بدل الحالي؟ سنحفظ نسخة سابقة ويمكن استرجاعها.'))return;
+     try{
+       await flush();await snapshot();
+       page.body=edited;page.richDoc=null;
+       $('#editor').value=edited;
+       state.sourceEdited=false;state.richChanged=false;
+       if(!state.sourceMode){loadingRich=true;try{loadRichDocument(richEditor,page);}finally{loadingRich=false;}}
+       editVersion++;await saveCurrent();
+       syncPreview();updateStats();state.aiBatch=null;target.innerHTML='';
+       toast('تم اعتماد النتيجة وحفظ نسخة من المستند الأصلي');
+     }catch(e){toast('تعذر اعتماد النص: '+e.message,'error');}
+   }
  };
 }
 async function runAI(){
  if(state.busy)return;
- const mode=state.mode,command=$('#ai-command').value.trim(),depth=$('#ai-depth').value;
- if(mode==='custom'&&!command){toast('اكتب الأمر الذي تريد تنفيذه أولًا','error');$('#ai-command').focus();return;}
+ const selected=MODE_ORDER.filter(mode=>state.selectedModes.includes(mode));
+ const command=$('#ai-command').value.trim(),depth=$('#ai-depth').value;
+ if(!selected.length){toast('اختر عملية واحدة على الأقل','error');return;}
+ if(selected.includes('custom')&&!command){toast('اكتب الأمر الخاص بك أولًا','error');$('#ai-command').focus();return;}
  try{await flush();}catch(e){toast('تعذر حفظ الصفحة قبل التحليل: '+e.message,'error');return;}
  const p=getPage();if(!p)return;
  const text=currentDocumentBody();
- if(!text.trim()&&!command){toast('اكتب نصًا أو أمرًا للمساعد أولًا','error');return;}
+ if(!text.trim()&&!command){toast('اكتب نصًا أو أمرًا أولًا','error');return;}
  try{activateEnteredProviderKey();}catch(e){toast(e.message,'error');return;}
  const key=providerKey(),password=$('#access-key').value.trim();
- if(!key&&!password){toast('أدخل مفتاح DeepSeek API أو رمز Worker','error');$('#provider-key').focus();return;}
+ if(!key&&!password){toast('فعّل مفتاح DeepSeek أو رمز Worker','error');$('#provider-key').focus();return;}
  const model=$('#model').value;
- state.model=model;state.busy=true;
- const btn=$('#run-ai');btn.disabled=true;
- btn.innerHTML='<span class="spin"></span> جاري تنفيذ الأمر...';
- $('#ai-results').innerHTML='<p class="ai-wait">أحلل الطلب والقيود وأجهّز إجابة مناسبة'+(depth==='deep'?' باستخدام التفكير العميق':'')+'...</p>';
  const instructions=[getSpace()?.instructions,p.instructions].filter(Boolean).join('\n');
+ const controller=new AbortController();
+ state.aiAbort=controller;state.busy=true;state.model=model;
+ state.aiBatch={pageId:p.id,title:p.title,original:text,running:true,activeIndex:0,results:selected.map(mode=>({mode,status:'waiting'}))};
+ const btn=$('#run-ai');
+ btn.disabled=true;btn.innerHTML='<span class="spin"></span> تنفيذ '+selected.length+' عمليات...';
+ $('#cancel-ai').classList.remove('hidden');
+ document.querySelectorAll('.mode-checkbox').forEach(input=>input.disabled=true);
+ renderAIResult();
  try{
-   const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json',...(key?{'X-Provider-Key':key}:{'X-Access-Key':password})},body:JSON.stringify({mode,model,text,title:p.title,instructions,command,depth})});
-   const data=await res.json().catch(()=>({error:'رد غير مفهوم من الخادم'}));
-   if(!res.ok||!data.ok)throw Error(data.error||'خطأ '+res.status);
-   let formatted='';
-   if(mode==='structure')formatted=insertHeadings(text,data.result.headings);
-   state.ai={mode,original:text,pageId:p.id,formatted,result:data.result,usage:data.usage,finishReason:data.finishReason};
-   renderAIResult();
- }catch(e){
-   $('#ai-results').innerHTML='<p class="ai-error">'+escapeHtml(e.message)+'</p>';
+   for(let i=0;i<selected.length;i++){
+     if(controller.signal.aborted)break;
+     const mode=selected[i],item=state.aiBatch.results[i];
+     item.status='running';state.aiBatch.activeIndex=i;renderAIResult();
+     try{
+       const res=await fetch('/api/ai',{
+         method:'POST',signal:controller.signal,
+         headers:{'Content-Type':'application/json',...(key?{'X-Provider-Key':key}:{'X-Access-Key':password})},
+         body:JSON.stringify({mode,model,text,title:p.title,instructions,command,depth})
+       });
+       const data=await res.json().catch(()=>({error:'استجابة غير مفهومة من الخادم'}));
+       if(!res.ok||!data.ok){
+         item.status='error';item.error=data.error||'فشل الطلب ('+res.status+')';
+         if([401,402,403,429].includes(data.providerStatus)||[401,503].includes(res.status))break;
+       }else{
+         item.status='complete';item.result=data.result;
+         item.formatted=mode==='structure'?insertHeadings(text,data.result.headings):'';
+         item.finishReason=data.finishReason||null;item.usage=data.usage||null;
+       }
+     }catch(error){
+       if(controller.signal.aborted){item.status='cancelled';break;}
+       item.status='error';item.error=error.message||'حدث خطأ غير متوقع';
+     }
+     renderAIResult();
+   }
  }finally{
-   state.busy=false;btn.disabled=false;
-   btn.innerHTML=icon('spark',18)+' <span>نفّذ العملية</span>';
+   const batch=state.aiBatch;
+   if(batch){
+     batch.running=false;
+     for(const item of batch.results)if(item.status==='waiting'||item.status==='running')item.status='cancelled';
+     const successful=batch.results.findIndex(item=>item.status==='complete');
+     if(successful>=0)batch.activeIndex=successful;
+   }
+   state.aiAbort=null;state.busy=false;
+   btn.disabled=!state.selectedModes.length;btn.innerHTML=icon('spark',18)+' <span>نفّذ العمليات المختارة</span>';
+   $('#cancel-ai').classList.add('hidden');
+   document.querySelectorAll('.mode-checkbox').forEach(input=>input.disabled=false);
+   renderAIResult();
  }
 }
 function bind(){

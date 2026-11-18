@@ -47,3 +47,19 @@ export async function bootstrap() {
   }
   return { spaces, pages: await list('pages') };
 }
+
+/** Commit all restored spaces/pages atomically: either both stores update or neither does. */
+export async function importBackupRows(spaces, pages) {
+  const database=await db();
+  return new Promise((resolve,reject)=>{
+    const tx=database.transaction(['spaces','pages'],'readwrite');
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error||new Error('تعذر استيراد النسخة الاحتياطية'));
+    tx.onabort=()=>reject(tx.error||new Error('تم إلغاء عملية الاستيراد'));
+    try{
+      const spaceStore=tx.objectStore('spaces'),pageStore=tx.objectStore('pages');
+      for(const space of spaces)spaceStore.put(space);
+      for(const page of pages)pageStore.put(page);
+    }catch(e){tx.abort();reject(e);}
+  });
+}

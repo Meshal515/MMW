@@ -1,6 +1,6 @@
 const MAX_CONTENT = 40000;
-const MODES = new Set(['structure','improve','review']);
-const MODELS = new Set(['deepseek-flash','deepseek-v4-pro']);
+const MODES = new Set(['structure','improve','review','prompt','proofread']);
+const MODELS = new Set(['deepseek-flash','deepseek-v4-flash','deepseek-v4-pro']);
 const json = (data, status=200) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 function safeCompare(a,b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
@@ -12,6 +12,8 @@ const POLICY = `أنت مساعد تحرير باللغة العربية. لا �
 function promptFor(mode, payload) {
   const base = `عنوان الصفحة: ${payload.title}\nتعليمات المستخدم للصفحة (تُطبّق فقط إن لم تتعارض مع الحفاظ على المعنى): ${payload.instructions || 'لا يوجد'}\nالنص الأصلي:\n<original_text>\n${payload.text}\n</original_text>`;
   if (mode === 'structure') return [{role:'system',content:POLICY+' أخرج JSON صالح فقط بالشكل {"headings":[{"line":1,"title":"..."}],"suggestedTitle":"...","summary":"..."}. أرقام الأسطر تبدأ من 1 في النص الأصلي. أضف عناوين فقط قبل أسطر مناسبة، ولاتعد كتابة النص، ولا تضف أي معلومة جديدة. العدد الأقصى 10 عناوين. لا تخترع معنى غير صريح.'},{role:'user',content:base}];
+  if (mode === 'prompt') return [{role:'system',content:POLICY+' حول الأفكار إلى برومبت Markdown منظم قابل للنسخ. استخدم عناوين # و## وقوائم واضحة للهدف والمتطلبات والقيود ومعايير النجاح عندما توجد في الأصل. لا تحذف أي معلومة أو رقم أو شرط أو اسم أو مثال. لا تخترع متطلبات أو معلومات. إذا كان هناك غموض ضعه تحت قسم أسئلة توضيحية ولا تفترض جوابه. أرجع البرومبت فقط.'},{role:'user',content:base}];
+  if (mode === 'proofread') return [{role:'system',content:POLICY+' صحح الأخطاء الإملائية والنحوية فقط مع المحافظة على اللهجة والمصطلحات والأسماء والأرقام والترتيب والمعنى والتفاصيل. لا تحذف أي فقرة ولا تعيد كتابة الأفكار. أرجع النص المصحح فقط بلا مقدمة.'},{role:'user',content:base}];
   if (mode === 'improve') return [{role:'system',content:POLICY+' أعد كتابة النص لتحسين سلاسة التعبير فقط. حافظ على كل المعاني والتفاصيل والقرارات. لا تُدخل معلومات جديدة. إذا كان أصل الكلام ملتبسًا لا تجزم بتفسيره. أرجع النص المقترح فقط بلا مقدمات.'},{role:'user',content:base}];
   return [{role:'system',content:POLICY+' راجع النص مراجعة ناقدة واضحة. اذكر مواطن الغموض والتكرار والتناقض المحتمل، وميز الملاحظات المحققة عن الاحتمالات. لا تعدّل الأصل. اكتب تقريرًا موجزًا بلغة عربية واضحة.'},{role:'user',content:base}];
 }
@@ -22,8 +24,18 @@ export default {
     if (request.method !== 'POST') return json({error:'Method not allowed'},405);
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({error:'Origin not allowed'},403);
-    if (!env.APP_ACCESS_KEY || !env.DEEPSEEK_API_KEY) return json({error:'لم يتم إعداد أسرار الخدمة على الخادم.'},503);
-    if (!safeCompare(request.headers.get('X-Access-Key'),env.APP_ACCESS_KEY)) return json({error:'رمز الدخول غير صحيح.'},401);
+    // BYOK: the visitor-supplied key is used in this request only. Never persist or log it.
+    // Legacy Cloudflare Secrets mode remains available for existing private deployments.
+    const hasUserKey = request.headers.has('X-Provider-Key');
+    const suppliedKey = request.headers.get('X-Provider-Key') || '';
+    if (hasUserKey && (suppliedKey.length < 20 || suppliedKey.length > 512 || !/^[!-~]+$/.test(suppliedKey))) {
+      return json({error:'مفتاح DeepSeek غير صالح.'},400);
+    }
+    if (!hasUserKey) {
+      if (!env.APP_ACCESS_KEY || !env.DEEPSEEK_API_KEY) return json({error:'أدخل مفتاح DeepSeek محليًا أو اضبط أسرار الخدمة.'},503);
+      if (!safeCompare(request.headers.get('X-Access-Key'),env.APP_ACCESS_KEY)) return json({error:'رمز الدخول غير صحيح.'},401);
+    }
+    const apiKey = hasUserKey ? suppliedKey : env.DEEPSEEK_API_KEY;
     if (Number(request.headers.get('content-length') || '0') > 100000) return json({error:'حجم الطلب كبير.'},413);
     let data;
     try {data = await request.json();} catch {return json({error:'تنسيق الطلب غير صالح.'},400);}
@@ -34,7 +46,7 @@ export default {
     try {
       const response = await fetch('https://api.deepseek.com/chat/completions', {
         method:'POST', signal:controller.signal,
-        headers:{'Authorization':`Bearer ${env.DEEPSEEK_API_KEY}`,'Content-Type':'application/json'},
+        headers:{'Authorization':`Bearer ${apiKey}`,'Content-Type':'application/json'},
         body:JSON.stringify({model:data.model, messages:promptFor(data.mode,data), thinking:{type:'disabled'}, temperature:0.2, max_tokens: data.mode==='structure'?2200:6500, ...(data.mode==='structure'?{response_format:{type:'json_object'}}:{})})
       });
       if (!response.ok) return json({error:`تعذّر الاتصال بمزود الذكاء (${response.status}).`},502);

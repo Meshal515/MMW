@@ -20,13 +20,13 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      AI_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      USPACE_GATE_KEY: ${{ secrets.USPACE_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install USPACE dependencies
+        run: npm install --prefix uspace --no-audit --no-fund
       - name: Test USPACE
         run: |
           node --test uspace/tests/*.test.js
@@ -46,36 +46,21 @@ jobs:
           mkdir -p functions/api worker
           cp uspace/functions/api/ai.js functions/api/ai.js
           cp uspace/worker/index.js worker/index.js
-      - name: Resolve or create USPACE Pages project
+      - name: Resolve existing USPACE production Pages project
         shell: bash
         run: |
           set -euo pipefail
-          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
-          LIST="$(mktemp)"
-          curl --retry 3 --retry-all-errors -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$API" > "$LIST"
-          PROJECT="$(jq -r '.result[]? | select(.name == "uspace" or .name == "uspace-mmw" or .name == "uspace-meshal515") | .name' "$LIST" | head -n1)"
-          if [ -z "$PROJECT" ]; then
-            for NAME in uspace uspace-mmw uspace-meshal515; do
-              OUTPUT="$(mktemp)"
-              STATUS="$(curl -sS --retry 2 --retry-all-errors -o "$OUTPUT" -w '%{http_code}' -X POST \
-                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-                -H 'Content-Type: application/json' \
-                -d "{\"name\":\"${NAME}\",\"production_branch\":\"main\"}" "$API")"
-              if [ "$STATUS" = '200' ] && jq -e '.success == true' "$OUTPUT" >/dev/null; then
-                PROJECT="$NAME"
-                break
-              fi
-            done
+          # This is the already-published user site. Never silently create a different project.
+          PROJECT="uspace-bin"
+          DETAILS="$(mktemp)"
+          STATUS="$(curl --retry 3 --retry-all-errors -sS -o "$DETAILS" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}")"
+          if [ "$STATUS" != "200" ] || ! jq -e '.success == true and .result.name == "uspace-bin"' "$DETAILS" >/dev/null; then
+            echo "::error::Cloudflare Pages project 'uspace-bin' not accessible. Verify account ID and API token permissions. Deployment aborted without creating an unrelated site."
+            exit 1
           fi
-          test -n "$PROJECT"
           echo "USPACE_PROJECT=${PROJECT}" >> "$GITHUB_ENV"
-      - name: Install USPACE AI secrets if available
-        if: ${{ env.AI_API_KEY != '' && env.USPACE_GATE_KEY != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$AI_API_KEY" | npx --yes wrangler@latest pages secret put DEEPSEEK_API_KEY --project-name="$USPACE_PROJECT"
-          printf '%s' "$USPACE_GATE_KEY" | npx --yes wrangler@latest pages secret put APP_ACCESS_KEY --project-name="$USPACE_PROJECT"
       - name: Deploy USPACE only
         shell: bash
         run: |
@@ -93,7 +78,10 @@ jobs:
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${USPACE_PROJECT}" > "$DETAILS"
           HOST="$(jq -r '.result.subdomain // empty' "$DETAILS")"
-          if [ -z "$HOST" ]; then HOST="${USPACE_PROJECT}.pages.dev"; fi
+          if [ "$HOST" != "uspace-bin.pages.dev" ]; then
+            echo "::error::Unexpected Cloudflare Pages subdomain: ${HOST}"
+            exit 1
+          fi
           URL="https://${HOST}"
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             PAGE="$(mktemp)"

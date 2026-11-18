@@ -41,14 +41,54 @@ export function insertHeadings(original, rawHeadings) {
 export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+function markdownInline(value) {
+  // Escape source before adding our own trusted markup; never emit user HTML.
+  return escapeHtml(value)
+    .replace(/\x60([^\x60\n]+)\x60/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+}
+function tableCells(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim());
+}
+function isTableSeparator(line) {
+  return tableCells(line).every(cell => /^:?-{3,}:?$/.test(cell));
+}
 export function markdownToHtml(text) {
-  const safe = escapeHtml(text);
-  return safe.split('\n').map(l => {
-    const m = /^(#{1,4})\s+(.+)$/.exec(l);
-    if (m) return `<h${m[1].length}>${m[2]}</h${m[1].length}>`;
-    if (/^\s*[-*]\s+/.test(l)) return `<p class="markdown-li">• ${l.replace(/^\s*[-*]\s+/, '')}</p>`;
-    if (/^\s*>\s?/.test(l)) return `<blockquote>${l.replace(/^\s*>\s?/, '')}</blockquote>`;
-    return l.trim() ? `<p>${l}</p>` : '<div class="md-gap"></div>';
-  }).join('');
+  const lines = String(text).split('\n');
+  const output = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().startsWith('```')) {
+      const language = line.trim().slice(3).replace(/[^a-z0-9_-]/gi, '').slice(0, 24);
+      const code = [];
+      while (++i < lines.length && !lines[i].trim().startsWith('```')) code.push(lines[i]);
+      output.push('<pre class="md-code"><code'+(language ? ' data-language="'+language+'"' : '')+'>'+escapeHtml(code.join('\n'))+'</code></pre>');
+      continue;
+    }
+    if (i + 1 < lines.length && line.includes('|') && lines[i+1].includes('|') && isTableSeparator(lines[i+1])) {
+      const headings = tableCells(line);
+      const separator = tableCells(lines[i+1]);
+      if (headings.length === separator.length && headings.length > 1) {
+        const rows = [];
+        i += 2;
+        while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+          const cells = tableCells(lines[i]);
+          rows.push('<tr>'+headings.map((_,index)=>'<td>'+markdownInline(cells[index] || '')+'</td>').join('')+'</tr>');
+          i++;
+        }
+        i--;
+        output.push('<div class="md-table-scroll"><table><thead><tr>'+headings.map(c=>'<th>'+markdownInline(c)+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>');
+        continue;
+      }
+    }
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (heading) {const n=heading[1].length;output.push('<h'+n+'>'+markdownInline(heading[2])+'</h'+n+'>');continue;}
+    if (/^\s*[-*]\s+/.test(line)) {output.push('<p class="markdown-li">• '+markdownInline(line.replace(/^\s*[-*]\s+/, ''))+'</p>');continue;}
+    if (/^\s*\d+\.\s+/.test(line)) {output.push('<p class="markdown-li">'+markdownInline(line.trim())+'</p>');continue;}
+    if (/^\s*>\s?/.test(line)) {output.push('<blockquote>'+markdownInline(line.replace(/^\s*>\s?/, ''))+'</blockquote>');continue;}
+    output.push(line.trim()?'<p>'+markdownInline(line)+'</p>':'<div class="md-gap"></div>');
+  }
+  return output.join('');
 }
 export function fileName(name) {return String(name || 'ملاحظة').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0,80) || 'ملاحظة';}

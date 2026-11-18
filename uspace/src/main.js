@@ -50,8 +50,8 @@ function fmtDate(ts){return new Intl.DateTimeFormat('ar-SA',{month:'short',day:'
 function renderShell(){
  $('#app').innerHTML=`<div class="shell">
   <div class="scrim" id="scrim"></div><div class="panel-scrim" id="panel-scrim"></div>
-  <aside class="sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/icons/icon.svg" alt="شعار USPACE الثابت" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
+  <aside class="sidebar" id="sidebar" aria-label="المكتبة: المساحات والصفحات">
+    <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/icons/icon.svg" alt="شعار USPACE الثابت" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button type="button" class="icon-btn mobile-close" id="close-sidebar" title="إغلاق المكتبة" aria-label="إغلاق المكتبة">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
     <div class="sidebar-utility" aria-label="أدوات المعرفة">
@@ -71,7 +71,7 @@ function renderShell(){
     <div class="sidebar-foot"><div class="local-status"><span class="local-dot"></span>محفوظ على هذا الجهاز</div><button class="sidebar-action" id="backup-btn">${icon('download',17)} تصدير نسخة احتياطية</button><button class="sidebar-action" id="import-btn">${icon('upload',17)} استيراد Markdown</button><button class="sidebar-action" id="restore-backup-btn">${icon('history',17)} استعادة نسخة JSON</button><button class="sidebar-action" id="settings-btn">${icon('settings',17)} الإعدادات والاتصال</button></div>
   </aside>
   <main class="main">
-    <header class="topbar"><div class="breadcrumbs"><button class="icon-btn mobile-menu" id="open-sidebar" title="القائمة">${icon('menu')}</button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
+    <header class="topbar"><div class="breadcrumbs"><button type="button" class="icon-btn mobile-menu" id="open-sidebar" title="فتح المكتبة والصفحات" aria-label="فتح المكتبة والصفحات" aria-controls="sidebar" aria-expanded="false">${icon('menu')}<span class="sidebar-open-label">المكتبة</span></button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
       <div class="top-actions"><button type="button" class="icon-btn theme-switch" id="theme-btn" title="تبديل الوضع الفاتح والداكن" aria-label="تبديل السمة">☾</button><button type="button" class="icon-btn favorite-switch" id="favorite-btn" title="تثبيت الصفحة في المفضلة" aria-label="تثبيت الصفحة">☆</button><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
     <div class="editor-scroll"><article class="editor-paper"><div class="eyebrow">مساحة للكتابة والتفكير</div><input id="page-title" class="page-title" aria-label="عنوان الصفحة" placeholder="صفحة بدون عنوان" maxlength="200"/><div class="page-meta"><span id="modified-label">آخر تعديل الآن</span><span class="meta-circle">●</span><span>Markdown</span><span class="meta-circle">●</span><span>خصوصي على جهازك</span></div>
     <div class="editor-rule"></div><div class="format-toolbar" role="toolbar" aria-label="تنسيق المستند">
@@ -392,6 +392,7 @@ function toggleSidebar(value){
  state.sidebarOpen=value;
  $('#sidebar').classList.toggle('open',value);
  $('#scrim').classList.toggle('show',value);
+ $('#open-sidebar')?.setAttribute('aria-expanded',String(value));
 }
 function togglePanel(value){
    if(value&&state.sidebarOpen)toggleSidebar(false);
@@ -812,7 +813,7 @@ function bind(){
  state.richChanged=false;state.sourceEdited=false;
  await saveCurrent();updateStats();toast('تم استيراد الملف');e.target.value='';};
  $('#more-btn').onclick=()=>showDialog('إدارة الصفحة',`<p class="dialog-description">نسخ واسترجاع أو حذف الصفحة الحالية.</p><div class="dialog-actions"><button id="history-btn" class="quiet-btn bordered">${icon('history',17)} سجل النسخ</button><button id="delete-page-btn" class="danger-btn">${icon('trash',17)} حذف الصفحة</button></div>`,{onOpen:()=>{$('#history-btn').onclick=()=>{closeDialog();showHistory();};$('#delete-page-btn').onclick=()=>{closeDialog();deleteCurrent();};}});
- $('#open-sidebar').onclick=()=>toggleSidebar(true);$('#close-sidebar').onclick=()=>toggleSidebar(false);$('#scrim').onclick=()=>toggleSidebar(false);
+ $('#open-sidebar').onclick=()=>toggleSidebar(!state.sidebarOpen);$('#close-sidebar').onclick=()=>toggleSidebar(false);$('#scrim').onclick=()=>toggleSidebar(false);
  document.addEventListener('keydown',e=>{const cmd=e.ctrlKey||e.metaKey;if(cmd&&e.key.toLowerCase()==='s'){e.preventDefault();flush().then(()=>toast('تم الحفظ'));}if(cmd&&e.key.toLowerCase()==='k'){e.preventDefault();openQuickSwitcher();}if(cmd&&e.shiftKey&&e.key.toLowerCase()==='n'){e.preventDefault();addPage().catch(err=>toast(err.message,'error'));}if(cmd&&e.shiftKey&&e.key.toLowerCase()==='d'){e.preventDefault();createDailyNote().catch(err=>toast(err.message,'error'));}if(cmd&&document.activeElement===$('#editor')&&['b','i'].includes(e.key.toLowerCase())){e.preventDefault();applyFormat(e.key.toLowerCase()==='b'?'bold':'italic');}if(e.key==='Escape'){closeDialog();togglePanel(false);toggleSidebar(false);}});
  window.addEventListener('pagehide',()=>{if(saveTimer){clearTimeout(saveTimer);const p=getPage();if(p){p.body=currentDocumentBody();if(!state.sourceMode&&state.richChanged)p.richDoc=richJSON(richEditor);if(state.sourceMode&&state.sourceEdited)p.richDoc=null;p.title=$('#page-title').value||'صفحة بدون عنوان';put('pages',{...p});}}});
 }

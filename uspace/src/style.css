@@ -107,3 +107,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
  .editor-footer{gap:4px}
 }
 @media(prefers-reduced-motion:reduce){.format-toolbar button,.table-tools button{transition:none}}
+
+@media(max-width:720px){
+  .top-actions #source-btn,.top-actions #preview-btn{display:inline-flex;padding:7px;min-width:34px;justify-content:center}
+  .top-actions{gap:3px}
+  .topbar{padding:0 9px}
+  .breadcrumbs{min-width:0;overflow:hidden}
+  .save-indicator{display:none}
+  .top-actions .accent-btn{padding:9px}
+  .format-toolbar button:focus-visible,.table-tools button:focus-visible{outline:2px solid #257857;outline-offset:2px}
+}

@@ -5,6 +5,27 @@
 const MAX_PAGES=3000,MAX_SPACES=250,MAX_BODY=2000000;
 const finiteTime=v=>Number.isFinite(v)&&v>0?Math.round(v):Date.now();
 const bounded=(value,max)=>typeof value==='string'&&value.length<=max;
+function safeUrl(value, image=false){
+ if(typeof value!=='string'||value.length>2048)return false;
+ const trimmed=value.trim();
+ if(trimmed.startsWith('#')||trimmed.startsWith('/'))return !trimmed.startsWith('//');
+ try{
+   const parsed=new URL(trimmed);
+   return image?parsed.protocol==='https:':['https:','http:','mailto:'].includes(parsed.protocol);
+ }catch{return false;}
+}
+function validateAttributes(attrs, image=false){
+ if(attrs==null)return;
+ if(typeof attrs!=='object'||Array.isArray(attrs))throw Error('خصائص التنسيق غير صالحة.');
+ for(const [key,value] of Object.entries(attrs)){
+   if(!/^[a-zA-Z][a-zA-Z0-9]*$/.test(key)||key.length>70)throw Error('اسم خاصية غير صالح.');
+   if(typeof value==='string'){
+     if(value.length>2200||/[\\u0000-\\u001f]/.test(value))throw Error('قيمة خاصية غير صالحة.');
+     if((key==='href'||key==='src')&&!safeUrl(value,key==='src'||image))throw Error('رابط غير آمن في النسخة الاحتياطية.');
+     if(/(?:expression\s*\(|url\s*\(|javascript\s*:)/i.test(value))throw Error('تنسيق غير آمن في النسخة الاحتياطية.');
+   }
+ }
+}
 function validateRichJSON(value){
  if(value==null)return null;
  if(!value||typeof value!=='object'||Array.isArray(value)||value.type!=='doc')throw Error('تنسيق Rich Text غير صالح.');
@@ -19,8 +40,14 @@ function validateRichJSON(value){
      if(!Array.isArray(node.content)||node.content.length>60000)throw Error('هيكل المستند غير صالح.');
      for(const child of node.content)stack.push({node:child,depth:depth+1});
    }
-   if(node.attrs!==undefined&&(typeof node.attrs!=='object'||node.attrs===null||Array.isArray(node.attrs)))throw Error('خصائص التنسيق غير صالحة.');
-   if(node.marks!==undefined&&!Array.isArray(node.marks))throw Error('خصائص النص غير صالحة.');
+   validateAttributes(node.attrs,node.type==='image');
+   if(node.marks!==undefined){
+     if(!Array.isArray(node.marks))throw Error('خصائص النص غير صالحة.');
+     for(const mark of node.marks){
+       if(!mark||typeof mark.type!=='string')throw Error('نوع تنسيق غير صالح.');
+       validateAttributes(mark.attrs);
+     }
+   }
  }
  return value;
 }

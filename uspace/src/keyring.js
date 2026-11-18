@@ -6,7 +6,7 @@ let activeProviderKey = '';
 function providerKey() { return activeProviderKey; }
 function setProviderKey(key) {
   const value = String(key || '').trim();
-  if (!value || value.length > 512 || /\s/.test(value)) throw new Error('مفتاح API غير صالح.');
+  if (value.length < 20 || value.length > 512 || /[^!-~]/.test(value)) throw new Error('مفتاح API غير صالح.');
   activeProviderKey = value;
 }
 function lockProviderKey() { activeProviderKey = ''; }

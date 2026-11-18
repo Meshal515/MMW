@@ -45,9 +45,9 @@ function getPage(){return state.pages.find(p=>p.id===state.activePage);}
 function fmtDate(ts){return new Intl.DateTimeFormat('ar-SA',{month:'short',day:'numeric'}).format(ts);}
 function renderShell(){
  $('#app').innerHTML=`<div class="shell">
-  <div class="scrim" id="scrim"></div>
+  <div class="scrim" id="scrim"></div><div class="panel-scrim" id="panel-scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark"><span>U</span></div><div class="brand-title"><b>USPACE</b><span>YOUR MIND, UNFILTERED</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
+    <div class="brand"><div class="brand-mark" aria-label="USPACE"><span aria-hidden="true">U</span></div><div class="brand-title"><b>USPACE</b><span>YOUR SPACE TO THINK · v0.2</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
     <div class="sidebar-separator"></div>
@@ -351,7 +351,12 @@ async function activateSpace(sid){await flush();state.activeSpace=sid;state.acti
 async function addSpace(){const name=prompt('اسم المساحة الجديدة؟','مشروعي الجديد');if(!name?.trim())return;const s={id:id(),name:name.trim().slice(0,70),instructions:'',createdAt:Date.now(),updatedAt:Date.now()};await put('spaces',s);state.spaces.push(s);await activateSpace(s.id);toast('تم إنشاء المساحة');}
 async function addPage(){await flush();const now=Date.now();const p={id:id(),spaceId:state.activeSpace,title:'صفحة بدون عنوان',body:'',instructions:'',createdAt:now,updatedAt:now};await put('pages',p);state.pages.push(p);await activatePage(p.id);$('#page-title').focus();}
 function toggleSidebar(value){state.sidebarOpen=value;$('#sidebar').classList.toggle('open',value);$('#scrim').classList.toggle('show',value);}
-function togglePanel(value){state.panelOpen=value;$('#right-panel').classList.toggle('open',value);if(value)renderModes();}
+function togglePanel(value){
+   state.panelOpen=value;
+   $('#right-panel').classList.toggle('open',value);
+   $('#panel-scrim').classList.toggle('show',value);
+   if(value)renderModes();
+ }
 function renderModes(){
  $('#modes').innerHTML=Object.entries(modes).map(([key,m])=>`<button class="mode-btn ${state.mode===key?'chosen':''}" data-mode="${key}"><span class="mode-radio"></span><span><b>${m.name}</b><small>${m.description}</small></span></button>`).join('');
 }
@@ -483,7 +488,7 @@ function bind(){
  $('#search').oninput=e=>{state.search=e.target.value;renderNav();};
  $('#preview-btn').onclick=()=>{state.preview=!state.preview;syncPreview();};
  $('#source-btn').onclick=()=>toggleMarkdownSource().catch(e=>toast(e.message,'error'));
- $('#assistant-btn').onclick=()=>togglePanel(true);$('#close-panel').onclick=()=>togglePanel(false);
+ $('#assistant-btn').onclick=()=>togglePanel(true);$('#close-panel').onclick=()=>togglePanel(false);$('#panel-scrim').onclick=()=>togglePanel(false);
  $('#modes').onclick=e=>{const el=e.target.closest('[data-mode]');if(el){state.mode=el.dataset.mode;renderModes();}};
  $('#model').onchange=e=>state.model=e.target.value;
  $('#access-key').value='';

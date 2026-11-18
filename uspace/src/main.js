@@ -6,6 +6,7 @@ import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, ri
 import { bootstrap, list, put, remove, clearPage, importBackupRows } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 import {fontOptionsHtml, pageFontFamily, fontStack, loadArabicFont, loadDocumentFonts} from './fonts.js';
+import {providerKey, setProviderKey, lockProviderKey, savedProviderKeyExists, saveEncryptedProviderKey, unlockProviderKey, forgetProviderKey} from './keyring.js';
 
 const $ = sel => document.querySelector(sel);
 const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };

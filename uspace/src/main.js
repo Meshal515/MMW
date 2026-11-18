@@ -7,6 +7,7 @@ import { bootstrap, list, put, remove, clearPage, importBackupRows } from './sto
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 import {fontOptionsHtml, pageFontFamily, fontStack, loadArabicFont, loadDocumentFonts} from './fonts.js';
 import {MODE_ORDER,normalizeModeSelection,preservationReport,labelForMode} from './ai-operations.js';
+import {extractTags,extractWikiLinks,linkedPageIds,backlinksFor,rankPages,graphForSpace,dailyTitle,PAGE_TEMPLATES} from './knowledge.js';
 import {providerKey, setProviderKey, lockProviderKey, savedProviderKeyExists, saveEncryptedProviderKey, unlockProviderKey, forgetProviderKey} from './keyring.js';
 
 const $ = sel => document.querySelector(sel);
@@ -50,18 +51,28 @@ function renderShell(){
  $('#app').innerHTML=`<div class="shell">
   <div class="scrim" id="scrim"></div><div class="panel-scrim" id="panel-scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark" aria-label="USPACE"><span aria-hidden="true">U</span></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
+    <div class="brand"><div class="brand-mark" aria-label="USPACE"><img class="brand-logo" src="/logo-animated.gif" alt="شعار USPACE المتحرك" width="42" height="42"/></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
+    <div class="sidebar-utility" aria-label="أدوات المعرفة">
+      <button type="button" class="quick-launch" id="quick-switch-btn">${icon('search',16)} بحث وتنقل سريع <span>Ctrl K</span></button>
+      <div class="sidebar-quick-row">
+        <button type="button" id="daily-note-btn" title="إنشاء أو فتح مذكّرة اليوم">${icon('edit',16)} اليوميّة</button>
+        <button type="button" id="templates-btn" title="مستند من قالب">${icon('file',16)} قوالب</button>
+        <button type="button" id="graph-btn" title="خريطة الروابط">${icon('book',16)} الخريطة</button>
+      </div>
+    </div>
     <div class="sidebar-separator"></div>
     <div class="pages-head"><span>الصفحات <b id="page-count">0</b></span><button class="icon-btn small" id="add-page" title="صفحة جديدة">${icon('plus',17)}</button></div>
     <label class="search-wrap">${icon('search',17)}<input id="search" type="search" placeholder="ابحث في صفحاتك..." autocomplete="off" aria-label="البحث في الصفحات"/><span>⌘K</span></label>
+    <div id="favorite-list" class="favorites-list" aria-label="الصفحات المثبتة"></div>
+    <div id="recent-list" class="recent-list" aria-label="الصفحات الأخيرة"></div>
     <div class="pages-list" id="pages-list"></div>
     <div class="sidebar-foot"><div class="local-status"><span class="local-dot"></span>محفوظ على هذا الجهاز</div><button class="sidebar-action" id="backup-btn">${icon('download',17)} تصدير نسخة احتياطية</button><button class="sidebar-action" id="import-btn">${icon('upload',17)} استيراد Markdown</button><button class="sidebar-action" id="restore-backup-btn">${icon('history',17)} استعادة نسخة JSON</button><button class="sidebar-action" id="settings-btn">${icon('settings',17)} الإعدادات والاتصال</button></div>
   </aside>
   <main class="main">
     <header class="topbar"><div class="breadcrumbs"><button class="icon-btn mobile-menu" id="open-sidebar" title="القائمة">${icon('menu')}</button><span id="crumb-space">مساحتي</span><span class="crumb-slash">/</span><strong id="crumb-page">ملاحظة جديدة</strong></div>
-      <div class="top-actions"><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
+      <div class="top-actions"><button type="button" class="icon-btn theme-switch" id="theme-btn" title="تبديل الوضع الفاتح والداكن" aria-label="تبديل السمة">☾</button><button type="button" class="icon-btn favorite-switch" id="favorite-btn" title="تثبيت الصفحة في المفضلة" aria-label="تثبيت الصفحة">☆</button><span class="save-indicator" id="save-status">${icon('check',15)} محفوظ</span><button class="quiet-btn" id="source-btn" title="عرض وتحرير Markdown">MD<span class="desktop-label"> المصدر</span></button><button class="quiet-btn" id="preview-btn">${icon('eye',17)}<span>معاينة</span></button><button class="accent-btn" id="assistant-btn">${icon('spark',18)}<span>المساعد الذكي</span></button></div></header>
     <div class="editor-scroll"><article class="editor-paper"><div class="eyebrow">مساحة للكتابة والتفكير</div><input id="page-title" class="page-title" aria-label="عنوان الصفحة" placeholder="صفحة بدون عنوان" maxlength="200"/><div class="page-meta"><span id="modified-label">آخر تعديل الآن</span><span class="meta-circle">●</span><span>Markdown</span><span class="meta-circle">●</span><span>خصوصي على جهازك</span></div>
     <div class="editor-rule"></div><div class="format-toolbar" role="toolbar" aria-label="تنسيق المستند">
       <select id="editor-font" aria-label="خط المستند" title="خط المستند">${fontOptionsHtml()}</select>
@@ -109,7 +120,7 @@ function renderShell(){
       <button type="button" data-format="table-remove" class="danger-action">حذف الجدول</button>
     </div>
     <div id="rich-editor" class="rich-editor-host" aria-label="المحرر المرئي"></div>
-    <textarea id="editor" class="hidden" spellcheck="true" dir="auto" aria-label="مصدر Markdown" placeholder="اكتب Markdown هنا..."></textarea><div id="preview" class="markdown-preview hidden"></div>
+    <textarea id="editor" class="hidden" spellcheck="true" dir="auto" aria-label="مصدر Markdown" placeholder="اكتب Markdown هنا..."></textarea><div id="preview" class="markdown-preview hidden"></div><section id="doc-context" class="doc-context" aria-label="روابط ووسوم المستند"></section>
     </article></div>
     <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="text-btn" id="export-html-btn">${icon('download',16)} HTML</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
   </main>
@@ -152,11 +163,18 @@ function renderShell(){
  bind();renderNav();renderCurrent();renderModes();
 }
 function renderNav(){
- const s=$('#spaces-list');s.innerHTML=state.spaces.map(sp=>`<button data-space="${sp.id}" class="space-option ${sp.id===state.activeSpace?'selected':''}"><span class="space-icon">${icon('book',17)}</span><span>${escapeHtml(sp.name)}</span>${sp.id===state.activeSpace?icon('chevron',16):''}</button>`).join('');
- const term=state.search.toLowerCase();const currentPages=state.pages.filter(p=>p.spaceId===state.activeSpace).sort((a,b)=>b.updatedAt-a.updatedAt);
- $('#page-count').textContent=currentPages.length;
- const shown=currentPages.filter(p=>`${p.title} ${p.body}`.toLowerCase().includes(term));
- $('#pages-list').innerHTML=shown.length?shown.map(p=>`<button data-page="${p.id}" class="page-option ${p.id===state.activePage?'active':''}"><span class="page-line">${icon('file',17)}<span class="page-item-title">${escapeHtml(p.title||'صفحة بدون عنوان')}</span></span><span class="page-date">${fmtDate(p.updatedAt)}</span></button>`).join(''):'<p class="empty-nav">ما فيه صفحات تطابق بحثك.</p>';
+ const s=$('#spaces-list');
+ s.innerHTML=state.spaces.map(sp=>'<button type="button" data-space="'+sp.id+'" class="space-option'+(sp.id===state.activeSpace?' selected':'')+'"><span class="space-icon">'+icon('book',17)+'</span><span>'+escapeHtml(sp.name)+'</span>'+(sp.id===state.activeSpace?icon('chevron',16):'')+'</button>').join('');
+ const term=state.search.trim();
+ const currentPages=state.pages.filter(p=>p.spaceId===state.activeSpace);
+ const shown=rankPages(state.pages,term,term?null:state.activeSpace);
+ $('#page-count').textContent=term?shown.length:currentPages.length;
+ const pageRow=p=>'<button type="button" data-page="'+p.id+'" class="page-option'+(p.id===state.activePage?' active':'')+'" title="'+escapeHtml(p.title||'بدون عنوان')+'"><span class="page-line">'+(p.favorite?'★ ':icon('file',16))+'<span class="page-item-title">'+escapeHtml(p.title||'صفحة بدون عنوان')+'</span></span><span class="page-date">'+fmtDate(p.updatedAt)+'</span></button>';
+ $('#pages-list').innerHTML=shown.length?shown.map(pageRow).join(''):'<p class="empty-nav">لا توجد صفحات مطابقة.</p>';
+ const favorites=currentPages.filter(p=>p.favorite).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,6);
+ $('#favorite-list').innerHTML=favorites.length?'<div class="nav-section-title">★ المفضلة</div>'+favorites.map(pageRow).join(''):'';
+ const recent=currentPages.filter(p=>p.id!==state.activePage&&!p.favorite).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,3);
+ $('#recent-list').innerHTML=recent.length?'<div class="nav-section-title">مؤخرًا</div>'+recent.map(pageRow).join(''):'';
  $('#crumb-space').textContent=getSpace()?.name||'مساحتي';
 }
 function currentDocumentBody(){
@@ -184,6 +202,7 @@ function renderCurrent(){
  $('#modified-label').textContent='آخر تعديل '+fmtDate(p.updatedAt);
  syncPreview();updateStats();updateRichToolbar();
  $('#ai-results').innerHTML='';state.ai=null;state.aiBatch=null;
+ renderKnowledgeContext();updateFavoriteButton();
 }
 function syncPreview(){
  const source=state.sourceMode&&!state.preview;
@@ -364,10 +383,10 @@ function queueSave(){
  saveTimer=setTimeout(()=>saveCurrent().catch(e=>toast('تعذر الحفظ: '+e.message,'error')),SAVE_DELAY);
 }
 async function flush(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;await saveCurrent();}}
-async function activatePage(pid){await flush();state.activePage=pid;localStorage.setItem('uspace-active-page',pid);renderNav();renderCurrent();toggleSidebar(false);}
+async function activatePage(pid){await flush();const page=state.pages.find(p=>p.id===pid);if(!page)throw Error('الصفحة غير موجودة');state.activePage=pid;if(state.activeSpace!==page.spaceId){state.activeSpace=page.spaceId;localStorage.setItem('uspace-active-space',page.spaceId);}localStorage.setItem('uspace-active-page',pid);renderNav();renderCurrent();toggleSidebar(false);}
 async function activateSpace(sid){await flush();state.activeSpace=sid;state.activePage=state.pages.filter(p=>p.spaceId===sid).sort((a,b)=>b.updatedAt-a.updatedAt)[0]?.id || null; if(!state.activePage)await addPage(); localStorage.setItem('uspace-active-space',sid);renderNav();renderCurrent();toggleSidebar(false);}
 async function addSpace(){const name=prompt('اسم المساحة الجديدة؟','مشروعي الجديد');if(!name?.trim())return;const s={id:id(),name:name.trim().slice(0,70),instructions:'',createdAt:Date.now(),updatedAt:Date.now()};await put('spaces',s);state.spaces.push(s);await activateSpace(s.id);toast('تم إنشاء المساحة');}
-async function addPage(){await flush();const now=Date.now();const p={id:id(),spaceId:state.activeSpace,title:'صفحة بدون عنوان',body:'',instructions:'',createdAt:now,updatedAt:now};await put('pages',p);state.pages.push(p);await activatePage(p.id);$('#page-title').focus();}
+async function addPage(template='blank',customTitle='صفحة بدون عنوان'){await flush();const now=Date.now();const body=PAGE_TEMPLATES[template]?.body||'';const p={id:id(),spaceId:state.activeSpace,title:customTitle,body,richDoc:null,instructions:'',favorite:false,createdAt:now,updatedAt:now};await put('pages',p);state.pages.push(p);await activatePage(p.id);if(template==='blank')$('#page-title').focus();}
 function toggleSidebar(value){
  if(value&&state.panelOpen)togglePanel(false);
  state.sidebarOpen=value;

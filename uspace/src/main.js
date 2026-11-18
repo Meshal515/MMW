@@ -6,14 +6,15 @@ import { mountRichEditor, loadRichDocument, richMarkdown, richJSON, richHTML, ri
 import { bootstrap, list, put, remove, clearPage, importBackupRows } from './storage.js';
 import {countText, insertHeadings, markdownToHtml, escapeHtml, fileName} from './format.js';
 import {fontOptionsHtml, pageFontFamily, fontStack, loadArabicFont, loadDocumentFonts} from './fonts.js';
+import {MODE_ORDER,normalizeModeSelection,preservationReport,labelForMode} from './ai-operations.js';
 import {providerKey, setProviderKey, lockProviderKey, savedProviderKeyExists, saveEncryptedProviderKey, unlockProviderKey, forgetProviderKey} from './keyring.js';
 
 const $ = sel => document.querySelector(sel);
-const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'structure', model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
+const state = { spaces:[], pages:[], activeSpace:null, activePage:null, mode:'ideas', selectedModes:['ideas'], aiBatch:null, aiAbort:null, model:'deepseek-flash', preview:false, sourceMode:false, sourceEdited:false, richChanged:false, sidebarOpen:false, panelOpen:false, search:'', ai:null, busy:false, saving:false, toastTimer:null };
 const SAVE_DELAY = 450;
 let saveTimer, revisionTimer, richEditor, loadingRich=false;
 let richSnapshotPage=null, richSnapshotAt=0, pendingRichSnapshot=Promise.resolve(), lastSnapshotError=null;
-const modes = {structure:{name:'ترتيب دون تحريف',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'مراجعة ونقد',description:'أرصد الغموض والتناقضات ونقاط الضعف، دون أن أغيّر أي كلمة.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت تنفيذي',description:'أحوّل فكرتك لأمر قابل للتنفيذ مع خطة ومعايير قبول، لا مجرد تلخيص.'},analyze:{name:'تحليل هندسي',description:'أستخرج الأسباب المحتملة والأولويات وخطوات التنفيذ واختبارات منع التراجع.'},custom:{name:'نفّذ طلبي',description:'اكتب أمرك الخاص وسأنفّذه على الصفحة دون إجابة نمطية.'}};
+const modes = {ideas:{name:'ترتيب الأفكار',description:'أرتّب كلامك أنت بعناوين هاشتاق وفقرات وقوائم من دون إضافة أفكار أو تغيير أسلوبك.'},structure:{name:'عناوين فقط',description:'أضيف عناوين مناسبة حول فقراتك، مع فحص آلي يثبت أن النص الأصلي لم يتغير.'},improve:{name:'تحسين الأسلوب',description:'أقترح نسخة أوضح تحافظ على المعنى. النص الأصلي لا يتغير إلا بموافقتك.'},review:{name:'نقد + نسخة مصححة',description:'أكشف المشاكل أولًا ثم أعطيك النص كاملًا بعد إصلاح ما كشفه النقد.'},proofread:{name:'تصحيح إملائي',description:'أصحح الأخطاء الإملائية والنحوية فقط مع حفظ الأصل.'},prompt:{name:'برومبت تنفيذي',description:'أحوّل فكرتك لأمر قابل للتنفيذ مع خطة ومعايير قبول، لا مجرد تلخيص.'},analyze:{name:'تحليل هندسي',description:'أستخرج الأسباب المحتملة والأولويات وخطوات التنفيذ واختبارات منع التراجع.'},custom:{name:'نفّذ طلبي',description:'اكتب أمرك الخاص وسأنفّذه على الصفحة دون إجابة نمطية.'}};
 
 function id(){return crypto.randomUUID();}
 function icon(name, size=19){
@@ -49,7 +50,7 @@ function renderShell(){
  $('#app').innerHTML=`<div class="shell">
   <div class="scrim" id="scrim"></div><div class="panel-scrim" id="panel-scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark" aria-label="USPACE"><span aria-hidden="true">U</span></div><div class="brand-title"><b>USPACE</b><span>YOUR SPACE TO THINK · v0.3</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
+    <div class="brand"><div class="brand-mark" aria-label="USPACE"><span aria-hidden="true">U</span></div><div class="brand-title"><b>USPACE</b><span>YOUR KNOWLEDGE STUDIO · v0.4</span></div><button class="icon-btn mobile-close" id="close-sidebar" title="إغلاق">${icon('close')}</button></div>
     <div class="workspace-label">مساحات العمل <button class="icon-btn small" id="add-space" title="إنشاء مساحة">${icon('plus',17)}</button></div>
     <div id="spaces-list" class="spaces-list"></div>
     <div class="sidebar-separator"></div>
@@ -113,7 +114,7 @@ function renderShell(){
     <footer class="editor-footer"><div class="count-line"><span id="word-count">0 كلمة</span><span id="char-count">0 حرف</span><span id="sentence-count">0 جملة</span></div><div class="footer-tools"><button class="text-btn" id="instructions-btn">${icon('settings',16)} تعليمات الصفحة</button><button class="text-btn" id="export-md-btn">${icon('download',16)} تنزيل MD</button><button class="text-btn" id="export-html-btn">${icon('download',16)} HTML</button><button class="icon-btn" id="more-btn" title="حذف الصفحة">${icon('trash',17)}</button></div></footer>
   </main>
   <aside class="right-panel" id="right-panel"><div class="panel-header"><div><span class="panel-kicker">USPACE INTELLIGENCE</span><h2>${icon('spark',22)} مساعد الكتابة</h2></div><button class="icon-btn" id="close-panel" aria-label="إغلاق المساعد">${icon('close')}</button></div>
-  <div class="panel-body"><div class="panel-note">حدد هدفك بدقة. المساعد يفرّق بين التنسيق والتحليل والتنفيذ، ولا يغير مستندك تلقائيًا.</div><label class="field-label">نوع العملية</label><div class="mode-options" id="modes"></div>
+  <div class="panel-body"><div class="panel-note">مساحتك للتفكير والتنظيم. اختر عملية واحدة أو عدة عمليات، وسأعطيك نتائج مستقلة مع الحفاظ على مستندك.</div><div class="mode-choice-head"><label class="field-label" id="modes-label">اختر أكثر من عملية</label><span class="selected-mode-count" id="selected-mode-count">عملية واحدة</span></div><div class="mode-options" id="modes" role="group" aria-labelledby="modes-label"></div><p class="mode-cost-hint" id="mode-cost-hint">تُرسل كل عملية كطلب منفصل إلى DeepSeek.</p>
   <label class="field-label" id="ai-command-label" for="ai-command">أمرك للمساعد في هذه العملية (اختياري)</label>
   <textarea id="ai-command" class="ai-command-input" rows="4" maxlength="3000" dir="auto" spellcheck="true" placeholder="مثال: حلل خطة فانتارا هندسيًا وقدم معالجة للأسباب الجذرية واختبارات قبول واضحة دون إضافة أي مزايا."></textarea>
   <div class="command-presets" aria-label="أوامر جاهزة"><button type="button" data-ai-preset="root">أسباب جذرية</button><button type="button" data-ai-preset="plan">خطة تنفيذ واختبار</button><button type="button" data-ai-preset="constraints">التزم بالقيود</button></div>
@@ -135,7 +136,7 @@ function renderShell(){
     <div class="key-buttons"><button class="quiet-btn bordered" type="button" id="remember-provider-key">حفظ مشفر</button><button class="quiet-btn bordered" type="button" id="unlock-provider-key">فتح الخزنة</button><button class="quiet-btn bordered" type="button" id="forget-provider-key">حذف المفتاح</button></div>
   </details>
   <details class="vault-details"><summary>اتصال Cloudflare القديم</summary><label class="field-label" for="access-key">رمز دخول Worker</label><input class="field-input" id="access-key" type="password" autocomplete="off" placeholder="رمز وصول Worker"/><p class="field-help">للوضع القديم فقط، عندما يكون مفتاح DeepSeek محفوظًا في Cloudflare Secrets.</p></details>
-  <button class="run-btn" id="run-ai">${icon('spark',18)} <span>نفّذ العملية</span></button><div id="ai-results" class="ai-results" aria-live="polite"></div></div></aside>
+  <div class="ai-run-actions"><button class="run-btn" id="run-ai">${icon('spark',18)} <span>نفّذ العمليات المختارة</span></button><button class="quiet-btn bordered hidden" type="button" id="cancel-ai">إيقاف</button></div><div id="ai-results" class="ai-results" aria-live="polite"></div></div></aside>
   <div id="dialog-root"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden/><input id="backup-input" type="file" accept=".json,application/json" hidden/>
   </div>`;
  if(richEditor)richEditor.destroy();
@@ -382,13 +383,24 @@ function togglePanel(value){
    if(value)renderModes();
  }
 function renderModes(){
- $('#modes').innerHTML=Object.entries(modes).map(([key,m])=>`<button type="button" class="mode-btn ${state.mode===key?'chosen':''}" data-mode="${key}" aria-pressed="${state.mode===key}"><span class="mode-radio"></span><span><b>${m.name}</b><small>${m.description}</small></span></button>`).join('');
- const command=$('#ai-command'),label=$('#ai-command-label');
- if(command && label){
-   label.textContent=state.mode==='custom'?'ما الأمر الذي تريد تنفيذه؟ (مطلوب)':'أمرك الخاص لهذه العملية (اختياري)';
-   command.setAttribute('aria-required',String(state.mode==='custom'));
-   command.toggleAttribute('required',state.mode==='custom');
+ const current=new Set(state.selectedModes);
+ $('#modes').innerHTML=MODE_ORDER.map(key=>{
+   const m=modes[key];
+   if(!m)return '';
+   const checked=current.has(key);
+   return '<label class="mode-btn mode-multi'+(checked?' chosen':'')+'" data-option="'+key+'"><input type="checkbox" class="mode-checkbox" data-mode="'+key+'" value="'+key+'" '+(checked?'checked':'')+' aria-label="'+escapeHtml(m.name)+'"/><span class="mode-checkbox-mark" aria-hidden="true">'+(checked?icon('check',14):'')+'</span><span><b>'+escapeHtml(m.name)+'</b><small>'+escapeHtml(m.description)+'</small></span></label>';
+ }).join('');
+ const command=$('#ai-command'),label=$('#ai-command-label'),custom=current.has('custom');
+ if(command&&label){
+   label.textContent=custom?'ما الأمر الذي تريد تنفيذه؟ (مطلوب)':'أمرك الخاص لهذه العمليات (اختياري)';
+   command.setAttribute('aria-required',String(custom));
+   command.toggleAttribute('required',custom);
  }
+ const n=current.size;
+ $('#selected-mode-count').textContent=n===0?'لم تحدد عملية':n===1?'عملية واحدة':n+' عمليات';
+ $('#mode-cost-hint').textContent=n>1?'سيُرسل '+n+' طلبات منفصلة إلى DeepSeek، كل عملية بنتيجتها وتكلفتها.':'كل عملية تستخدم طلب DeepSeek واحدًا؛ يبقى المستند دون تغيير حتى توافق.';
+ const button=$('#run-ai');
+ if(button&&!state.busy)button.disabled=n===0;
 }
 function showDialog(title, content, opts={}){
  const root=$('#dialog-root');root.innerHTML=`<div class="modal-backdrop" id="dialog-backdrop"><section role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}" class="modal"><div class="modal-top"><h2>${escapeHtml(title)}</h2><button id="dialog-close" class="icon-btn" title="إغلاق">${icon('close')}</button></div><div class="modal-content">${content}</div></section></div>`;
@@ -554,7 +566,15 @@ function bind(){
  $('#preview-btn').onclick=()=>{state.preview=!state.preview;syncPreview();};
  $('#source-btn').onclick=()=>toggleMarkdownSource().catch(e=>toast(e.message,'error'));
  $('#assistant-btn').onclick=()=>togglePanel(true);$('#close-panel').onclick=()=>togglePanel(false);$('#panel-scrim').onclick=()=>togglePanel(false);
- $('#modes').onclick=e=>{const el=e.target.closest('[data-mode]');if(el&&!state.busy){state.mode=el.dataset.mode;renderModes();}};
+ $('#modes').onchange=e=>{
+   const input=e.target.closest('input[data-mode]');if(!input||state.busy)return;
+   const chosen=new Set(state.selectedModes);
+   if(input.checked)chosen.add(input.dataset.mode);else chosen.delete(input.dataset.mode);
+   state.selectedModes=MODE_ORDER.filter(mode=>chosen.has(mode));
+   state.mode=state.selectedModes[0]||'ideas';
+   renderModes();
+ };
+ $('#cancel-ai').onclick=()=>{if(state.aiAbort){state.aiAbort.abort();toast('تم إيقاف العمليات المتبقية');}};
  const presets={
   root:'شخّص الأسباب الجذرية المحتملة في خطة المشروع، ميّز ما يحتاج فحصًا عما هو مؤكد، واقترح خطة إصلاح واختبارات منع تراجع دون إضافة مزايا.',
   plan:'حوّل هذا المستند إلى خطة تنفيذ مرتبة بالأولوية والاعتماديات مع خطوات عملية ومعايير قبول واختبارات واضحة.',
